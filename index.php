@@ -470,23 +470,4 @@ class Dj_App_Bootstrap {
         $generator = sprintf( '<meta name="generator" content="%s" />' . "\n", Dj_App::NAME );
         echo $generator;
     }
-
-    /**
-     * @return void
-     */
-    public function sendHeaders()
-    {
-        $req_obj = Dj_App_Request::getInstance();
-
-        // Add generator header if enabled
-        $render_gen = Dj_App_Config::cfg('app.core.output.render_generator', true);
-
-        if ($render_gen) {
-            $req_obj->addHeader('X-Generator', Dj_App::NAME);
-        }
-
-
-        $headers = $req_obj->getHeaders();
-
-    }
 }
