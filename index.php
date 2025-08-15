@@ -7,10 +7,13 @@
 $app_base_dir = Dj_App_Config::cfg(Dj_App_Config::APP_BASE_DIR, __DIR__);
 defined('DJEBEL_APP_BASE_DIR') or define('DJEBEL_APP_BASE_DIR', $app_base_dir);
 
-$dj_app_sys_dir = Dj_App_Config::cfg('app.sys.app_core_dir', $app_base_dir . '/core');
-defined('DJEBEL_APP_CORE_DIR') or define('DJEBEL_APP_CORE_DIR', $dj_app_sys_dir);
+$dj_app_src_dir = Dj_App_Config::cfg('app.sys.app_src_dir', $app_base_dir . '/src');
+defined('DJEBEL_APP_SRC_DIR') or define('DJEBEL_APP_SRC_DIR', $dj_app_src_dir);
 
-$app_lib_dir = Dj_App_Config::cfg('app.sys.lib_dir', $dj_app_sys_dir . '/lib');
+$dj_app_core_dir = Dj_App_Config::cfg('app.sys.app_core_dir', $dj_app_src_dir . '/core');
+defined('DJEBEL_APP_CORE_DIR') or define('DJEBEL_APP_CORE_DIR', $dj_app_core_dir);
+
+$app_lib_dir = Dj_App_Config::cfg('app.sys.app_lib_dir', $dj_app_core_dir . '/lib');
 defined('DJEBEL_APP_LIB_DIR') or define('DJEBEL_APP_LIB_DIR', $app_lib_dir);
 
 require_once $app_lib_dir . '/env.php';
@@ -110,8 +113,8 @@ if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
     Dj_App_Hooks::doAction( 'app.core.plugins.system_loaded' );
 }
 
-/*if (is_file($dj_app_sys_dir . '/vendor/autoload.php')) {
-    require_once $dj_app_sys_dir . '/vendor/autoload.php';
+/*if (is_file($dj_app_core_dir . '/vendor/autoload.php')) {
+    require_once $dj_app_core_dir . '/vendor/autoload.php';
 }*/
 
 // @todo
