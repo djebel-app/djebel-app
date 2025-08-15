@@ -206,7 +206,7 @@ class Dj_App_Config {
     {
         try {
             $key_fmt = $key;
-            $key_fmt = preg_replace('#[^\w]+#si', '_', $key_fmt); // too early for libs
+            $key_fmt = preg_replace('#[^\w]+#si', '_', $key_fmt);
             $key_fmt = preg_replace('#\_+#si', '_', $key_fmt);
             $key_fmt = strtoupper($key_fmt);
             $key_fmt = trim($key_fmt, '_');
