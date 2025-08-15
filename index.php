@@ -7,7 +7,7 @@
 $app_base_dir = Dj_App_Config::cfg(Dj_App_Config::APP_BASE_DIR, __DIR__);
 defined('DJEBEL_APP_BASE_DIR') or define('DJEBEL_APP_BASE_DIR', $app_base_dir);
 
-$dj_app_sys_dir = Dj_App_Config::cfg('app.sys.app_dir', $app_base_dir . '/core');
+$dj_app_sys_dir = Dj_App_Config::cfg('app.sys.app_core_dir', $app_base_dir . '/core');
 defined('DJEBEL_APP_CORE_DIR') or define('DJEBEL_APP_CORE_DIR', $dj_app_sys_dir);
 
 $app_lib_dir = Dj_App_Config::cfg('app.sys.lib_dir', $dj_app_sys_dir . '/lib');
