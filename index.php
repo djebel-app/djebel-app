@@ -4,17 +4,10 @@
  * @package Djebel
  */
 
-$app_base_dir = Dj_App_Config::cfg(Dj_App_Config::APP_BASE_DIR, __DIR__);
-defined('DJEBEL_APP_BASE_DIR') or define('DJEBEL_APP_BASE_DIR', $app_base_dir);
-
+$app_base_dir = Dj_App_Config::cfg('app.sys.app_base_dir', __DIR__); // where djebel is unpacked.
 $dj_app_src_dir = Dj_App_Config::cfg('app.sys.app_src_dir', $app_base_dir . '/src');
-defined('DJEBEL_APP_SRC_DIR') or define('DJEBEL_APP_SRC_DIR', $dj_app_src_dir);
-
 $dj_app_core_dir = Dj_App_Config::cfg('app.sys.app_core_dir', $dj_app_src_dir . '/core');
-defined('DJEBEL_APP_CORE_DIR') or define('DJEBEL_APP_CORE_DIR', $dj_app_core_dir);
-
 $app_lib_dir = Dj_App_Config::cfg('app.sys.app_lib_dir', $dj_app_core_dir . '/lib');
-defined('DJEBEL_APP_LIB_DIR') or define('DJEBEL_APP_LIB_DIR', $app_lib_dir);
 
 require_once $app_lib_dir . '/env.php';
 require_once $app_lib_dir . '/html.php';
@@ -109,16 +102,16 @@ if ($app_load_admin) {
 $sys_plugins_dir = Dj_App_Plugins::getSysPluginsDir();
 
 if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
+    Dj_App_Hooks::doAction( 'app.core.system_plugins.pre_load' );
     Dj_App_Plugins::loadPlugins($sys_plugins_dir, [ 'is_system' => true, ]);
-    Dj_App_Hooks::doAction( 'app.core.plugins.system_loaded' );
+    Dj_App_Hooks::doAction( 'app.core.system_plugins.loaded' );
 }
 
 /*if (is_file($dj_app_core_dir . '/vendor/autoload.php')) {
     require_once $dj_app_core_dir . '/vendor/autoload.php';
 }*/
 
-// @todo
-//require_once $app_lib_dir . '/db.php'; // needs doctrine.
+$load_shared_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_shared_plugins', false );
 
 $load_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_plugins', true );
 
@@ -132,7 +125,6 @@ if ($load_plugins) {
 
     foreach ($plugin_dirs as $plugin_dir) {
         $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($plugin_dir);
-        //var_dump($plugin_load_res_obj);
     }
 
     Dj_App_Hooks::doAction( 'app.core.plugins.loaded' );
