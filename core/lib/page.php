@@ -1,0 +1,274 @@
+<?php
+
+/**
+ *
+ */
+class Dj_App_Page {
+    /**
+     * @var array
+     */
+    public function get($inp_name, $default = '')
+    {
+        $val = '';
+        $name = $inp_name;
+        $escape = false;
+        $req_obj = Dj_App_Request::getInstance();
+
+        if ($inp_name == 'full_page') {
+            $all_segments = $req_obj->segments();
+            $page = join('/', $all_segments);
+            $page = empty($page) ? '' : $page;
+            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$inp_name", $page );
+            return $page;
+        } else if ($inp_name == 'page') {
+            $all_segments = $req_obj->segments();
+            $page = array_pop($all_segments);
+            $page = empty($page) ? '' : $page;
+            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get", $page );
+            return $page;
+        }
+
+        // if $name starts with esc or -_ then escape the value later and remove the prefix
+        if (strpos($name, 'esc') === 0) {
+            $escape = true;
+            $name = preg_replace('/^[\-\_]*esc[\-\_]*(cape[\-\_]*)?/si', '', $name);
+        }
+
+        if (isset($this->data[$name])) {
+            $val = $this->data[$name];
+            $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val );
+
+            if ($escape) {
+                $val = Djebel_App_HTML::encodeEntities($val);
+            }
+
+            return $val;
+        }
+
+        $options_obj = Dj_App_Options::getInstance();
+        $val = $options_obj->get($name);
+        $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val );
+        $val = empty($val) ? $default : $val;
+
+        if ($escape) {
+            $val = Djebel_App_HTML::encodeEntities($val);
+        }
+
+        return $val;
+    }
+
+    /**
+     * @var array
+     */
+    public function set($key, $val, $extra_opts = [])
+    {
+        $ttl = isset($extra_opts['ttl']) ? $extra_opts['ttl'] : 24 * 60 * 60;
+        $val = is_scalar($val) ? $val : serialize($val);
+    }
+
+    private $data = [];
+
+    /**
+     * Returns member data or a key from data. It's easier e.g. $data_res->output
+     * @param string $name
+     * @return mixed|null
+     */
+    public function __get($name) {
+        $val = $this->get($name);
+        return $val;
+    }
+
+    /**
+     * Sets a property value with hook filtering support
+     * @param string $key Property key
+     * @param mixed $val Property value
+     */
+    public function __set($key, $val) {
+        $ctx = [ 'key' => $key, 'val' => $val, ];
+        $val = Dj_App_Hooks::applyFilter( 'app.page.filter.pre_set_property', $val, $ctx );
+        $val = Dj_App_Hooks::applyFilter( 'app.page.filter.pre_set_property_' . $key, $val, $ctx );
+        $this->data[$key] = $val;
+    }
+
+    /**
+     * Unsets a property from the data array
+     * @param string $key Property key
+     */
+    public function __unset($key) {
+        $ctx = [ 'key' => $key, ];
+        Dj_App_Hooks::doAction( 'app.page.action.pre_unset_property', $ctx );
+        Dj_App_Hooks::doAction( 'app.page.action.pre_unset_property_' . $key, $ctx );
+        unset($this->data[$key]);
+    }
+
+    /**
+     * Checks if a data property exists
+     * @param string $key Property key
+     */
+    public function __isset($key) {
+        // Check if it exists directly in our data array first
+        if (isset($this->data[$key])) {
+            return true;
+        }
+        
+        // For special computed properties
+        if (in_array($key, ['full_page', 'page'])) {
+            return true;
+        }
+        
+        // Check if it exists in options as a fallback
+        $options_obj = Dj_App_Options::getInstance();
+        $val = $options_obj->get($key);
+        return !empty($val);
+    }
+
+    /**
+     * Singleton pattern i.e. we have only one instance of this obj
+     * @staticvar static $instance
+     * @return static
+     */
+    public static function getInstance() {
+        static $instance = null;
+
+        // This will make the calling class to be instantiated.
+        // no need each sub class to define this method.
+        if (is_null($instance)) {
+            $instance = new static();
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Renders navigation menu from configuration
+     * 
+     * @param array $args Optional arguments to customize menu rendering
+     * @return string HTML menu structure
+     */
+    public function renderMenu($args = []) 
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $options_obj = Dj_App_Options::getInstance();
+        $nav_options = $options_obj->get('nav');
+        $nav_options = empty($nav_options) ? [] : (array) $nav_options;
+        
+        if (empty($nav_options)) {
+            return '';
+        }
+
+        $current_page = $this->get('page');
+        $menu_items = [];
+        
+        foreach ($nav_options as $item) {
+            // Skip if explicitly set as inactive
+            if (isset($item['active']) && empty($item['active'])) {
+                continue;
+            }
+
+            $url = isset($item['url']) ? $item['url'] : '';
+            $slug = isset($item['slug']) ? $item['slug'] : $this->formatPageSlug($url);
+            $title = isset($item['title']) ? $item['title'] : '';
+
+            if (empty($title) || empty($url)) {
+                continue;
+            }
+
+            // put the web path prefix for relative URLs
+            if (stripos($url, 'http') === false) {
+                $url = $req_obj->webPath() . $url;
+            }
+
+            $is_current = $slug == $current_page || 0;
+            $item_class = 'dj-app-menu-item';
+            
+            if ($is_current) {
+                $item_class .= ' dj-app-menu-item-current';
+                $menu_items[] = "        <li class='$item_class'><span class='dj-app-menu-text'>$title</span></li>";
+            } else {
+                $menu_items[] = "        <li class='$item_class'><a href='$url' class='dj-app-menu-link'>$title</a></li>";
+            }
+        }
+
+        // Filter menu items array before building HTML
+        $menu_items = Dj_App_Hooks::applyFilter('app.page.menu.items', $menu_items, $args);
+
+        $menu_parts = [
+            '<div class="dj-app-menu-container">',
+            '    <ul class="dj-app-menu-nav">',
+            implode("\n", $menu_items),
+            '    </ul>',
+            '</div>',
+        ];
+
+        $menu_html = implode("\n", $menu_parts) . "\n";
+        $menu_html = Dj_App_Hooks::applyFilter('app.page.menu.html', $menu_html, $args);
+
+        echo $menu_html;
+    }
+
+    /**
+     * @param string $page
+     * @return string
+     */
+    public function formatPageSlug($page)
+    {
+        if (empty($page) || $page == '/') {
+            return '';
+        }
+
+        // get last part of the page
+        if (strpos($page, '/') !== false) {
+            $page = rtrim($page, '/');
+            $page = explode('/', $page);
+            $page = array_pop($page);
+        }
+
+        // loop through the page and remove non alpha numeric and dash
+        $page = preg_replace('/[^\w\-]/si', '_', $page);
+        $page = preg_replace('/_+/si', '_', $page);
+        $page = preg_replace('/\-+/si', '-', $page);
+        $page = substr($page, 0, 100);
+        $page = trim($page, '_-');
+
+        return $page;
+    }
+
+    /**
+     * Formats a full page slug by handling slashes and calling formatPageSlug for each element
+     * en/home
+     * @param string $page
+     * @return string
+     */
+    public function formatFullPageSlug($page)
+    {
+        if (empty($page)) {
+            return '';
+        }
+
+        $formatted_page = '';
+
+        // Check if there's a slash in the page
+        if (strpos($page, '/') !== false) {
+            // Split by slash and format each element
+            $segments = explode('/', $page);
+            $formatted_segments = [];
+
+            foreach ($segments as $segment) {
+                $formatted_segment = $this->formatPageSlug($segment);
+                
+                if (!empty($formatted_segment)) {
+                    $formatted_segments[] = $formatted_segment;
+                }
+            }
+
+            // Join the formatted segments back with slashes
+            $formatted_page = implode('/', $formatted_segments);
+        } else {
+            // No slashes, just format the single page
+            $formatted_page = $this->formatPageSlug($page);
+        }
+
+        return $formatted_page;
+    }
+}
+

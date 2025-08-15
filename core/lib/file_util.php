@@ -1,0 +1,160 @@
+<?php
+
+class Dj_App_File_Util {
+    /**
+     * Reads a file partially e.g. the first NN bytes.
+     * Dj_App_File_Util::readFilePartially();
+     *
+     * @param string $file
+     * @param int $len_bytes how much bytes to read
+     * @param int $seek_bytes should we start from the start?
+     * @return Dj_App_Result
+     */
+    static function readPartially($file, $len_bytes = 2048, $seek_bytes = 0) {
+        $res_obj = new Dj_App_Result();
+
+        try {
+            Dj_App_Util::time( __METHOD__ . $file . $len_bytes . $seek_bytes );
+
+            if (!file_exists($file)) {
+                throw new Dj_App_Exception("File not found", [ 'file' => $file ]);
+            }
+
+            $file_handle = fopen($file, 'rb');
+
+            if (empty($file_handle)) {
+                throw new Dj_App_Exception("Couldn't open file for reading", [ 'file' => $file ]);
+            }
+
+            flock($file_handle, LOCK_SH);
+
+            if ($seek_bytes > 0) {
+                $fsee_res = fseek($file_handle, $seek_bytes);
+
+                if ($fsee_res === -1) {
+                    throw new Dj_App_Exception("Couldn't seek to position", [ 'file' => $file, 'seek_bytes' => $seek_bytes ]);
+                }
+            }
+
+            $buff = fread($file_handle, $len_bytes);
+            $res_obj->output = $buff;
+            $res_obj->status(true);
+        } catch (Exception $e) {
+            $res_obj->msg = $e->getMessage();
+        } finally {
+            if (!empty($file_handle)) {
+                flock($file_handle, LOCK_UN);
+                fclose($file_handle);
+            }
+
+            $res_obj->exec_time = Dj_App_Util::time( __METHOD__ . $file . $len_bytes . $seek_bytes );
+        }
+
+        return $res_obj;
+    }
+
+    /**
+     * @desc read function using flock
+     * Dj_App_File_Util::read();
+     * @param string $file
+     * @return false|string
+     */
+    static public function read($file) {
+        if (!is_file($file)) {
+            return false;
+        }
+
+        $fp = fopen($file, 'rb');
+
+        if (empty($fp)) {
+            return false;
+        }
+
+        try {
+            flock($fp, LOCK_SH);
+            $buff = file_get_contents($file);
+
+            if (empty($buff)) {
+                return false;
+            }
+
+            return $buff;
+        } finally {
+            if (!empty($fp)) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+            }
+        }
+    }
+
+    /**
+     * Writes to a file and creates the dir if it doesn't exist.
+     * Dj_App_File_Util::write();
+     * @param string $file
+     * @param string|mixed $data
+     * @return Dj_App_Result
+     */
+    static public function write($file, $data)
+    {
+        $res_obj = new Dj_App_Result();
+
+        try {
+            $dir = dirname($file);
+            $mk_res = Dj_App_File_Util::mkdir($dir);
+
+            if ($mk_res->isError()) {
+                throw new Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
+            }
+
+            $buff = is_scalar($data) ? $data : json_encode($data, JSON_PRETTY_PRINT);
+            $res = file_put_contents($file, $buff, LOCK_EX);
+
+            if (empty($res)) {
+                throw Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
+            }
+
+            $res_obj->status = true;
+        } catch (Exception $e) {
+            $res_obj->msg = $e->getMessage();
+        } finally {
+
+        }
+
+        return $res_obj;
+    }
+
+    /**
+     * Creates a folder recursively if it doesn't exist.
+     * @param string $dir
+     * @param int $perm
+     * @return Dj_App_Result
+     */
+    public static function mkdir($dir, $perm = 0755) {
+        $res_obj = new Dj_App_Result();
+
+        try {
+            $old_mask = umask();
+            umask(0);
+
+            if (!is_dir($dir)) {
+                $res = mkdir($dir, $perm, true);
+
+                if (!$res) {
+                    throw Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
+                }
+            }
+
+            chmod($dir, $perm); // jic
+
+            $res_obj->status = true;
+        } catch (Exception $e) {
+            $res_obj->msg = $e->getMessage();
+        } finally {
+            umask($old_mask);
+        }
+
+        return $res_obj;
+    }
+}
+
+class Dj_App_File_Util_Exception extends Dj_App_Exception {}

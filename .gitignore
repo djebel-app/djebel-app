@@ -1,0 +1,11 @@
+/dj-config.php
+.env*
+/.htaccess
+/.idea
+*.log
+*.log.*
+.phpunit.cache
+.phpunit.result.cache
+*.gz
+*.tar
+*.zip
