@@ -192,9 +192,10 @@ class Dj_App_Config {
      * Dj_App_Config::cfg();
      * @param string $key
      * @param mixed $val
+     * @param array $attribs
      * @return string
      */
-    public static function cfg($key, $fallback_val = '')
+    public static function cfg($key, $fallback_val = '', $attribs = [])
     {
         try {
             $key_fmt = $key;
@@ -227,6 +228,9 @@ class Dj_App_Config {
             // - $val === '' means it exists but is empty
             // - otherwise it has the actual value (including '0')
             if ($val !== false) { // was found in the env
+                if (!empty($attribs['override'])) {
+                    $val = $fallback_val;
+                }
                 return $val;
             }
 
@@ -251,6 +255,8 @@ class Dj_App_Config {
             // We need to set this always so the consts are defined between requests
             if (!empty($val)) {
                 putenv($key . '=' . $val);
+            } elseif (!empty($attribs['override'])) {
+                putenv($key); // rm env
             }
         }
 
