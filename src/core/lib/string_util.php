@@ -73,23 +73,15 @@ class Dj_App_String_Util
     }
 
     /**
-     * Checks if a string is alphanumeric + _ + -
+     * Checks if a string is alphanumeric and also _ + -
      * Dj_App_String_Util::isAlphaNumericExt();
      * @param $str
      * @return bool
      */
     static public function isAlphaNumericExt($str)
     {
-        // loops through the chars and returns if it's not alphanumeric or _ or -
-        for ($i = 0; $i < strlen($str); $i++) {
-            $char = $str[$i];
-
-            if (!ctype_alnum($char) && $char !== '_' && $char !== '-') {
-                return false;
-            }
-        }
-
-        return true;
+        $filtered = str_replace(['-', '_'], '', $str);
+        return ctype_alnum($filtered);
     }
 
     const ALLOW_DOT = 2;
