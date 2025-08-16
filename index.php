@@ -238,11 +238,11 @@ class Dj_App_Config {
                 $val = constant($key_fmt);
             }
 
-            if (empty($val) && defined($app_key_fmt)) { // check app const
+            if (strlen($val) == 0 && defined($app_key_fmt)) { // check app const
                 $val = constant($app_key_fmt);
             }
 
-            if (empty($val)) {
+            if (strlen($val) == 0) {
                 $val = $fallback_val;
             }
         } finally {
