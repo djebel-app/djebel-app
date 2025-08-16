@@ -80,7 +80,12 @@ class Dj_App_String_Util
      */
     static public function isAlphaNumericExt($str)
     {
+        if (empty($str)) {
+            return false;
+        }
+
         $filtered = str_replace(['-', '_'], '', $str);
+
         return ctype_alnum($filtered);
     }
 
