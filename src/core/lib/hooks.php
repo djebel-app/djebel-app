@@ -102,6 +102,11 @@ class Dj_App_Hooks {
         try {
             $callback = empty($ctx['callback']) ? '' : $ctx['callback'];
             $hook_name = empty($ctx['hook_name']) ? '' : $ctx['hook_name'];
+            $priority = empty($ctx['priority']) ? 10 : $ctx['priority'];
+
+            if ($priority > 10000) {
+                throw new Dj_App_Exception("Priority cannot exceed 10,000. Given priority: {$priority}");
+            }
 
             if (empty($hook_name)) {
                 throw new Dj_App_Exception("Empty hook name");
@@ -170,6 +175,7 @@ class Dj_App_Hooks {
         $check_ctx = [];
         $check_ctx['hook_name'] = $hook_name;
         $check_ctx['callback'] = $callback;
+        $check_ctx['priority'] = $priority;
 
         $check_res = Dj_App_Hooks::checkAllowed($check_ctx);
 
@@ -362,6 +368,7 @@ class Dj_App_Hooks {
         $check_ctx['type'] = 'filter';
         $check_ctx['callback'] = $callback;
         $check_ctx['hook_name'] = $hook_name;
+        $check_ctx['priority'] = $priority;
 
         $check_res = Dj_App_Hooks::checkAllowed($check_ctx);
 
