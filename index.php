@@ -124,10 +124,12 @@ if (Dj_App_Util::isEnabled($load_core_shared_plugins) && !empty($app_core_shared
 }
 
 // Add non-public plugins if enabled
-$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', 0);
+$app_non_public_plugins_dir = Dj_App_Plugins::getNonPublicPluginsDir();
+$app_non_public_plugins_dir_load = is_dir($app_non_public_plugins_dir);
+$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', $app_non_public_plugins_dir_load);
 
-if (Dj_App_Util::isEnabled($load_non_public_plugins)) {
-    $plugin_dirs[] = Dj_App_Plugins::getNonPublicPluginsDir();
+if (Dj_App_Util::isEnabled($load_non_public_plugins) && !empty($app_non_public_plugins_dir)) {
+    $plugin_dirs[] = $app_non_public_plugins_dir;
 }
 
 $load_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_plugins', true );
@@ -498,14 +500,19 @@ class Dj_App_Bootstrap {
         }
 
         $plugin_id = $ctx['plugin_id'];
-        $load_if_url = Dj_App_Config::cfg("plugins.{$plugin_id}.load_if_url");
+
+        if (!empty($plugins_options[$plugin_id]['load_if_url'])) {
+            $load_if_url = $plugins_options[$plugin_id]['load_if_url'];
+        } else {
+            $load_if_url = Dj_App_Config::cfg("plugins.{$plugin_id}.load_if_url");
+        }
 
         if (empty($load_if_url)) {
             return $plugins_options;
         }
 
         $req_obj = Dj_App_Request::getInstance();
-        $current_url = $req_obj->getRequestUri();
+        $current_url = $req_obj->getRequestUrl();
         $patterns = explode('|', $load_if_url);
         $patterns = Dj_App_String_Util::trim($patterns);
         
