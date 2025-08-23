@@ -36,6 +36,30 @@ class Dj_App_Plugins {
     }
 
     /**
+     * Gets the plugins directory that we have for all sites /zzz_qs/djebel-app/app/shared_plugins/
+     * Dj_App_Plugins::getSharedPluginsDir();
+     * @return string
+     */
+    public static function getSharedPluginsDir()
+    {
+        $dir = Dj_App_Config::cfg('app.sys.plugins.shared_plugins_dir');
+        $dir = Dj_App_Hooks::applyFilter( 'app.core.plugins.shared_plugins_dir', $dir );
+        return $dir;
+    }
+
+    /**
+     * Gets the non-public plugins directory (outside of document root)
+     * Dj_App_Plugins::getNonPublicPluginsDir();
+     * @return string
+     */
+    public static function getNonPublicPluginsDir()
+    {
+        $dir = Dj_App_Util::getCorePrivateDir() . '/app/plugins';
+        $dir = Dj_App_Hooks::applyFilter( 'app.core.plugins.non_public_plugins_dir', $dir );
+        return $dir;
+    }
+
+    /**
      * Loads regular or system plugins from a folder.
      * Dj_App_Plugins::loadPlugins();
      * @param string $dir
@@ -74,6 +98,7 @@ class Dj_App_Plugins {
                 $plugins_options = Dj_App_Hooks::applyFilter( 'app.plugin.options', $plugins_options, $ctx );
 
                 // is this deactivated?
+                // non-public plugins can still be deactivated via config
                 if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
                     continue;
                 }
@@ -124,8 +149,8 @@ class Dj_App_Plugins {
                     continue;
                 }
 
-                // core or system plugins don't need to be active to be loaded.
-                if (!empty($ctx['is_system']) || !empty($ctx['is_core'])) {
+                // core, system, or non-public plugins don't need to be active to be loaded.
+                if (!empty($ctx['is_system']) || !empty($ctx['is_core']) || !empty($ctx['is_nonpublic'])) {
                     // ok
                 } else {
                     // Check for active plugins

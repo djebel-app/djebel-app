@@ -107,27 +107,47 @@ if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
     Dj_App_Hooks::doAction( 'app.core.system_plugins.loaded' );
 }
 
+$ctx = [];
+
 /*if (is_file($dj_app_core_dir . '/vendor/autoload.php')) {
     require_once $dj_app_core_dir . '/vendor/autoload.php';
 }*/
 
-$load_shared_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_shared_plugins', false );
+$plugin_dirs = [];
+
+// these are plugins that run for all sites on the server.
+$app_core_shared_plugins_dir = Dj_App_Plugins::getSharedPluginsDir();
+$load_core_shared_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_shared_plugins', !empty($app_core_shared_plugins_dir) );
+
+if (Dj_App_Util::isEnabled($load_core_shared_plugins) && !empty($app_core_shared_plugins_dir)) {
+    $plugin_dirs[] = $app_core_shared_plugins_dir;
+}
+
+// Add non-public plugins if enabled
+$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', 0);
+
+if (Dj_App_Util::isEnabled($load_non_public_plugins)) {
+    $plugin_dirs[] = Dj_App_Plugins::getNonPublicPluginsDir();
+}
 
 $load_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_plugins', true );
 
 if ($load_plugins) {
-    $plugin_dirs = [
-        Dj_App_Plugins::getPluginsDir(),
-    ];
+    $plugin_dirs[] = Dj_App_Plugins::getPluginsDir();
+}
 
-    // in case somebody wants to load more plugins
-    $plugin_dirs = Dj_App_Hooks::applyFilter( 'app.core.plugins.plugin_dirs', $plugin_dirs );
+// in case somebody wants to load more plugins
+$plugin_dirs = Dj_App_Hooks::applyFilter( 'app.core.plugins.plugin_dirs', $plugin_dirs );
+
+if (!empty($plugin_dirs)) {
+    $ctx['plugin_dirs'] = $plugin_dirs;
+    Dj_App_Hooks::doAction( 'app.core.plugins.before_load_plugins', $ctx );
 
     foreach ($plugin_dirs as $plugin_dir) {
         $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($plugin_dir);
     }
 
-    Dj_App_Hooks::doAction( 'app.core.plugins.loaded' );
+    Dj_App_Hooks::doAction( 'app.core.plugins.loaded', $ctx );
 }
 
 Dj_App_Hooks::doAction( 'app.core.init' );
