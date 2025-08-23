@@ -18,6 +18,6 @@ $_SERVER['PORT'] = 443;
 putenv('DJEBEL_APP_CORE_RUN=0');
 
 $dj_app_dir = dirname(__DIR__);
-require_once $dj_app_dir . '/dj-bootstrap.php';
+require_once $dj_app_dir . '/index.php';
 
 require_once __DIR__ . '/vendor/autoload.php';
