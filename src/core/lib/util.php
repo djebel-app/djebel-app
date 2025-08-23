@@ -44,8 +44,32 @@ class Dj_App_Util {
         }
 
         $marker = substr($marker, 0, 100);
-        $marker = preg_replace('#[^\w:/]+#si', '_', $marker);
-        $marker = preg_replace('#_+#si', '_', $marker);
+        $len = strlen($marker);
+
+        $last_char = '';
+        
+        for ($i = 0; $i < $len; $i++) {
+            $char = $marker[$i];
+
+            if ($char == '_') {
+                if ($last_char == '_') {
+                    unset($marker[$i]);
+                    continue;
+                }
+                $last_char = '_';
+                continue;
+            }
+
+            if (ctype_alnum($char)) {
+                $last_char = $char;
+                continue;
+            }
+
+            $marker[$i] = '_';
+            $last_char = '_';
+        }
+        
+        $marker = trim($marker, '_');
         $marker = strtolower($marker);
 
         // calc diff from another timestamp
