@@ -195,6 +195,24 @@ class Dj_App_Util {
      * @return string
      * @throws Exception
      */
+    public static function getCorePrivateDataDir()
+    {
+        $dir = Dj_App_Util::getCorePrivateDir();
+
+        if (empty($dir)) {
+            return '';
+        }
+
+        $dir .= '/data';
+        $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_dir', $dir );
+
+        return $dir;
+    }
+
+    /**
+     * @return string
+     * @throws Exception
+     */
     public static function getCoreConfDir()
     {
         $config_dir_env = Dj_App_Env::getEnvConst('DJEBEL_APP_CONF_DIR');
