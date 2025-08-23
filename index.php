@@ -512,17 +512,21 @@ class Dj_App_Bootstrap {
         }
 
         $req_obj = Dj_App_Request::getInstance();
-        $current_url = $req_obj->getRequestUrl();
+        $current_url = $req_obj->webPath();
         $patterns = explode('|', $load_if_url);
         $patterns = Dj_App_String_Util::trim($patterns);
-        
+        $matched = false;
+
+        // If the url matches we'll load it otherwise no.
         foreach ($patterns as $pattern) {
             if (strpos($current_url, $pattern) !== false) {
-                return $plugins_options;
+                $matched = true;
+                break;
             }
         }
 
-        $plugins_options[$plugin_id]['active'] = 0;
+        $plugins_options[$plugin_id]['active'] = $matched ? true : false;
+
         return $plugins_options;
     }
 
