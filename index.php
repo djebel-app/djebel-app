@@ -480,6 +480,43 @@ class Dj_App_Bootstrap {
 
         // run this again in case new headers were added by the functions.php
         Dj_App_Hooks::addAction( 'app.core.theme.functions_loaded', [ $req_obj, 'outputHeaders'] );
+
+        // Conditional plugin loading filter
+        Dj_App_Hooks::addFilter( 'app.plugin.options', [ $this, 'filterConditionalPlugins' ], 10, 2 );
+    }
+
+    /**
+     * Filter for conditional plugin loading based on URL patterns
+     * @param array $plugins_options
+     * @param array $ctx
+     * @return array
+     */
+    public function filterConditionalPlugins($plugins_options, $ctx)
+    {
+        if (empty($ctx['plugin_id'])) {
+            return $plugins_options;
+        }
+
+        $plugin_id = $ctx['plugin_id'];
+        $load_if_url = Dj_App_Config::cfg("plugins.{$plugin_id}.load_if_url");
+
+        if (empty($load_if_url)) {
+            return $plugins_options;
+        }
+
+        $req_obj = Dj_App_Request::getInstance();
+        $current_url = $req_obj->getRequestUri();
+        $patterns = explode('|', $load_if_url);
+        $patterns = Dj_App_String_Util::trim($patterns);
+        
+        foreach ($patterns as $pattern) {
+            if (strpos($current_url, $pattern) !== false) {
+                return $plugins_options;
+            }
+        }
+
+        $plugins_options[$plugin_id]['active'] = 0;
+        return $plugins_options;
     }
 
     /**
