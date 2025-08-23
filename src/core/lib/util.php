@@ -46,28 +46,23 @@ class Dj_App_Util {
         $marker = substr($marker, 0, 100);
         $len = strlen($marker);
 
-        $last_char = '';
+        $result = '';
+        $last_was_underscore = false;
         
+        // Convert non-alphanumeric chars to underscores
         for ($i = 0; $i < $len; $i++) {
             $char = $marker[$i];
 
-            if ($char == '_') {
-                if ($last_char == '_') {
-                    unset($marker[$i]);
-                    continue;
-                }
-                $last_char = '_';
-                continue;
-            }
-
             if (ctype_alnum($char)) {
-                $last_char = $char;
-                continue;
+                $result .= $char;
+                $last_was_underscore = false;
+            } elseif (!$last_was_underscore) { // ... avoid consecutive underscores
+                $result .= '_';
+                $last_was_underscore = true;
             }
-
-            $marker[$i] = '_';
-            $last_char = '_';
         }
+        
+        $marker = $result;
         
         $marker = trim($marker, '_');
         $marker = strtolower($marker);
