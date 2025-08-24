@@ -184,6 +184,25 @@ class Dj_App_Plugins {
                     $load_time = Dj_App_Util::time($plugin_file);
                     $plugin_load_times[$plugin_file] = $load_time;
                 }
+                
+                // Allow plugins to control further loading via config or filter
+                $continue_loading = Dj_App_Config::cfg('app.core.plugins.continue_loading', true);
+                
+                if (!$continue_loading) {
+                    break;
+                }
+                
+                $load_ctx = [];
+                $load_ctx['current_plugin'] = $plugin_file;
+                $load_ctx['current_plugin_meta'] = $plugin_meta_info;
+                $load_ctx['loaded_plugins'] = array_keys($plugin_load_times);
+                $load_ctx['remaining_plugins'] = array_keys(array_slice($plugins, array_search($plugin_file, array_keys($plugins)) + 1, null, true));
+                
+                $continue_loading = Dj_App_Hooks::applyFilter('app.core.plugins.continue_loading', true, $load_ctx);
+                
+                if (!$continue_loading) {
+                    break;
+                }
             }
 
             $res_obj->status(1);
