@@ -173,8 +173,8 @@ class Dj_App_Plugins {
             foreach ($plugins as $plugin_file => $plugin_meta_info) {
                 try {
                     $load_time = Dj_App_Util::time($plugin_file);
-                    require_once $plugin_file;
-                } catch (Dj_App_Exception $e) {
+                    include_once $plugin_file;
+                } catch (Throwable $e) {
                     // some plugin failed or crashed
                     // @todo log this
                     $basename = basename($plugin_file);
