@@ -92,7 +92,7 @@ class Dj_App_Themes {
 
         // we're loading it early so that the theme can schedule its hooks
         if ($load_theme_func_file && file_exists($theme_func_file)) {
-            require_once $theme_func_file;
+            include_once $theme_func_file;
             Dj_App_Hooks::doAction( 'app.core.theme.functions_loaded' );
         }
 
