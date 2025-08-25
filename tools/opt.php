@@ -152,7 +152,7 @@ try {
     if (!empty($php_header_rows)) {
         $stub .= "<?php\n";
         $stub .= join("\n", $php_header_rows);
-        $stub .= "?>\n";
+        $stub .= "?>"; // don't add new line so we don't break headers
     }
 
     // Create the default stub from main.php entry point
