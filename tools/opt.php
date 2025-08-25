@@ -223,24 +223,16 @@ try {
     // plus - compressing it into gzip
     $phar->compressFiles(Phar::GZ);
 
-    //$phar->buildFromIterator(
-    //	new RecursiveIteratorIterator(
-    //		new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
-    //	),
-    //	$src_root
-    //);
-
-    //$phar = $phar->convertToExecutable(Phar::PHAR, Phar::GZ);
-
     // was it successful?
     if (!file_exists($phar_file)) {
         throw new RuntimeException("Failed to create as: $phar_file");
     }
 
     // Validate PHAR file creation and set permissions
-    if (!chmod($phar_file, 0755)) {
+    // it's going to be loaded and not executed ... for now, so don't set the permissions.
+    /*if (!chmod($phar_file, 0755)) {
         throw new RuntimeException("Failed to set permissions on PHAR file: $phar_file");
-    }
+    }*/
 
     $size = filesize($phar_file);
     $size_fmt = number_format($size, 0);
@@ -265,7 +257,7 @@ try {
     }
     
     // Provide stack trace in verbose mode (can be enabled via environment variable)
-    if (getenv('VERBOSE') === '1') {
+    if (!empty(getenv('VERBOSE'))) {
         $tool->stderr("Stack trace:");
         $tool->stderr($e->getTraceAsString());
     }
