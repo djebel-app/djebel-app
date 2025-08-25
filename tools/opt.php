@@ -1,11 +1,17 @@
 #!/usr/bin/env php
 <?php
-//
+// packages the djebel app into a phar archive that's one file.
 // Usage: php opt.php
 // Author: Svetoslav Marinov | https://orbisius.com
 // Copyright: All Rights Reserved
 // Check command line arguments first
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+
+$tool = new Djebel_Tool_Opt();
+$phar_name = getenv('DJEBEL_TOOL_OPT_PHAR_NAME');
+
+// The file's extension must end in .phar
+define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? 'djebel-app.phar' : $phar_name);
 
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
@@ -19,34 +25,34 @@ foreach ($args as $arg) {
     }
 }
 
-// Check if exec() is available
-if (!function_exists('exec')) {
-    echo "exec() function is not available. This script requires exec() to be enabled.\n";
-    exit(1);
-}
+$exit_code = 0;
 
-// Check if phar.readonly is enabled and auto-restart if needed
-$can_create_php_phar = ini_get('phar.readonly');
-
-if (!empty($can_create_php_phar) && preg_match('#on|1#si', $can_create_php_phar)) {
-    // Check if we're already running with the parameter to avoid infinite loops
-    $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
-    $has_phar_param = false;
+try {
+    // Check if phar.readonly is enabled and auto-restart if needed
+    $can_create_php_phar = ini_get('phar.readonly');
     
-    foreach ($args as $arg) {
-        if (strpos($arg, 'phar.readonly=0') !== false) {
-            $has_phar_param = true;
-            break;
+    // phar is readonly by default but we need to not be just for a moment so we can create phar
+    // to do that we'll restart the script with the proper php params -d phar.readonly=0
+    if (!empty($can_create_php_phar) && preg_match('#on|1|true#si', $can_create_php_phar)) {
+        // Check if we're already running with the parameter to avoid infinite loops
+        $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+        $has_phar_param_and_still_ro = false; // can this ever happen?
+
+        foreach ($args as $arg) {
+            if (strpos($arg, 'phar.readonly=0') !== false) {
+                $has_phar_param_and_still_ro = true;
+                break;
+            }
         }
-    }
+
+        if ($has_phar_param_and_still_ro) {
+            throw new Exception("Cannot create phar. phar.readonly is enabled and cannot be overridden for some reason.");
+        }
     
-    if (!$has_phar_param) {
-        echo "phar.readonly is enabled. Restarting with -d phar.readonly=0...\n";
-        
         $script_path = __FILE__;
         $script_path_esc = escapeshellarg($script_path);
         $command = sprintf('php -d phar.readonly=0 %s', $script_path_esc);
-        
+
         // Pass through any additional arguments
         if (count($args) > 1) {
             $args_copy = $args;
@@ -54,150 +60,174 @@ if (!empty($can_create_php_phar) && preg_match('#on|1#si', $can_create_php_phar)
             $escaped_args = array_map('escapeshellarg', $args_copy);
             $command .= ' ' . join(' ', $escaped_args);
         }
-        
+
         if (function_exists('passthru')) {
+            $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
             passthru($command, $exit_code);
-        } else {
-            // Fallback to exec() if passthru() is not available
+        } elseif (function_exists('exec')) {
+            $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
             $output = [];
             $exit_code = 0;
             exec($command, $output, $exit_code);
             echo join('', $output) . "\n"; // output already has new lines
+        } else {
+            throw new Exception("Cannot restart the app with -d phar.readonly=0 please do it manually or set phar.readonly=0 in php.ini");
         }
-        exit($exit_code);
-    } else {
-        echo "Cannot create phar. phar.readonly is enabled and cannot be overridden.\n";
-        exit(1);
+
+        exit($exit_code); // this is the parent no need to continue
     }
-}
 
-// Usage:
-// php --define phar.readonly=0 create_phar.php
-
-// see https://medium.com/@tfidry/create-and-deploy-secure-phars-c5572f10b4dd
-// phar to load external config???
-
-// https://gist.githubusercontent.com/odan/8051a1cf01b922df8c6e0f9100703bfa/raw/c14ce52be8dc27cc283270b1b728de0853455da4/create-phar.php
-// https://gist.github.com/odan/8051a1cf01b922df8c6e0f9100703bfa
-// https://www.sitepoint.com/packaging-your-apps-with-phar/
-// https://cweiske.de/tagebuch/phar-renaming-no-ext.htm
-// To make this executable we need to insert a shebang
-// https://blog.programster.org/creating-phar-files
-
-// The file's extension must end in .phar
-define('DJEBEL_TOOL_OPT_PHAR_NAME', 'djebel-app.phar');
-
-// next: // http://php.net/manual/en/phar.mount.php
-$dir = __DIR__;
-$app_dir = dirname(__DIR__);
-$src_root = "$app_dir/src";
-$build_root = "$app_dir/build";
-$phar_file = $build_root . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
-
-// clean up
-$clean_up_files = [
-    $phar_file,
-    $phar_file . '.zip',
-];
-
-foreach ($clean_up_files as $clean_up_file) {
-    if (file_exists($clean_up_file)) {
-        $res = unlink($clean_up_file);
-        opt_stderr("Deleting [$phar_file] " . (empty($res)) ? 'Failed' : 'OK' );
+    $dir = __DIR__;
+    $app_dir = dirname(__DIR__); // one level up
+    $src_root = "$app_dir/src";
+    $build_dir = "$app_dir/build";
+    $phar_file = $build_dir . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
+    
+    // Ensure build directory exists
+    if (!is_dir($build_dir) && !mkdir($build_dir, 0750, true)) {
+        throw new RuntimeException("Failed to create build directory: $build_dir");
     }
-}
 
-echo "Building [$phar_file] ...\n";
-echo "Source directory: $src_root\n";
-echo "Build directory: $build_root\n";
+    // clean up
+    $clean_up_files = [
+        $phar_file,
+        $phar_file . '.zip',
+    ];
 
-$phar = new Phar($phar_file, FilesystemIterator::CURRENT_AS_FILEINFO | 	FilesystemIterator::KEY_AS_FILENAME, basename(DJEBEL_TOOL_OPT_PHAR_NAME));
+    foreach ($clean_up_files as $clean_up_file) {
+        if (file_exists($clean_up_file)) {
+            if (unlink($clean_up_file)) {
+                $tool->stderr("Deleting [$clean_up_file] OK");
+            } else {
+                $tool->stderr("Warning: Could not delete [$clean_up_file]");
+            }
+        }
+    }
 
-// start buffering. Mandatory to modify stub to add shebang
-$phar->startBuffering();
+    // Create the PHAR file with proper exception handling
+    $phar = null;
 
-// Create the default stub from main.php entry point
-$default_stub = $phar->createDefaultStub('index.php');
+    // Validate source directory exists
+    if (!is_dir($src_root)) {
+        throw new InvalidArgumentException("Source directory does not exist: $src_root");
+    }
 
-// pointing main file which requires all classes
-//$phar->setDefaultStub('index.php', 'index.php');
+    echo "Source directory: [$src_root]\n";
+    echo "Building [$phar_file] ...\n";
+    echo "Build directory: [$build_dir]\n";
 
-// creating our library using whole directory
-$build_res = $phar->buildFromDirectory($src_root);
+    $phar = new Phar($phar_file,
+        FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::KEY_AS_FILENAME,
+        basename(DJEBEL_TOOL_OPT_PHAR_NAME)
+    );
 
-$built_date = date('r');
-$git_commit = shell_exec("git rev-list -1 HEAD");
-$git_commit = empty($git_commit) ? '' : $git_commit;
+    // start buffering. Mandatory to modify stub to add shebang
+    $phar->startBuffering();
 
-// Customize the stub to add the shebang
-$stub = '';
-$stub .= "#!/usr/bin/env php\n";
-$stub .= "<?php define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');?>";
+    // pointing main file which requires all classes
+    //$phar->setDefaultStub('index.php', 'index.php');
 
-if (!empty($git_commit)) {
-    $stub .= "<?php define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');?>";
-}
+    // creating our library using whole directory
+    $build_res = $phar->buildFromDirectory($src_root);
 
-$stub .= $default_stub;
-$phar->setStub($stub); // Add the stub
+    if (!$build_res) {
+        throw new RuntimeException("Failed to build PHAR from directory: [$src_root]");
+    }
 
-$phar->stopBuffering();
+    $built_date = date('r');
 
-// plus - compressing it into gzip
-$phar->compressFiles(Phar::GZ);
+    // Customize the stub to add the shebang
+    $stub = '';
+    $stub .= "#!/usr/bin/env php\n";
 
-//$phar->buildFromIterator(
-//	new RecursiveIteratorIterator(
-//		new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
-//	),
-//	$src_root
-//);
+    $php_header_rows = [];
+    $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');";
 
-//$phar = $phar->convertToExecutable(Phar::PHAR, Phar::GZ);
+    $git_output = function_exists('shell_exec') ? shell_exec("git rev-list -1 HEAD") : '';
+    $git_commit = empty($git_output) ? '' : trim($git_output);
 
-$target_conf_file = $build_root . "/conf/config.ini";
+    if (!empty($git_commit)) {
+        $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
+    }
 
-if (file_exists($src_root . "/conf/config.ini")) {
-	if ( ! is_dir( dirname( $build_root . "/conf/config.ini" ) ) ) {
-		mkdir( dirname( $build_root . "/conf/config.ini" ), 0750, 1 );
-	}
+    if (!empty($php_header_rows)) {
+        $stub .= "<?php\n";
+        $stub .= join("\n", $php_header_rows);
+        $stub .= "?>\n";
+    }
 
-	$copy_res = copy( $src_root . "/conf/config.ini", $target_conf_file );
-}
+    // Create the default stub from main.php entry point
+    $default_stub = $phar->createDefaultStub('index.php');
+    $stub .= $default_stub;
+    $phar->setStub($stub); // Add the stub
 
-if (file_exists($phar_file)) {
-	chmod($phar_file, 0755);
+    $phar->stopBuffering();
+
+    // plus - compressing it into gzip
+    $phar->compressFiles(Phar::GZ);
+
+    //$phar->buildFromIterator(
+    //	new RecursiveIteratorIterator(
+    //		new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
+    //	),
+    //	$src_root
+    //);
+
+    //$phar = $phar->convertToExecutable(Phar::PHAR, Phar::GZ);
+
+    // was it successful?
+    if (!file_exists($phar_file)) {
+        throw new RuntimeException("Failed to create as: $phar_file");
+    }
+
+    // Validate PHAR file creation and set permissions
+    if (!chmod($phar_file, 0755)) {
+        throw new RuntimeException("Failed to set permissions on PHAR file: $phar_file");
+    }
+
     $size = filesize($phar_file);
     $size_fmt = number_format($size, 0);
-    echo "size: " . $size_fmt . " bytes\n";
+    echo "PHAR created: [$phar_file]\n";
+    echo "Size: $size_fmt bytes\n";
+} catch (Exception $e) {
+    // Clean up partially created PHAR file on failure
+    if (!empty($phar) && file_exists($phar_file)) {
+        if (!unlink($phar_file)) {
+            $tool->stderr("Warning: Could not clean up partial PHAR file");
+        }
+    }
+
+    // Main exception handler - catches all unhandled exceptions
+    $tool->stderr("Build failed: " . $e->getMessage());
+    
+    // If this is a nested exception, show the original cause
+    $previous = $e->getPrevious();
+
+    if ($previous !== null) {
+        $tool->stderr("Caused by: " . $previous->getMessage());
+    }
+    
+    // Provide stack trace in verbose mode (can be enabled via environment variable)
+    if (getenv('VERBOSE') === '1') {
+        $tool->stderr("Stack trace:");
+        $tool->stderr($e->getTraceAsString());
+    }
+    
+    $exit_code = 255;
+} finally {
+    if (!empty($phar)) {
+        unset($phar);
+    }
+
+    exit($exit_code);
 }
 
+class Djebel_Tool_Opt {
+    function stderr($msg) {
+        if (empty($msg)) {
+            return false;
+        }
 
-$target_dist_dir = getenv('HOME') . sprintf('/Dropbox/Business/%d/software', date('Y'));
-
-if (!is_dir($target_dist_dir)) {
-    mkdir($target_dist_dir, 0700, true);
-}
-
-if (!is_dir($target_dist_dir)) {
-    echo "Error: Could not create target distribution directory [$target_dist_dir].\n";
-    exit(1);
-}
-
-$target_file = $target_dist_dir . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
-
-if (file_exists($target_file)) {
-    unlink($target_file); // Remove existing file if it exists
-}
-
-if (copy($phar_file, $target_file)) {
-    echo "Copied to [$target_file]\n";
-    chmod($target_file, 0755);
-} else {
-    echo "Error: Could not copy to target file [$target_file].\n";
-    exit(1);
-}
-
-function opt_stderr($msg) {
-    fputs(STDERR, $msg . "\n");
+        fputs(STDERR, $msg . "\n");
+    }
 }
