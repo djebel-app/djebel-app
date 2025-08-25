@@ -126,12 +126,53 @@ try {
     // pointing main file which requires all classes
     //$phar->setDefaultStub('index.php', 'index.php');
 
-    // creating our library using whole directory
-    $build_res = $phar->buildFromDirectory($src_root);
+    // creating our library using whole directory with filtering
+    class FilteringIterator extends FilterIterator {
+        public function accept(): bool {
+            $file = $this->getInnerIterator()->current();
+            $path = $file->getPathname();
+            $basename = $file->getBasename();
+            
+            // Exclude patterns - keep composer files but exclude others
+            $exclude_patterns = [
+                // File extensions
+                '#\.(tmp|log|bak|sql)$#i' => $basename,
+                // Git/SVN directories
+                '#/\.(git|svn)/#' => $path,
+                // Environment files
+                '#^\.env[\w\-\.]*$#i' => $basename,
+                // Test directories
+                '#/tests?/#i' => $path,
+                // README files (with or without extension)
+                '#^README(\.md|\.txt|\.docx)?$#i' => $basename,
+                // System files
+                '#^\.DS_Store$#' => $basename,
+            ];
+            
+            foreach ($exclude_patterns as $pattern => $target) {
+                if (preg_match($pattern, $target)) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    }
+
+    $iterator = new FilteringIterator(
+        new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
+        )
+    );
+
+    $phar->buildFromIterator($iterator, $src_root);
+
+    /*$build_res = $phar->buildFromDirectory($src_root);
+    $build_res = true; // buildFromIterator doesn't return a result
 
     if (!$build_res) {
         throw new RuntimeException("Failed to build PHAR from directory: [$src_root]");
-    }
+    }*/
 
     $built_date = date('r');
 
