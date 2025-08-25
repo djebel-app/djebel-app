@@ -163,6 +163,9 @@ $load_admin = false;
 $load_admin = Dj_App_Util::isEnabled($load_admin_env) ? true : false;
 $load_admin = Dj_App_Hooks::applyFilter('app.core.admin.load_admin', $load_admin);
 
+// if the app.ini has [site] theme set.
+$current_theme = $options_obj->site->theme;
+
 if ($req_obj->isAdminArea()) {
     if ($app_load_admin) {
         Dj_App_Hooks::doAction('app.core.admin.init');
@@ -171,7 +174,7 @@ if ($req_obj->isAdminArea()) {
     } else {
         Dj_App_Util::die("Resource not available.", "Error", ['code' => 503,]);
     }
-} else {
+} elseif (!empty($current_theme)) {
     $load_theme_env = Dj_App_Env::getEnvConst('DJEBEL_APP_THEME_LOAD_THEME');
     $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
     $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
