@@ -111,8 +111,6 @@ echo "Building [$phar_file] ...\n";
 echo "Source directory: $src_root\n";
 echo "Build directory: $build_root\n";
 
-$obfuscated_src_dir = $src_root;
-
 $phar = new Phar($phar_file, FilesystemIterator::CURRENT_AS_FILEINFO | 	FilesystemIterator::KEY_AS_FILENAME, basename(DJEBEL_TOOL_OPT_PHAR_NAME));
 
 // start buffering. Mandatory to modify stub to add shebang
@@ -125,7 +123,7 @@ $default_stub = $phar->createDefaultStub('index.php');
 //$phar->setDefaultStub('index.php', 'index.php');
 
 // creating our library using whole directory
-$build_res = $phar->buildFromDirectory($obfuscated_src_dir);
+$build_res = $phar->buildFromDirectory($src_root);
 
 $built_date = date('r');
 $git_commit = shell_exec("git rev-list -1 HEAD");
