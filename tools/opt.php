@@ -128,13 +128,18 @@ $default_stub = $phar->createDefaultStub('index.php');
 $build_res = $phar->buildFromDirectory($obfuscated_src_dir);
 
 $built_date = date('r');
-$build_hash = '';
+$git_commit = shell_exec("git rev-list -1 HEAD");
+$git_commit = empty($git_commit) ? '' : $git_commit;
 
 // Customize the stub to add the shebang
 $stub = '';
 $stub .= "#!/usr/bin/env php\n";
 $stub .= "<?php define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');?>";
-$stub .= "<?php define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_HASH', '$build_hash');?>";
+
+if (!empty($git_commit)) {
+    $stub .= "<?php define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');?>";
+}
+
 $stub .= $default_stub;
 $phar->setStub($stub); // Add the stub
 
