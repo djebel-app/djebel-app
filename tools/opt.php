@@ -166,6 +166,16 @@ try {
     );
 
     $phar->buildFromIterator($iterator, $src_root);
+    
+    // Add the root index.php file as the main entry point
+    $root_index = $app_dir . '/index.php';
+
+    if (file_exists($root_index)) {
+        $phar->addFile($root_index, 'index.php');
+        echo "Added root index.php to PHAR\n";
+    } else {
+        throw new RuntimeException("Root index.php not found at: $root_index");
+    }
 
     /*$build_res = $phar->buildFromDirectory($src_root);
     $build_res = true; // buildFromIterator doesn't return a result
