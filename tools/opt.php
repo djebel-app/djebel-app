@@ -67,7 +67,6 @@ try {
         } elseif (function_exists('exec')) {
             $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
             $output = [];
-            $exit_code = 0;
             exec($command, $output, $exit_code);
             echo join('', $output) . "\n"; // output already has new lines
         } else {
