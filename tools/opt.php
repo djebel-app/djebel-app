@@ -139,7 +139,7 @@ try {
                 '#\.(tmp|log|bak|sql)$#i' => $basename,
                 // Git/SVN directories
                 '#/\.(git|svn)/#' => $path,
-                // Environment files
+                // Environment files (only .env* files starting with dot)
                 '#^\.env[\w\-\.]*$#i' => $basename,
                 // Test directories
                 '#/tests?/#i' => $path,
@@ -165,7 +165,14 @@ try {
         )
     );
 
-    $phar->buildFromIterator($iterator, $src_root);
+    // Build from iterator manually to preserve src/ directory structure
+    foreach ($iterator as $file) {
+        if ($file->isFile()) {
+            // Keep the full path relative to app_dir to preserve src/ folder
+            $relative_path = substr($file->getPathname(), strlen($app_dir) + 1);
+            $phar->addFile($file->getPathname(), $relative_path);
+        }
+    }
     
     // Add the root index.php file as the main entry point
     $root_index = $app_dir . '/index.php';
