@@ -193,9 +193,9 @@ try {
 
     $built_date = date('r');
 
-    // Customize the stub to add the shebang
+    // Customize the stub to add the shebang (only for CLI)
     $stub = '';
-    $stub .= "#!/usr/bin/env php\n";
+    // $stub .= "#!/usr/bin/env php\n"; // commented out for web usage
 
     $php_header_rows = [];
     $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');";
