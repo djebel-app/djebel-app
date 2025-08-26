@@ -55,18 +55,17 @@ class Dj_App_String_Util
             return '';
         }
 
+        $str = substr($str, 0, 64); // let's work with small strings
+        $str = str_replace( ['-', ':', '/', "\0"], '_', $str);
+
         // check if it's alphanumeric before doing anything more resource intensive
-        if (Dj_App_String_Util::isAlphaNumericExt($str)) {
-            $str = str_replace('-', '_', $str);
-        } else {
+        if (!Dj_App_String_Util::isAlphaNumericExt($str)) {
             $str = Dj_App_String_Util::trim($str);
-            $str = preg_replace( '#[^\w\-]+#si', '_', $str );
-            $str = str_replace( '-', '_', $str );
+            $str = preg_replace( '#[^\w]+#si', '_', $str );
             $str = preg_replace( '#_+#si', '_', $str ); // single _
         }
 
         $str = strtolower($str);
-        $str = substr($str, 0, 64);
         $str = trim($str, '_');
 
         return $str;
