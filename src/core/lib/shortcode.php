@@ -28,6 +28,7 @@ class Dj_App_Shortcode {
 
     /**
      * replaces [djebel_nav] shortcode with whatever we have defined in app.ini in the nav
+     * @todo add ids and position?
      * @param array $params
      * @return string
      */
