@@ -14,8 +14,8 @@ class Dj_App_Shortcode {
      */
     public function installHooks()
     {
-        // [year]
-        $this->addShortcode('year', [ $this, 'renderSysShortcodeYear' ]);
+        // [djebel_date_year]
+        $this->addShortcode('djebel_date_year', [ $this, 'renderSysShortcodeYear' ]);
 
         // [djebel_nav]
         $this->addShortcode('djebel_nav', [ $this, 'renderNav' ]);
