@@ -120,7 +120,6 @@ class Dj_App_Util {
             }
 
             $app_base_dir = empty($app_base_dir) ? Dj_App_Config::cfg(Dj_App_Config::APP_BASE_DIR) : $app_base_dir;
-
             $dir = $app_base_dir . '/dj-content';
         }
 
@@ -1204,6 +1203,7 @@ MSG_EOF;
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
             '__SITE_WEB_PATH__' => $req_obj->getWebPath(),
+            '__SITE_CONTENT_WEB_PATH__' => $req_obj->getWebPath() . '',
         ];
 
         // Replace magic variables
