@@ -180,7 +180,6 @@ if ($req_obj->isAdminArea()) {
     $themes_obj = Dj_App_Themes::getInstance();
     $themes_obj->installHooks();
     $themes_obj->loadTheme();
-    Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded' );
 } elseif (0) {
     // this is a code duplication from themes.php until we refactor it.
     ob_start();

@@ -81,108 +81,112 @@ class Dj_App_Themes {
      */
     public function loadTheme($inp_params = [])
     {
-        $req_obj = Dj_App_Request::getInstance();
-        $page_obj = Dj_App_Page::getInstance();
+        try {
+            $req_obj = Dj_App_Request::getInstance();
+            $page_obj = Dj_App_Page::getInstance();
 
-        $ctx = [];
-        $ctx['page'] = $page_obj->page;
-        $ctx['full_page'] = $page_obj->full_page;
+            $ctx = [];
+            $ctx['page'] = $page_obj->page;
+            $ctx['full_page'] = $page_obj->full_page;
 
-        $site_section = Dj_App_Options::getInstance()->site;
-        $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme() : $inp_params['theme'];
-        $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
-        $this->current_theme = $current_theme;
+            $site_section = Dj_App_Options::getInstance()->site;
+            $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme() : $inp_params['theme'];
+            $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
+            $this->current_theme = $current_theme;
 
-        $themes_dir = $this->getThemesDir();
-        $current_theme_dir = $themes_dir . '/' . $current_theme;
-        $this->current_theme_dir = $current_theme_dir;
-        $current_theme_dir = Dj_App_Hooks::applyFilter( 'app.themes.current_theme_dir', $current_theme_dir, $ctx );
+            $themes_dir = $this->getThemesDir();
+            $current_theme_dir = $themes_dir . '/' . $current_theme;
+            $this->current_theme_dir = $current_theme_dir;
+            $current_theme_dir = Dj_App_Hooks::applyFilter('app.themes.current_theme_dir', $current_theme_dir, $ctx);
 
-        $this->current_theme_dir = $current_theme_dir;
-        $this->current_theme_url = $req_obj->contentUrlPrefix() . '/themes/' . $current_theme;
-        $default_theme_file = $current_theme_dir . '/index.php';
+            $this->current_theme_dir = $current_theme_dir;
+            $this->current_theme_url = $req_obj->contentUrlPrefix() . '/themes/' . $current_theme;
+            $default_theme_file = $current_theme_dir . '/index.php';
 
-        // organize funcs
-        $load_theme_func_file = !isset($site_section['theme_load_functions']) || !empty($site_section['theme_load_functions'])
-            ? true
-            : false;
-        $theme_func_file = $current_theme_dir . '/functions.php';
-        $load_theme_func_file = Dj_App_Config::cfg('app.core.theme.load_theme_functions', $load_theme_func_file);
-        $load_theme_func_file = Dj_App_Hooks::applyFilter( 'app.core.theme.load_theme_functions', $load_theme_func_file, $ctx );
+            // organize funcs
+            $load_theme_func_file = !isset($site_section['theme_load_functions']) || !empty($site_section['theme_load_functions'])
+                ? true
+                : false;
+            $theme_func_file = $current_theme_dir . '/functions.php';
+            $load_theme_func_file = Dj_App_Config::cfg('app.core.theme.load_theme_functions', $load_theme_func_file);
+            $load_theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_functions', $load_theme_func_file, $ctx);
 
-        // we're loading it early so that the theme can schedule its hooks
-        if ($load_theme_func_file && file_exists($theme_func_file)) {
-            include_once $theme_func_file;
-            Dj_App_Hooks::doAction( 'app.core.theme.functions_loaded' );
-        }
-
-        Dj_App_Hooks::doAction( 'app.core.theme.setup', $ctx );
-
-        // Header
-        ob_start();
-        $theme_header_file = $current_theme_dir . '/header.php';
-        $load_theme_header_file = Dj_App_Config::cfg('app.core.theme.load_theme_header', $theme_load_main_file ? false : true);
-        $load_theme_header_file = Dj_App_Hooks::applyFilter( 'app.core.theme.load_theme_header', $load_theme_header_file );
-
-        $header_loaded = false;
-
-        if ($load_theme_header_file && file_exists($theme_header_file)) {
-            include_once $theme_header_file;
-            $header_loaded = true;
-        }
-
-        $header_buff = ob_get_clean();
-        $header_buff = Dj_App_Hooks::applyFilter( 'app.page.header_buffer', $header_buff );
-        // Header
-
-        // Footer
-        ob_start();
-        $footer_loaded = false;
-        $theme_footer_file = $current_theme_dir . '/footer.php';
-        $load_theme_footer_file = Dj_App_Config::cfg('app.core.theme.load_theme_footer', $theme_load_main_file ? false : true);
-        $load_theme_footer_file = Dj_App_Hooks::applyFilter( 'app.core.theme.load_theme_footer', $load_theme_footer_file );
-
-        if ($load_theme_footer_file && file_exists($theme_footer_file)) {
-            include_once $theme_footer_file;
-            $footer_loaded = true;
-        }
-
-        $footer_buff = ob_get_clean();
-        $header_buff = Dj_App_Hooks::applyFilter( 'app.page.footer_buffer', $footer_buff );
-        // Footer
-
-        $ctx['theme'] = $current_theme;
-        $ctx['theme_dir'] = $current_theme_dir;
-        $ctx['header_loaded'] = $header_loaded;
-        $ctx['footer_loaded'] = $footer_loaded;
-
-        $full_page_content = '';
-
-        if (!empty($header_buff) && !empty($footer_buff)) {
-            $page_content_buff = '';
-
-            // check if the render content hook was called. The theme could just define the two blocks
-            // and we'll do a content sandwich :)
-            if (!Dj_App_Hooks::hasRun('app.page.content.render')) {
-                $page_content_buff = Dj_App_Hooks::captureHookOutput('app.page.content.render', $ctx);
+            // we're loading it early so that the theme can schedule its hooks
+            if ($load_theme_func_file && file_exists($theme_func_file)) {
+                include_once $theme_func_file;
+                Dj_App_Hooks::doAction('app.core.theme.functions_loaded');
             }
 
-            $page_content_buff = Dj_App_Hooks::applyFilter( 'app.page.content', $page_content_buff, $ctx );
-            $full_page_content = $header_buff . $page_content_buff . $footer_buff;
-        } else {
-            if (!file_exists($default_theme_file)) {
-                Dj_App_Util::die("Theme file not found", $current_theme, ['code' => 404,]);
-            }
+            Dj_App_Hooks::doAction('app.core.theme.setup', $ctx);
 
+            // Header
             ob_start();
-            include_once $default_theme_file;
-            $full_page_content = ob_get_clean();
+            $theme_header_file = $current_theme_dir . '/header.php';
+            $load_theme_header_file = Dj_App_Config::cfg('app.core.theme.load_theme_header', $theme_load_main_file ? false : true);
+            $load_theme_header_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_header', $load_theme_header_file);
+
+            $header_loaded = false;
+
+            if ($load_theme_header_file && file_exists($theme_header_file)) {
+                include_once $theme_header_file;
+                $header_loaded = true;
+            }
+
+            $header_buff = ob_get_clean();
+            $header_buff = Dj_App_Hooks::applyFilter('app.page.header_buffer', $header_buff);
+            // Header
+
+            // Footer
+            ob_start();
+            $footer_loaded = false;
+            $theme_footer_file = $current_theme_dir . '/footer.php';
+            $load_theme_footer_file = Dj_App_Config::cfg('app.core.theme.load_theme_footer', $theme_load_main_file ? false : true);
+            $load_theme_footer_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_footer', $load_theme_footer_file);
+
+            if ($load_theme_footer_file && file_exists($theme_footer_file)) {
+                include_once $theme_footer_file;
+                $footer_loaded = true;
+            }
+
+            $footer_buff = ob_get_clean();
+            $header_buff = Dj_App_Hooks::applyFilter('app.page.footer_buffer', $footer_buff);
+            // Footer
+
+            $ctx['theme'] = $current_theme;
+            $ctx['theme_dir'] = $current_theme_dir;
+            $ctx['header_loaded'] = $header_loaded;
+            $ctx['footer_loaded'] = $footer_loaded;
+
+            $full_page_content = '';
+
+            if (!empty($header_buff) && !empty($footer_buff)) {
+                $page_content_buff = '';
+
+                // check if the render content hook was called. The theme could just define the two blocks
+                // and we'll do a content sandwich :)
+                if (!Dj_App_Hooks::hasRun('app.page.content.render')) {
+                    $page_content_buff = Dj_App_Hooks::captureHookOutput('app.page.content.render', $ctx);
+                }
+
+                $page_content_buff = Dj_App_Hooks::applyFilter('app.page.content', $page_content_buff, $ctx);
+                $full_page_content = $header_buff . $page_content_buff . $footer_buff;
+            } else {
+                if (!file_exists($default_theme_file)) {
+                    Dj_App_Util::die("Theme file not found", $current_theme, ['code' => 404,]);
+                }
+
+                ob_start();
+                include_once $default_theme_file;
+                $full_page_content = ob_get_clean();
+            }
+
+            $full_page_content = Dj_App_Hooks::applyFilter('app.page.full_content', $full_page_content);
+            $full_page_content = trim($full_page_content);
+
+            echo $full_page_content;
+        } finally {
+            Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded', $ctx );
         }
-
-        $full_page_content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $full_page_content );
-        $full_page_content = trim($full_page_content);
-
-        echo $full_page_content;
     }
 
     public function installHooks()
