@@ -89,14 +89,15 @@ class Dj_App_String_Util
     }
 
     const ALLOW_DOT = 2;
-    const KEEP_CASE = 4;
-    const LOWERCASE = 8;
-    const UPPERCASE = 32;
-    const FORMAT_ALLOW_DOT = 64;
-    const FORMAT_CONVERT_TO_DASHES = 128;
-    const KEEP_LEADING_DASH = 256;
-    const KEEP_TRAILING_DASH = 512;
-    const SHORTEN_TO_MAX_SUBDOMAIN_LENGTH = 1024;
+    const KEEP_CASE = 2**2;
+    const KEEP_DASH = 2**3;
+    const LOWERCASE = 2**4;
+    const UPPERCASE = 2**5;
+    const FORMAT_ALLOW_DOT = 2**6;
+    const FORMAT_CONVERT_TO_DASHES = 2**7;
+    const KEEP_LEADING_DASH = 2**8;
+    const KEEP_TRAILING_DASH = 2**9;
+    const SHORTEN_TO_MAX_SUBDOMAIN_LENGTH = 2**10;
 
     /**
      * Dj_App_String_Util::formatStringId();
@@ -105,6 +106,31 @@ class Dj_App_String_Util
      * Ideas gotten from: http://www.jonasjohn.de/snippets/php/trim-array.htm
      */
     public static function formatStringId($tag, $flags = 0) {
+        if (is_null($tag) || $tag === '' || $tag === false) {
+            return false; // early return for empty values
+        }
+
+        $max_len = 255;
+
+        if (!is_scalar($tag)) {
+            $tag = serialize($tag);
+        } else if (is_numeric($tag)) { // ctype_alnum(): Argument of type int will be interpreted as string in the future
+            $tag = (string) $tag; // php complains about ctype_alnum when it receives numbers that will be treated as strings
+        }
+
+        // Fast path: if already alphanumeric extended (a-z0-9_-) and no flags, just lowercase
+        if (empty($flags) && self::isAlphaNumericExt($tag)) {
+            // with no flag lowercase is the default option.
+            // We're doing this as one of the tests failed.
+            $tag = strtolower($tag);
+
+            if (($flags & Dj_App_String_Util::KEEP_DASH) == 0) {
+                $tag = str_replace('-', '_', $tag);
+            }
+
+            return $tag;
+        }
+
         // checking for an empty str because the value could be null
         // we don't want the null thing serialized
         $tag = is_null($tag) || $tag == '' || $tag === false ? '' : $tag; // 0 is ok
@@ -169,13 +195,12 @@ class Dj_App_String_Util
         }
 
         $tag = trim($tag, join('', $extra_allowed_chars));
-        $cut = 255;
 
         if ($flags & Dj_App_String_Util::SHORTEN_TO_MAX_SUBDOMAIN_LENGTH) {
-            $cut = 63;
+            $max_len = 63;
         }
 
-        $tag = substr($tag, 0, $cut);
+        $tag = substr($tag, 0, $max_len);
 
         return $tag;
     }
