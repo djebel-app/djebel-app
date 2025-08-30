@@ -70,6 +70,7 @@ class Dj_App_Themes {
             $current_theme = $options_obj->site->theme;
         }
 
+        $current_theme = Dj_App_String_Util::formatStringId($current_theme);
         $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme );
 
         return $current_theme;
