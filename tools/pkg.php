@@ -81,6 +81,7 @@ try {
     $src_root = "$app_dir/src";
     $build_dir = "$app_dir/build";
     $phar_file = $build_dir . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
+    $zip_file = $phar_file . '.zip';
     
     // Ensure build directory exists
     if (!is_dir($build_dir) && !mkdir($build_dir, 0750, true)) {
@@ -90,7 +91,7 @@ try {
     // clean up
     $clean_up_files = [
         $phar_file,
-        $phar_file . '.zip',
+        $zip_file,
     ];
 
     foreach ($clean_up_files as $clean_up_file) {
@@ -238,11 +239,75 @@ try {
     $size_fmt = number_format($size, 0);
     echo "PHAR created: [$phar_file]\n";
     echo "Size: $size_fmt bytes\n";
+
+    // Create ZIP file of the PHAR
+    $zip_created = false;
+    $zip_comment = "Created: $built_date";
+
+    if ( !empty($git_commit) ) {
+        $zip_comment .= "\nGit commit: $git_commit";
+    }
+
+    if ( class_exists('ZipArchive') ) {
+        echo "Creating ZIP file: [$zip_file] ...\n";
+
+        $zip = new ZipArchive();
+        $zip_result = $zip->open($zip_file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        
+        if ( !empty($zip_result) ) {
+            throw new RuntimeException("Failed to create ZIP file: $zip_file (Error: $zip_result)");
+        }
+        
+        // Add the PHAR file to the ZIP with just the filename (not the full path)
+        $zip->addFile($phar_file, basename($phar_file));
+        $zip->setArchiveComment($zip_comment);
+        $zip->close();
+        
+        if ( !file_exists($zip_file) ) {
+            throw new RuntimeException("Failed to create ZIP file: $zip_file");
+        }
+
+        $zip_created = true;
+    } else if ( function_exists('exec') ) {
+        echo "Creating ZIP file: [$zip_file] ...\n";
+
+        // Escape shell arguments for security
+        $zip_file_esc = escapeshellarg($zip_file);
+        $phar_file_esc = escapeshellarg($phar_file);
+        
+        // Create zip: -j (junk paths), -9 (max compression)
+        $zip_command = "zip -j -9 $zip_file_esc $phar_file_esc";
+        exec($zip_command, $zip_output, $zip_exit_code);
+
+        // Check if zip command succeeded (exit code 0) and file was created
+        if ( empty($zip_exit_code) && file_exists($zip_file) ) {
+            $zip_created = true;
+        } else {
+            $tool->stderr("Warning: Failed to create ZIP file using zip command (exit code: $zip_exit_code)");
+        }
+    } else {
+        echo "Warning: ZipArchive class and exec function not available, skipping ZIP creation\n";
+    }
+
+    // Show ZIP creation success message and size (common for both methods)
+    if ( $zip_created ) {
+        $zip_size = filesize($zip_file);
+        $zip_size_fmt = number_format($zip_size, 0);
+        echo "ZIP created: [$zip_file]\n";
+        echo "ZIP Size: $zip_size_fmt bytes\n";
+    }
 } catch (Exception $e) {
     // Clean up partially created PHAR file on failure
     if (!empty($phar) && file_exists($phar_file)) {
         if (!unlink($phar_file)) {
             $tool->stderr("Warning: Could not clean up partial PHAR file");
+        }
+    }
+    
+    // Clean up partially created ZIP file on failure
+    if (!empty($zip_file) && file_exists($zip_file)) {
+        if (!unlink($zip_file)) {
+            $tool->stderr("Warning: Could not clean up partial ZIP file");
         }
     }
 
