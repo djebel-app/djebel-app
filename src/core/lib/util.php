@@ -100,6 +100,18 @@ class Dj_App_Util {
     }
 
     /**
+     * That's dj-content
+     * Dj_App_Util::getContentDirName();
+     * @return string
+     */
+    public static function getContentDirName()
+    {
+        $dir = 'dj-content';
+        $dir = Dj_App_Hooks::applyFilter( 'app.config.content_dir_name', $dir );
+        return $dir;
+    }
+
+    /**
      * That's the folder that contains /plugins and /themes/ and files/
      * Dj_App_Util::getContentDir();
      * @return string
@@ -120,7 +132,7 @@ class Dj_App_Util {
             }
 
             $app_base_dir = empty($app_base_dir) ? Dj_App_Config::cfg(Dj_App_Config::APP_BASE_DIR) : $app_base_dir;
-            $dir = $app_base_dir . '/dj-content';
+            $dir = $app_base_dir . '/' . Dj_App_Util::getContentDirName();
         }
 
         $dir = Dj_App_Hooks::applyFilter( 'app.config.content_dir', $dir );
@@ -1192,7 +1204,7 @@ MSG_EOF;
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
             '__SITE_WEB_PATH__' => $req_obj->getWebPath(),
-            '__SITE_CONTENT_WEB_PATH__' => $req_obj->getWebPath() . '',
+            '__SITE_CONTENT_WEB_PATH__' => $req_obj->getWebPath() . '/' . Dj_App_Util::getContentDirName(),
         ];
 
         // Replace magic variables
