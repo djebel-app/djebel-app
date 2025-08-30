@@ -178,7 +178,7 @@ if ($req_obj->isAdminArea()) {
 } elseif ($load_theme) {
     require_once $app_lib_dir . '/themes.php';
     $themes_obj = Dj_App_Themes::getInstance();
-    $themes_obj->installThemeHooks();
+    $themes_obj->installHooks();
     $themes_obj->loadTheme();
     Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded' );
 } elseif (0) {

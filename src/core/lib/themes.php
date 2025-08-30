@@ -185,7 +185,7 @@ class Dj_App_Themes {
         echo $full_page_content;
     }
 
-    public function installThemeHooks()
+    public function installHooks()
     {
         Dj_App_Hooks::addAction( 'app.page.content.render', [ $this, 'renderPageContent' ] );
         Dj_App_Hooks::addFilter( 'app.page.full_content', [ $this, 'autoCorrectAssetLinks' ] );
