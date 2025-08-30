@@ -361,11 +361,11 @@ class Djebel_App_HTML {
 		$is_error_page = !empty($options['status_code']) && $options['status_code'] >= 400;
 		
 		if ($is_error_page) {
-			$bg_gradient = empty($options['bg_gradient']) ? 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)' : $options['bg_gradient'];
+			$bg_gradient = empty($options['bg_gradient']) ? 'linear-gradient(135deg, #008080 0%, #20b2aa 100%)' : $options['bg_gradient'];
 			$container_class = empty($options['container_class']) ? 'djebel-app-error-container' : $options['container_class'];
 			$content_class = empty($options['content_class']) ? 'djebel-app-error-content' : $options['content_class'];
 		} else {
-			$bg_gradient = empty($options['bg_gradient']) ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : $options['bg_gradient'];
+			$bg_gradient = empty($options['bg_gradient']) ? 'linear-gradient(135deg, #008080 0%, #20b2aa 100%)' : $options['bg_gradient'];
 			$container_class = empty($options['container_class']) ? 'djebel-app-page-container' : $options['container_class'];
 			$content_class = empty($options['content_class']) ? 'djebel-app-page-content' : $options['content_class'];
 		}
