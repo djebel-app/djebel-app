@@ -21,7 +21,7 @@ class Dj_App_Shortcode {
         $this->addShortcode('djebel_nav', [ $this, 'renderNav' ]);
 
         //
-        $this->addShortcode('djebel_content', [ $this, 'renderContent' ]);
+        $this->addShortcode('djebel_page_content', [ $this, 'renderContent' ]);
         $this->addShortcode('djebel_page_footer', [ $this, 'renderPageFooter' ]);
 
         Dj_App_Hooks::addFilter( 'app.page.full_content', [ $this, 'replaceShortCodes'] );
@@ -43,7 +43,7 @@ class Dj_App_Shortcode {
     }
 
     /**
-     * replaces [djebel_content] shortcode with whatever we have defined in app.ini in the nav
+     * replaces [djebel_page_content] shortcode with whatever we have defined in app.ini in the nav
      * @param array $params
      * @return string
      */
