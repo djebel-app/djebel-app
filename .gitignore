@@ -9,3 +9,6 @@
 *.gz
 *.tar
 *.zip
+djebel*.phar*
+app.ini
+
