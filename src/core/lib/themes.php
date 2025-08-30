@@ -54,9 +54,31 @@ class Dj_App_Themes {
     }
 
     /**
+    // checks the app.ini if it has 'theme' or 'theme_id' in [site], [theme] sections
+     * @return string
+     */
+    public function getCurrentTheme()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $current_theme = 'default';
+
+        if (!empty($options_obj->site->theme_id)) {
+            $current_theme = $options_obj->site->theme_id;
+        } else if (!empty($options_obj->theme->theme_id)) {
+            $current_theme = $options_obj->theme->theme_id;
+        } else if (!empty($options_obj->site->theme)) {
+            $current_theme = $options_obj->site->theme;
+        }
+
+        $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme );
+
+        return $current_theme;
+    }
+
+    /**
      * @return void
      */
-    public function loadCurrentTheme()
+    public function loadTheme($inp_params = [])
     {
         $req_obj = Dj_App_Request::getInstance();
         $page_obj = Dj_App_Page::getInstance();
@@ -66,11 +88,8 @@ class Dj_App_Themes {
         $ctx['full_page'] = $page_obj->full_page;
 
         $site_section = Dj_App_Options::getInstance()->site;
-        $current_theme = empty($site_section['theme']) ? '' : $site_section['theme'];
-        $theme_load_main_file = empty($site_section['theme_load_main_file']) ? '' : $site_section['theme_load_main_file'];
-        $current_theme = empty($current_theme) ? 'default' : $current_theme;
-        $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme, $ctx );
-
+        $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme() : $inp_params['theme'];
+        $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
         $this->current_theme = $current_theme;
 
         $themes_dir = $this->getThemesDir();
@@ -151,7 +170,7 @@ class Dj_App_Themes {
             $full_page_content = $header_buff . $page_content_buff . $footer_buff;
         } else {
             if (!file_exists($default_theme_file)) {
-                Dj_App_Util::die("Theme file not found", "$current_theme", ['code' => 404,]);
+                Dj_App_Util::die("Theme file not found", $current_theme, ['code' => 404,]);
             }
 
             ob_start();
@@ -194,6 +213,17 @@ class Dj_App_Themes {
         }
 
         $page_obj = Dj_App_Page::getInstance();
+        $options_obj = Dj_App_Options::getInstance();
+
+        $pages_dir = $current_theme_dir . '/pages';
+        $ctx['pages_dir'] = $pages_dir;
+        $single_page = !empty($options_obj->theme->single_page) || !is_dir($pages_dir);
+        $single_page = Dj_App_Hooks::applyFilter('app.themes.single_page', $single_page, $ctx);
+
+        // the main theme file handles the content
+        if ($single_page) {
+            return;
+        }
 
         $page = $page_obj->full_page;
         $page = empty($page) ? '' : $page; // this can be product or product/prod1
@@ -202,8 +232,8 @@ class Dj_App_Themes {
         $default_page = 'home';
 
         if (empty($page)) {
-            if (!empty($site_section['front_page'])) {
-                $page = $site_section['front_page'];
+            if (!empty($options_obj->site->front_page)) {
+                $page = $options_obj->site->front_page;
             } else {
                 $page = $default_page;
             }
@@ -211,15 +241,29 @@ class Dj_App_Themes {
 
         $page_fmt = $page;
         $page_fmt = $page_obj->formatFullPageSlug($page_fmt);
-        $page_fmt = Dj_App_Hooks::applyFilter( 'app.themes.current_page', $page_fmt, $ctx );
+        $page_fmt = Dj_App_Hooks::applyFilter('app.themes.current_page', $page_fmt, $ctx);
         $page_fmt = $page_obj->formatFullPageSlug($page_fmt); // jic
-        $file = $current_theme_dir . "/pages/$page_fmt.php";
-        $file = Dj_App_Hooks::applyFilter( 'app.themes.page_content_file', $file, $ctx );
 
-        if (!file_exists($file)) {
+        $page_file_candiates = [
+            $file = $pages_dir . "/$page_fmt.php",
+        ];
+
+        $page_file_candiates = Dj_App_Hooks::applyFilter('app.themes.page_file_candidates', $page_file_candiates, $ctx);
+        $file = '';
+
+        foreach ($page_file_candiates as $loop_file) {
+            $loop_file = Dj_App_Hooks::applyFilter('app.themes.page_content_file', $loop_file, $ctx);
+
+            if (file_exists($loop_file)) {
+                $file = $loop_file;
+                break;
+            }
+        }
+
+        if (empty($file) || !file_exists($file)) {
             // test if this is a dir so access e.g. /bg/
             $dir = $current_theme_dir . "/pages/$page_fmt";
-            $page_not_found_file = $current_theme_dir . "/pages/404.php";
+            $page_not_found_file = $pages_dir . "/404.php";
             $page_not_found_file = Dj_App_Hooks::applyFilter( 'app.themes.page_not_found_file', $page_not_found_file, $ctx );
 
             if (is_dir($dir)) {
