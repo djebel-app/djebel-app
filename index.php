@@ -163,8 +163,16 @@ $load_admin = false;
 $load_admin = Dj_App_Util::isEnabled($load_admin_env) ? true : false;
 $load_admin = Dj_App_Hooks::applyFilter('app.core.admin.load_admin', $load_admin);
 
-// if the app.ini has [site] theme set.
-$current_theme = $options_obj->site->theme;
+// check the app.ini if it has 'theme' or 'theme_id' in [site] [theme] sections
+$current_theme = '';
+
+if (!empty($options_obj->site->theme_id)) {
+    $current_theme = $options_obj->site->theme_id;
+} else if (!empty($options_obj->theme->theme_id)) {
+    $current_theme = $options_obj->theme->theme_id;
+} else if (!empty($options_obj->site->theme)) {
+    $current_theme = $options_obj->site->theme;
+}
 
 if ($req_obj->isAdminArea()) {
     if ($app_load_admin) {
