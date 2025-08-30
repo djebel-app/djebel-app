@@ -163,16 +163,9 @@ $load_admin = false;
 $load_admin = Dj_App_Util::isEnabled($load_admin_env) ? true : false;
 $load_admin = Dj_App_Hooks::applyFilter('app.core.admin.load_admin', $load_admin);
 
-// check the app.ini if it has 'theme' or 'theme_id' in [site] [theme] sections
-$current_theme = '';
-
-if (!empty($options_obj->site->theme_id)) {
-    $current_theme = $options_obj->site->theme_id;
-} else if (!empty($options_obj->theme->theme_id)) {
-    $current_theme = $options_obj->theme->theme_id;
-} else if (!empty($options_obj->site->theme)) {
-    $current_theme = $options_obj->site->theme;
-}
+$load_theme_env = Dj_App_Env::getEnvConst('DJEBEL_APP_THEME_LOAD_THEME');
+$load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
+$load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
 
 if ($req_obj->isAdminArea()) {
     if ($app_load_admin) {
@@ -182,31 +175,25 @@ if ($req_obj->isAdminArea()) {
     } else {
         Dj_App_Util::die("Resource not available.", "Error", ['code' => 503,]);
     }
-} elseif (!empty($current_theme)) {
-    $load_theme_env = Dj_App_Env::getEnvConst('DJEBEL_APP_THEME_LOAD_THEME');
-    $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
-    $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
+} elseif ($load_theme) {
+    require_once $app_lib_dir . '/themes.php';
+    $themes_obj = Dj_App_Themes::getInstance();
+    $themes_obj->installThemeHooks();
+    $themes_obj->loadTheme();
+    Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded' );
+} elseif (0) {
+    // this is a code duplication from themes.php until we refactor it.
+    ob_start();
+    Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
+    // we have to call this so it's rendered by whatever plugin is handling it
+    Dj_App_Hooks::doAction( 'app.page.content.render' );
+    $content = ob_get_clean();
+    $content = Dj_App_Hooks::applyFilter( 'app.page.content', $content );
+    $content = trim($content);
 
-    if ($load_theme) {
-        require_once $app_lib_dir . '/themes.php';
-        $themes_obj = Dj_App_Themes::getInstance();
-        $themes_obj->installThemeHooks();
-        $themes_obj->loadCurrentTheme();
-        Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded' );
-    } else {
-        // this is a code duplication from themes.php until we refactor it.
-        ob_start();
-        Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
-        // we have to call this so it's rendered by whatever plugin is handling it
-        Dj_App_Hooks::doAction( 'app.page.content.render' );
-        $content = ob_get_clean();
-        $content = Dj_App_Hooks::applyFilter( 'app.page.content', $content );
-        $content = trim($content);
+    $content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $content );
 
-        $content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $content );
-
-        echo $content;
-    }
+    echo $content;
 }
 
 $exec_time = Dj_App_Util::time( 'dj_app_timer' ); // move this to shutdown
