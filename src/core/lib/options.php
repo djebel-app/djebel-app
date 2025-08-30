@@ -46,7 +46,7 @@ class Dj_App_Options implements ArrayAccess {
         $load_extra_opts = Dj_App_Hooks::applyFilter( 'app.core.options.load_extra_conf_files', false );
 
         if (!empty($load_extra_opts)) { // let's use glob to load all other options files when when really needed
-            $extra_opt_files = glob(Dj_App_Util::getDataDir() . '/*.ini');
+            $extra_opt_files = glob(Dj_App_Util::getCoreConfDir() . '/*.ini');
             $extra_opt_files = empty($extra_opt_files) ? [] : $extra_opt_files;
             $extra_opt_files = array_diff($extra_opt_files, [ $file ]); // rm the main options file
 

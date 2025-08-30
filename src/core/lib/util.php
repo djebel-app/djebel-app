@@ -182,17 +182,6 @@ class Dj_App_Util {
     }
 
     /**
-     * Dj_App_Util::getDataDir();
-     * @return string
-     */
-    public static function getDataDir()
-    {
-        $dir = Dj_App_Util::getContentDir() . '/.ht_data';
-        $dir = Dj_App_Hooks::applyFilter( 'app.config.data_dir', $dir );
-        return $dir;
-    }
-
-    /**
      * This folder is supposed to reside outside of the public html folder for security reasons.
      * it can have these folders
      * .ht_djebel/conf
