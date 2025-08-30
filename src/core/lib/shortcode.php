@@ -22,6 +22,7 @@ class Dj_App_Shortcode {
 
         //
         $this->addShortcode('djebel_content', [ $this, 'renderContent' ]);
+        $this->addShortcode('djebel_page_footer', [ $this, 'renderPageFooter' ]);
 
         Dj_App_Hooks::addFilter( 'app.page.full_content', [ $this, 'replaceShortCodes'] );
     }
@@ -61,6 +62,21 @@ class Dj_App_Shortcode {
      */
     public function renderSysShortcodeYear($params = []) {
         return date('Y');
+    }
+
+    /**
+     * replaces [djebel_page_footer] shortcode with some footer text
+     * @param array $params
+     * @return string
+     */
+    public function renderPageFooter($params = []) {
+        ob_start();
+        ?>
+        <div>&copy; <?php echo date('Y'); ?> All rights reserved. Powered by Djebel</div>
+        <?php
+        $buff = ob_get_clean();
+        $buff = Dj_App_Hooks::applyFilter('app.page.render.footer', $buff, $params);
+        return $buff;
     }
 
     /**
