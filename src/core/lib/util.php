@@ -1222,7 +1222,7 @@ MSG_EOF;
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
             '__SITE_WEB_PATH__' => $req_obj->getWebPath(),
-            '__SITE_CONTENT_WEB_PATH__' => $req_obj->getWebPath() . '/' . Dj_App_Util::getContentDirName(),
+            '__SITE_CONTENT_WEB_PATH__' => rtrim($req_obj->getWebPath(), '/') . '/' . Dj_App_Util::getContentDirName(),
         ];
 
         // Replace magic variables
