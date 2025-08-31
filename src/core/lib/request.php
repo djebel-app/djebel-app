@@ -196,20 +196,14 @@ class Dj_App_Request {
      * Get a more reliable web path by considering multiple detection methods
      * @return string
      */
-    private function detectWebPath()
+    public function detectWebPath()
     {
-        // Method 1: Use existing webPath if already determined
-        if (!empty($this->request_data['web_path'])) {
-            return $this->request_data['web_path'];
-        }
-
         // Method 2: Simple prefix detection when SCRIPT_NAME is stripped
         $request_uri = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
         $script_name = empty($_SERVER['SCRIPT_NAME']) ? '' : $_SERVER['SCRIPT_NAME'];
         
-        // If SCRIPT_NAME is stripped (starts with /), check if REQUEST_URI ends with SCRIPT_NAME
-        if (!empty($request_uri) && !empty($script_name) && (strpos($script_name, '/') === 0)) {
-            // Check if REQUEST_URI ends with SCRIPT_NAME (stripped prefix scenario)
+        // Check if REQUEST_URI ends with SCRIPT_NAME (stripped prefix scenario)
+        if (!empty($request_uri) && !empty($script_name)) {
             $script_pos = strpos($request_uri, $script_name);
             
             if (($script_pos !== false) && ($script_pos + strlen($script_name) === strlen($request_uri))) {
@@ -232,6 +226,8 @@ class Dj_App_Request {
             }
         }
         
+        $php_self = empty($_SERVER['PHP_SELF']) ? '' : $_SERVER['PHP_SELF'];
+
         if (!empty($php_self)) {
             $web_path = dirname($php_self);
             $web_path = rtrim($web_path, '/\\');
