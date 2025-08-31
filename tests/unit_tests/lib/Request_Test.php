@@ -32,16 +32,16 @@ class Request_Test extends TestCase
     public function testWebPathDetectionWithStrippedScriptName()
     {
         // Simulate server environment where SCRIPT_NAME is stripped
-        $_SERVER['REQUEST_URI'] = '/some-cool-site/ofni.php';
-        $_SERVER['SCRIPT_NAME'] = '/ofni.php';
-        $_SERVER['PHP_SELF'] = '/ofni.php';
+        $_SERVER['REQUEST_URI'] = '/some-cool-site/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['PHP_SELF'] = '/success.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
         $this->assertEquals('/some-cool-site', $web_path, 
-            'Web path should be /some-cool-site when REQUEST_URI is /some-cool-site/ofni.php and SCRIPT_NAME is /ofni.php');
+            'Web path should be /some-cool-site when REQUEST_URI is /some-cool-site/success.php and SCRIPT_NAME is /success.php');
     }
 
     /**
@@ -51,8 +51,8 @@ class Request_Test extends TestCase
     public function testWebPathDetectionWithDifferentSiteNames()
     {
         $test_cases = [
-            ['/dayana/ofni.php', '/ofni.php', '/dayana'],
-            ['/influencer-site/ofni.php', '/ofni.php', '/influencer-site'],
+            ['/dayana/success.php', '/success.php', '/dayana'],
+            ['/influencer-site/success.php', '/success.php', '/influencer-site'],
             ['/my-blog/admin.php', '/admin.php', '/my-blog'],
             ['/deep/nested/path/script.php', '/script.php', '/deep/nested/path'],
         ];
@@ -113,16 +113,34 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithComplexNestedPaths()
     {
-        $_SERVER['REQUEST_URI'] = '/level1/level2/level3/level4/script.php';
-        $_SERVER['SCRIPT_NAME'] = '/script.php';
-        $_SERVER['PHP_SELF'] = '/script.php';
+        $_SERVER['REQUEST_URI'] = '/dayana/dir1/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/dir1/success.php';
+        $_SERVER['PHP_SELF'] = '/dir1/success.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        $this->assertEquals('/level1/level2/level3/level4', $web_path, 
-            'Web path should handle complex nested paths correctly');
+        $this->assertEquals('/dayana', $web_path, 
+            'Web path should be /dayana when REQUEST_URI is /dayana/dir1/success.php and SCRIPT_NAME is /dir1/success.php');
+    }
+    
+    /**
+     * Test web path detection where SCRIPT_NAME is stripped to subdirectory level
+     * This tests the case where only the first segment differs
+     */
+    public function testWebPathDetectionWithStrippedSubdirectory()
+    {
+        $_SERVER['REQUEST_URI'] = '/dayana/dir1/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['PHP_SELF'] = '/success.php';
+        
+        // Create a fresh instance to avoid singleton caching
+        $req_obj = new Dj_App_Request();
+        $web_path = $req_obj->detectWebPath();
+        
+        $this->assertEquals('/dayana/dir1', $web_path, 
+            'Web path should be /dayana/dir1 when REQUEST_URI is /dayana/dir1/success.php and SCRIPT_NAME is /success.php');
     }
 
     /**
@@ -153,9 +171,9 @@ class Request_Test extends TestCase
     public function testWebPathDetectionWithVariousFormats()
     {
         $test_cases = [
-            ['/site/ofni.php', '/ofni.php', '/site'],
-            ['site/ofni.php', '/ofni.php', 'site'],  // REQUEST_URI without leading / returns 'site'
-            ['/ofni.php', '/ofni.php', '/'],
+            ['/site/success.php', '/success.php', '/site'],
+            ['site/success.php', '/success.php', 'site'],  // REQUEST_URI without leading / returns 'site'
+            ['/success.php', '/success.php', '/'],
         ];
 
         foreach ($test_cases as [$request_uri, $script_name, $expected_path]) {
