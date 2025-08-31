@@ -239,10 +239,10 @@ class Dj_App_Util {
     }
 
     /**
+     * @param array $params
      * @return string
-     * @throws Exception
      */
-    public static function getCoreConfDir()
+    public static function getCoreConfDir($params = [])
     {
         $config_dir_env = Dj_App_Env::getEnvConst('DJEBEL_APP_CONF_DIR');
 
@@ -258,6 +258,14 @@ class Dj_App_Util {
 
         $config_dir = Dj_App_Util::getCorePrivateDir() . '/conf';
         $config_dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_conf_dir', $config_dir );
+
+        if (!empty($params['plugin'])) {
+            $plugin = $params['plugin'];
+            $plugin = Dj_App_String_Util::formatStringId($plugin);
+            $config_dir .= '/plugins/' . $plugin;
+            $ctx = [ 'plugin' => $plugin, ];
+            $config_dir = Dj_App_Hooks::applyFilter( 'app.config.plugin_conf_dir', $config_dir, $ctx );
+        }
 
         return $config_dir;
     }
