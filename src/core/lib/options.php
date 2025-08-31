@@ -416,6 +416,11 @@ class Dj_App_Options implements ArrayAccess {
         unset($this->data[$offset]);
     }
 
+    /**
+     * ArrayAccess interface method - suppress deprecation notice for return type compatibility
+     * PHP 8.1+ expects mixed return type, but we need to maintain PHP 7.x compatibility
+     */
+    #[\ReturnTypeWillChange]
     public function offsetGet($offset) {
         return $this->__get($offset);
     }

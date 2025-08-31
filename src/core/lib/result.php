@@ -346,8 +346,12 @@ class Dj_App_Result implements \JsonSerializable {
      * For some odd reason the private members also end up into the JSON?!?
      * We'll have to remove them manually as they are not useful.
      * @see https://stackoverflow.com/questions/7005860/php-json-encode-class-private-members
+     * 
+     * JsonSerializable interface method - suppress deprecation notice for return type compatibility
+     * PHP 8.1+ expects mixed return type, but we need to maintain PHP 7.x compatibility
      * @return array
      */
+    #[\ReturnTypeWillChange]
     public function jsonSerialize() {
         $vars = get_object_vars($this);
         unset($vars['expected_system_keys_regex']);
