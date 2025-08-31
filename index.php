@@ -398,8 +398,17 @@ class Dj_App_Bootstrap {
         
         $is_dev = Dj_App_Config::cfg('app.debug', false);
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
-        $error_log_file = Dj_App_Config::cfg('app.error_log_file', DJEBEL_APP_BASE_DIR . '/error.log');
-        
+
+        $date_suff = date('Y-m-d');
+        $date_rel_dir = date('Y/m/d');
+        $log_dir = Dj_App_Util::getCorePrivateDataDir() . "/logs/$date_rel_dir";
+        $log_file = $log_dir . "/.ht_app_{$date_suff}.log";
+        $error_log_file = Dj_App_Config::cfg('app.error_log_file', $log_file);
+
+        if (!is_dir($log_dir)) {
+            $mk_dir_res = mkdir($log_dir, 0755, true);
+        }
+
         // Log the exception
         if ($log_errors && !empty($error_log_file)) {
             $timestamp = date('Y-m-d H:i:s');
@@ -407,12 +416,16 @@ class Dj_App_Bootstrap {
                         " in " . $exception->getFile() . " on line " . $exception->getLine() . 
                         "\nStack trace:\n" . $exception->getTraceAsString() . 
                         "\n" . str_repeat('-', 80) . "\n";
-            error_log($log_entry, 3, $error_log_file);
+            $log_res = error_log($log_entry, 3, $error_log_file);
         }
         
         $content = '<h1 class="djebel-app-error-title">Uncaught Exception</h1>';
         $content .= '<div class="djebel-app-error-message">' . htmlspecialchars($exception->getMessage()) . '</div>';
-        
+
+        if ($log_errors && empty($log_res)) {
+            $content .= "\n<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
+        }
+
         if ($is_dev) {
             $content .= '<div class="djebel-app-error-details">';
             $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Exception:</div><div class="djebel-app-detail-value">' . htmlspecialchars(get_class($exception)) . '</div></div>';
@@ -424,7 +437,7 @@ class Dj_App_Bootstrap {
         }
         
         $content .= '<div class="djebel-app-back-link"><a href="javascript:history.back()">← Go Back</a></div>';
-        
+
         $options = [
             'status_code' => 500,
         ];
