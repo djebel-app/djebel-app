@@ -203,13 +203,26 @@ class Dj_App_Request {
             return $this->request_data['web_path'];
         }
 
-        // Method 2: Try to detect from SCRIPT_NAME or PHP_SELF
+        // Method 2: Simple prefix detection when SCRIPT_NAME is stripped
+        $request_uri = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
         $script_name = empty($_SERVER['SCRIPT_NAME']) ? '' : $_SERVER['SCRIPT_NAME'];
         
-        if (empty($script_name)) {
-            $script_name = empty($_SERVER['PHP_SELF']) ? '' : $_SERVER['PHP_SELF'];
+        // If SCRIPT_NAME is stripped (starts with /), check if REQUEST_URI ends with SCRIPT_NAME
+        if (!empty($request_uri) && !empty($script_name) && (strpos($script_name, '/') === 0)) {
+            // Check if REQUEST_URI ends with SCRIPT_NAME (stripped prefix scenario)
+            $script_pos = strpos($request_uri, $script_name);
+            
+            if (($script_pos !== false) && ($script_pos + strlen($script_name) === strlen($request_uri))) {
+                $web_path = substr($request_uri, 0, $script_pos);
+                $web_path = rtrim($web_path, '/');
+                
+                if (!empty($web_path)) {
+                    return $web_path;
+                }
+            }
         }
 
+        // Method 3: Traditional detection from SCRIPT_NAME or PHP_SELF
         if (!empty($script_name)) {
             $web_path = dirname($script_name);
             $web_path = rtrim($web_path, '/\\');
@@ -218,9 +231,17 @@ class Dj_App_Request {
                 return $web_path;
             }
         }
+        
+        if (!empty($php_self)) {
+            $web_path = dirname($php_self);
+            $web_path = rtrim($web_path, '/\\');
 
-        // Method 3: Try to detect from REQUEST_URI and document root
-        $request_uri = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
+            if (!empty($web_path) && $web_path != '.') {
+                return $web_path;
+            }
+        }
+
+        // Method 4: Fallback to document root detection
         $document_root = empty($_SERVER['DOCUMENT_ROOT']) ? '' : $_SERVER['DOCUMENT_ROOT'];
         
         if (!empty($request_uri) && !empty($document_root)) {
