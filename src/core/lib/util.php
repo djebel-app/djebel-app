@@ -200,9 +200,10 @@ class Dj_App_Util {
      * .ht_djebel/logs
      * .ht_djebel/data
      * Dj_App_Util::getCorePrivateDir();
+     * @param array $params
      * @return string
      */
-    public static function getCorePrivateDir()
+    public static function getCorePrivateDir($params = [])
     {
         $private_dir = Dj_App_Env::getEnvConst('DJEBEL_APP_PRIVATE_DIR');
         $dir = empty($private_dir) ? Dj_App_Util::getSiteRootDir() . '/.ht_djebel' : $private_dir;
@@ -211,10 +212,10 @@ class Dj_App_Util {
     }
 
     /**
+     * @param array $params
      * @return string
-     * @throws Exception
      */
-    public static function getCorePrivateDataDir()
+    public static function getCorePrivateDataDir($params = [])
     {
         $dir = Dj_App_Util::getCorePrivateDir();
 
@@ -223,7 +224,16 @@ class Dj_App_Util {
         }
 
         $dir .= '/data';
-        $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_dir', $dir );
+
+        $ctx = [];
+        $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_dir', $dir, $ctx );
+
+        if (!empty($params['plugin'])) {
+            $plugin = $params['plugin'];
+            $plugin = Dj_App_String_Util::formatStringId($plugin);
+            $dir .= '/plugins/' . $plugin;
+            $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_plugin_dir', $dir, $ctx );
+        }
 
         return $dir;
     }
