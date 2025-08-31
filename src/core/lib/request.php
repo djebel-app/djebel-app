@@ -105,7 +105,7 @@ class Dj_App_Request {
         // We want to skip the web path and then get the segments
         $trimmed_url = $req_url;
         $prefix_position = strpos($trimmed_url, $web_path);
-
+        
         if ($prefix_position !== false) {
             $trimmed_url = substr($req_url, $prefix_position + strlen($web_path));
         }
@@ -173,7 +173,7 @@ class Dj_App_Request {
      */
     public function getWebPath()
     {
-        $web_path = empty($this->request_data['web_path']) ? '' : $this->request_data['web_path'];
+        $web_path = empty($this->request_data['web_path']) ? '/' : $this->request_data['web_path'];
         $web_path = Dj_App_Hooks::applyFilter('app.core.request.web_path', $web_path, []);
         return $web_path;
     }
@@ -237,7 +237,7 @@ class Dj_App_Request {
             }
         }
 
-        return '';
+        return '/';
     }
 
     /**
