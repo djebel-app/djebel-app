@@ -348,7 +348,7 @@ class Dj_App_Result implements \JsonSerializable {
      * @see https://stackoverflow.com/questions/7005860/php-json-encode-class-private-members
      * @return array
      */
-    public function jsonSerialize() : mixed {
+    public function jsonSerialize() {
         $vars = get_object_vars($this);
         unset($vars['expected_system_keys_regex']);
         return $vars;

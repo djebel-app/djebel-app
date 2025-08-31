@@ -416,7 +416,7 @@ class Dj_App_Options implements ArrayAccess {
         unset($this->data[$offset]);
     }
 
-    public function offsetGet($offset): mixed {
+    public function offsetGet($offset) {
         return $this->__get($offset);
     }
 }
