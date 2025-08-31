@@ -149,7 +149,7 @@ class Dj_App_Page {
     {
         $req_obj = Dj_App_Request::getInstance();
         $options_obj = Dj_App_Options::getInstance();
-        $nav_options = $options_obj->get('nav');
+        $nav_options = $options_obj->get('page_nav');
         $nav_options = empty($nav_options) ? [] : (array) $nav_options;
         
         if (empty($nav_options)) {
