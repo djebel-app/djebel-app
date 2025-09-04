@@ -1330,7 +1330,7 @@ CLEAR_AND_REDIRECT_HTML;
      * 
      * @return string Clean site URL
      */
-    public function getSiteUrl() 
+    public function getSiteUrl()
     {
         static $site_url = null;
 
@@ -1416,26 +1416,53 @@ CLEAR_AND_REDIRECT_HTML;
 
         // Add protocol
         $protocol = $is_https ? 'https://' : 'http://';
-        
-        // Add port if not standard - check proxy headers first
+
+        // Port detection - use colon in host headers as hint
         $port = '';
         $detected_port = '';
         
-        $port_headers = [
-            'HTTP_X_FORWARDED_PORT', 
-            'SERVER_PORT',
-        ];
+        // Check if HTTP_HOST or HTTP_X_FORWARDED_HOST contains port (colon as hint)
+        $host_with_port_headers = ['HTTP_HOST', 'HTTP_X_FORWARDED_HOST'];
         
-        foreach ($port_headers as $header) {
+        foreach ($host_with_port_headers as $header) {
             if (empty($_SERVER[$header])) {
                 continue;
             }
-
-            $detected_port = $_SERVER[$header];
-            break;
+            
+            // Skip if host doesn't contain colon (no port)
+            if (strpos($_SERVER[$header], ':') === false) {
+                continue;
+            }
+            
+            $host_parts = explode(':', $_SERVER[$header]);
+            
+            if (count($host_parts) === 2 && is_numeric($host_parts[1])) {
+                $hostname = $host_parts[0]; // Clean hostname without port
+                $detected_port = $host_parts[1];
+                break;
+            }
         }
         
-        if (!empty($detected_port) 
+        // If no colon found in host headers, check explicit port headers as fallback
+        if (empty($detected_port)) {
+            $port_headers = ['HTTP_X_FORWARDED_PORT',];
+            
+            foreach ($port_headers as $header) {
+                if (empty($_SERVER[$header])) {
+                    continue;
+                }
+                
+                $detected_port = $_SERVER[$header];
+                break;
+            }
+        }
+
+        // server may be behind a proxy and we don't want to append the internal port.
+        if (empty($detected_port) && !empty($_SERVER['SERVER_PORT']) && $options_obj->site_use_port) {
+            $detected_port = $_SERVER['SERVER_PORT'];
+        }
+
+        if (!empty($detected_port)
             && $detected_port != '80' 
             && $detected_port != '443'
         ) {
