@@ -1458,7 +1458,7 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         // server may be behind a proxy and we don't want to append the internal port.
-        if (empty($detected_port) && !empty($_SERVER['SERVER_PORT']) && $options_obj->site_use_port) {
+        if (empty($detected_port) && !empty($_SERVER['SERVER_PORT']) && !empty($options_obj->site_use_port)) {
             $detected_port = $_SERVER['SERVER_PORT'];
         }
 
