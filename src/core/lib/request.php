@@ -1339,7 +1339,7 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $options_obj = Dj_App_Options::getInstance();
-        $site_url = $options_obj->get('site_url');
+        $site_url = $options_obj->site->site_url;
 
         // If we have a complete URL from options, use it
         if (!empty($site_url)) {
