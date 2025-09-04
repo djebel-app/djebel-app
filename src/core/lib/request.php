@@ -1483,6 +1483,36 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Gets the content directory URL (site URL + web path + content dir)
+     * @return string Content directory URL
+     */
+    public function getContentDirUrl()
+    {
+        static $content_dir_url = null;
+
+        if (!is_null($content_dir_url)) {
+            return $content_dir_url;
+        }
+
+        $site_url = Dj_App_Util::removeSlash($this->getSiteUrl());
+        $web_path = $this->getWebPath();
+        $content_dir_name = Dj_App_Util::getContentDirName();
+
+        $url_parts = [$site_url];
+
+        // Only add web_path if it's not empty and not just '/'
+        if (!empty($web_path) && $web_path !== '/') {
+            $url_parts[] = trim($web_path, '/');
+        }
+
+        $url_parts[] = $content_dir_name;
+
+        $content_dir_url = implode('/', $url_parts);
+
+        return $content_dir_url;
+    }
+
+    /**
      * Adds a header to the collection (skips if already exists)
      * 
      * @param string $name Header name
