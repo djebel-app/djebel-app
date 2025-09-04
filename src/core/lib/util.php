@@ -737,6 +737,7 @@ MSG_EOF;
 
     const FLAG_LEADING = 2;
     const FLAG_TRAILING = 4;
+    const FLAG_BOTH = self::FLAG_LEADING | self::FLAG_TRAILING;
 
     /**
      * Dj_App_Util::addSlash();
