@@ -1341,49 +1341,108 @@ CLEAR_AND_REDIRECT_HTML;
         $options_obj = Dj_App_Options::getInstance();
         $site_url = $options_obj->get('site_url');
 
-        if (empty($site_url) && !empty($_SERVER['SERVER_NAME'])) {
-            $site_url = $_SERVER['SERVER_NAME'];
+        // If we have a complete URL from options, use it
+        if (!empty($site_url)) {
+            return $site_url;
         }
 
-        if (empty($site_url)) {
+        // Otherwise, build URL from hostname + protocol + port
+        $hostname = '';
+        $host_headers = [
+            'HTTP_HOST',              // Standard HTTP host header (most reliable)
+            'HTTP_X_FORWARDED_HOST',  // Proxy forwarded hostname (may include internal ports)
+            'SERVER_NAME',            // Server hostname (fallback)
+        ];
+        
+        foreach ($host_headers as $header) {
+            if (empty($_SERVER[$header])) {
+                continue;
+            }
+            
+            $hostname = $_SERVER[$header];
+            break;
+        }
+
+        if (empty($hostname)) {
             return '';
         }
 
-        // Convert to lowercase
-        $site_url = strtolower($site_url);
+        // Convert hostname to lowercase
+        $hostname = strtolower($hostname);
 
         // Remove www prefix if present
-        $www_pos = strpos($site_url, 'www.');
+        $www_pos = strpos($hostname, 'www.');
 
         if ($www_pos === 0) {
-            $site_url = substr($site_url, 4);
+            $hostname = substr($hostname, 4);
         }
 
-        // Detect HTTPS
+        // Detect HTTPS - check proxy headers first
         $is_https = false;
+        
+        $https_checks = [
+            ['header' => 'HTTP_X_FORWARDED_PROTO', 'value' => 'https'],
+            ['header' => 'HTTP_X_FORWARDED_SSL', 'value' => 'on'],
+            ['header' => 'HTTP_X_ARR_SSL', 'value' => null], // Azure - just needs to exist
+            ['header' => 'HTTP_X_FORWARDED_PORT', 'value' => '443'],
+            ['header' => 'HTTPS', 'value' => 'on'],
+            ['header' => 'SERVER_PORT', 'value' => '443'],
+        ];
+        
+        foreach ($https_checks as $check) {
+            if (empty($_SERVER[$check['header']])) {
+                continue;
+            }
+            
+            if (is_null($check['value'])) { // Header just needs to exist
+                $is_https = true;
+                break;
+            }
 
-        if (!empty($_SERVER['HTTPS']) && strcasecmp($_SERVER['HTTPS'], 'on') == 0) {
-            $is_https = true;
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-            $is_https = true;
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') {
-            $is_https = true;
+            if (strcasecmp($_SERVER[$check['header']], $check['value']) == 0) {
+                $is_https = true;
+                break;
+            }
+        }
+        
+        // Special case for Cloudflare CF_VISITOR JSON
+        if (!$is_https && !empty($_SERVER['HTTP_CF_VISITOR'])) {
+            $cf_visitor = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
+            
+            if (!empty($cf_visitor['scheme']) && $cf_visitor['scheme'] === 'https') {
+                $is_https = true;
+            }
         }
 
         // Add protocol
         $protocol = $is_https ? 'https://' : 'http://';
         
-        // Add port if not standard
+        // Add port if not standard - check proxy headers first
         $port = '';
+        $detected_port = '';
         
-        if (!empty($_SERVER['SERVER_PORT']) 
-            && $_SERVER['SERVER_PORT'] != '80' 
-            && $_SERVER['SERVER_PORT'] != '443'
+        $port_headers = [
+            'HTTP_X_FORWARDED_PORT', 
+            'SERVER_PORT',
+        ];
+        
+        foreach ($port_headers as $header) {
+            if (empty($_SERVER[$header])) {
+                continue;
+            }
+
+            $detected_port = $_SERVER[$header];
+            break;
+        }
+        
+        if (!empty($detected_port) 
+            && $detected_port != '80' 
+            && $detected_port != '443'
         ) {
-            $port = ':' . $_SERVER['SERVER_PORT'];
+            $port = ':' . $detected_port;
         }
 
-        $site_url = $protocol . $site_url . $port;
+        $site_url = $protocol . $hostname . $port;
 
         return $site_url;
     }
