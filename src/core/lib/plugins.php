@@ -93,7 +93,7 @@ class Dj_App_Plugins {
                 $plugin_dir = Dj_App_Hooks::applyFilter( 'app.plugin.dir', $plugin_dir, $ctx );
 
                 // the plugin must be named exactly plugin.php file no need to check for other stuff.
-                $plugin_id = basename($plugin_dir); // for now the plugin is determined by the folder name.
+                $plugin_id = self::formatId(basename($plugin_dir)); // for now the plugin is determined by the folder name.
                 $ctx['plugin_id'] = $plugin_id;
                 $plugins_options = Dj_App_Hooks::applyFilter( 'app.plugin.options', $plugins_options, $ctx );
 
@@ -135,7 +135,7 @@ class Dj_App_Plugins {
                 }
 
                 if (!empty($extr_res->plugin_id)) {
-                    $plugin_id = $extr_res->plugin_id;
+                    $plugin_id = self::formatId($extr_res->plugin_id);
 
                     // check for activeness using internal plugin id
                     if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
