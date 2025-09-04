@@ -783,21 +783,21 @@ MSG_EOF;
             return empty($url) ? '' : $url;
         }
 
-        // Remove leading slash
+        // Remove leading slashes
         if ($flags & self::FLAG_LEADING) {
             $first_char = substr($url, 0, 1);
-            
+
             if ($first_char == '/' || $first_char == '\\') {
-                $url = substr($url, 1);
+                $url = ltrim($url, '/\\');
             }
         }
 
-        // Remove trailing slash
+        // Remove trailing slashes
         if ($flags & self::FLAG_TRAILING) {
             $last_char = substr($url, -1);
-            
+
             if ($last_char == '/' || $last_char == '\\') {
-                $url = substr($url, 0, -1);
+                $url = rtrim($url, '/\\');
             }
         }
 
