@@ -735,21 +735,37 @@ MSG_EOF;
         return $converter($data);
     }
 
+    const FLAG_LEADING = 2;
+    const FLAG_TRAILING = 4;
+
     /**
      * Dj_App_Util::addSlash();
      * @param string $url
+     * @param int $flags FLAG_LEADING and/or FLAG_TRAILING (default: FLAG_TRAILING)
      * @return string
      */
-    static public function addSlash($url)
+    static public function addSlash($url, $flags = self::FLAG_TRAILING)
     {
-        if (empty($url)) {
-            return '/';
+        if (empty($url) || empty($flags)) {
+            return empty($url) ? '/' : $url;
         }
 
-        $last_char = substr($url, -1);
+        // Add leading slash
+        if ($flags & self::FLAG_LEADING) {
+            $first_char = substr($url, 0, 1);
+            
+            if ($first_char != '/') {
+                $url = '/' . $url;
+            }
+        }
 
-        if ($last_char != '/') {
-            $url .= '/';
+        // Add trailing slash
+        if ($flags & self::FLAG_TRAILING) {
+            $last_char = substr($url, -1);
+            
+            if ($last_char != '/') {
+                $url .= '/';
+            }
         }
 
         return $url;
@@ -758,17 +774,30 @@ MSG_EOF;
     /**
      * Dj_App_Util::removeSlash();
      * @param string $url
+     * @param int $flags FLAG_LEADING and/or FLAG_TRAILING (default: FLAG_TRAILING)
      * @return string
      */
-    static public function removeSlash($url = '') {
-        if (empty($url)) {
-            return '';
+    static public function removeSlash($url = '', $flags = self::FLAG_TRAILING) {
+        if (empty($url) || empty($flags)) {
+            return empty($url) ? '' : $url;
         }
 
-        $last_char = substr($url, -1);
+        // Remove leading slash
+        if ($flags & self::FLAG_LEADING) {
+            $first_char = substr($url, 0, 1);
+            
+            if ($first_char == '/' || $first_char == '\\') {
+                $url = substr($url, 1);
+            }
+        }
 
-        if ($last_char == '/' || $last_char == '\\') {
-            $url = substr($url, 0, -1);
+        // Remove trailing slash
+        if ($flags & self::FLAG_TRAILING) {
+            $last_char = substr($url, -1);
+            
+            if ($last_char == '/' || $last_char == '\\') {
+                $url = substr($url, 0, -1);
+            }
         }
 
         return $url;
@@ -1218,11 +1247,13 @@ MSG_EOF;
         // quick correct in case somebody uses _uri
         $buff = self::cleanMagicVars($buff);
 
+        $web_path = $req_obj->getWebPath();
+
         // Define magic variables and their values
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
-            '__SITE_WEB_PATH__' => $req_obj->getWebPath(),
-            '__SITE_CONTENT_WEB_PATH__' => rtrim($req_obj->getWebPath(), '/') . '/' . Dj_App_Util::getContentDirName(),
+            '__SITE_WEB_PATH__' => $web_path,
+            '__SITE_CONTENT_WEB_PATH__' => rtrim($web_path, '/') . '/' . Dj_App_Util::getContentDirName(),
         ];
 
         // Replace magic variables
