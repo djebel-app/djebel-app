@@ -77,22 +77,27 @@ $boostrap_obj->installHooks();
 
 $req_obj = Dj_App_Request::getInstance();
 
-// Early 404 check for static assets (images, CSS, JS) to avoid unnecessary processing
-$request_uri = $req_obj->getRequestUrl();
+$app_process_missing_files = Dj_App_Env::getEnvConst('DJEBEL_APP_PROCESS_MISSING_STATIC_FILES');
+$app_load_admin = Dj_App_Config::cfg('app.core.process_missing_static_files', $app_process_missing_files);
 
-if (!empty($request_uri)) {
-    $path_info = parse_url($request_uri, PHP_URL_PATH);
-    
-    if (!empty($path_info)) {
-        $extension = pathinfo($path_info, PATHINFO_EXTENSION);
-        $extension = strtolower($extension);
-        $static_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'css', 'js', 'ico', 'woff', 'woff2', 'ttf', 'eot',];
-        
-        if (in_array($extension, $static_extensions, true)) {
-            http_response_code(404);
-            header('Content-Type: text/plain');
-            echo 'Djebel Error: Page Not Found (404)';
-            exit;
+if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
+    // Early 404 check for static assets (images, CSS, JS) to avoid unnecessary processing
+    $request_uri = $req_obj->getRequestUrl();
+
+    if (!empty($request_uri)) {
+        $path_info = parse_url($request_uri, PHP_URL_PATH);
+
+        if (!empty($path_info)) {
+            $extension = pathinfo($path_info, PATHINFO_EXTENSION);
+            $extension = strtolower($extension);
+            $static_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'css', 'js', 'ico', 'woff', 'woff2', 'ttf', 'eot',];
+
+            if (in_array($extension, $static_extensions, true)) {
+                http_response_code(404);
+                header('Content-Type: text/plain');
+                echo 'Djebel Error: Page Not Found (404)';
+                exit;
+            }
         }
     }
 }
