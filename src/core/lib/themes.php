@@ -70,7 +70,7 @@ class Dj_App_Themes {
             $current_theme = $options_obj->site->theme;
         }
 
-        $current_theme = Dj_App_String_Util::formatStringId($current_theme);
+        $current_theme = $this->formatId($current_theme);
         $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme );
 
         return $current_theme;
@@ -310,6 +310,15 @@ class Dj_App_Themes {
         $rel_path = $path;
         $rel_path = str_replace($themes_dir, '', $rel_path);
         return $rel_path;
+    }
+
+    /**
+     * Format an ID allowing hyphens using formatStringId from String_util
+     * @param string $id
+     * @return string
+     */
+    public function formatId($id) {
+        return Dj_App_String_Util::formatStringId($id, Dj_App_String_Util::KEEP_DASH);
     }
 
     /**
