@@ -1471,6 +1471,14 @@ CLEAR_AND_REDIRECT_HTML;
 
         $site_url = $protocol . $hostname . $port;
 
+        // the site url should contain the web path too
+        $req_obj = Dj_App_Request::getInstance();
+        $web_path = $req_obj->getWebPath();
+
+        if (strlen($web_path)) {
+            $site_url .= $web_path;
+        }
+
         return $site_url;
     }
 
