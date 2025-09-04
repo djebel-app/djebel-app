@@ -483,4 +483,81 @@ BUFF_EOF;
         $expected = "Project structure:\n- $home/src\n- $home/docs\n- $home/tests";
         $this->assertEquals($expected, Dj_App_Config::replaceSystemVars($complex_string));
     }
+
+    /**
+     * Test addSlash method with different flag combinations
+     */
+    public function testAddSlash() {
+        // Test empty URL
+        $this->assertEquals('/', Dj_App_Util::addSlash(''));
+        $this->assertEquals('/', Dj_App_Util::addSlash(null));
+        
+        // Test FLAG_TRAILING (default)
+        $this->assertEquals('path/', Dj_App_Util::addSlash('path'));
+        $this->assertEquals('path/', Dj_App_Util::addSlash('path/'));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('/path'));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('/path/'));
+        
+        // Test FLAG_LEADING
+        $this->assertEquals('/path', Dj_App_Util::addSlash('path', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('/path', Dj_App_Util::addSlash('/path', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('path/', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('/path/', Dj_App_Util::FLAG_LEADING));
+        
+        // Test FLAG_BOTH
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('path', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('/path', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('path/', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('/path/', Dj_App_Util::addSlash('/path/', Dj_App_Util::FLAG_BOTH));
+        
+        // Test single slash
+        $this->assertEquals('/', Dj_App_Util::addSlash('/'));
+        $this->assertEquals('/', Dj_App_Util::addSlash('/', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('/', Dj_App_Util::addSlash('/', Dj_App_Util::FLAG_BOTH));
+        
+        // Test empty flags
+        $this->assertEquals('path', Dj_App_Util::addSlash('path', 0));
+        $this->assertEquals('/', Dj_App_Util::addSlash('', 0));
+    }
+
+    /**
+     * Test removeSlash method with different flag combinations
+     */
+    public function testRemoveSlash() {
+        // Test empty URL
+        $this->assertEquals('', Dj_App_Util::removeSlash(''));
+        $this->assertEquals('', Dj_App_Util::removeSlash(null));
+        
+        // Test FLAG_TRAILING (default)
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path'));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path/'));
+        $this->assertEquals('/path', Dj_App_Util::removeSlash('/path'));
+        $this->assertEquals('/path', Dj_App_Util::removeSlash('/path/'));
+        
+        // Test FLAG_LEADING
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('/path', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('path/', Dj_App_Util::removeSlash('path/', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('path/', Dj_App_Util::removeSlash('/path/', Dj_App_Util::FLAG_LEADING));
+        
+        // Test FLAG_BOTH
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('/path', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path/', Dj_App_Util::FLAG_BOTH));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('/path/', Dj_App_Util::FLAG_BOTH));
+        
+        // Test single slash
+        $this->assertEquals('', Dj_App_Util::removeSlash('/'));
+        $this->assertEquals('', Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('', Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_BOTH));
+        
+        // Test empty flags
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path', 0));
+        $this->assertEquals('', Dj_App_Util::removeSlash('', 0));
+        
+        // Test multiple slashes (removes all consecutive slashes)
+        $this->assertEquals('path', Dj_App_Util::removeSlash('path///', Dj_App_Util::FLAG_TRAILING));
+        $this->assertEquals('path///', Dj_App_Util::removeSlash('///path///', Dj_App_Util::FLAG_LEADING));
+        $this->assertEquals('path', Dj_App_Util::removeSlash('///path///', Dj_App_Util::FLAG_BOTH));
+    }
 }
