@@ -1495,18 +1495,10 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $site_url = Dj_App_Util::removeSlash($this->getSiteUrl());
-        $web_path = $this->getWebPath();
         $content_dir_name = Dj_App_Util::getContentDirName();
 
         $url_parts = [$site_url];
-
-        // Only add web_path if it's not empty and not just '/'
-        if (!empty($web_path) && $web_path !== '/') {
-            $url_parts[] = trim($web_path, '/');
-        }
-
         $url_parts[] = $content_dir_name;
-
         $content_dir_url = implode('/', $url_parts);
 
         return $content_dir_url;
