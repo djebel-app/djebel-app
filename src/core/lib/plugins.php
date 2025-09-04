@@ -218,6 +218,15 @@ class Dj_App_Plugins {
     }
 
     /**
+     * Format an ID allowing hyphens using formatStringId from String_util
+     * @param string $id
+     * @return string
+     */
+    public static function formatId($id) {
+        return Dj_App_String_Util::formatStringId($id, Dj_App_String_Util::KEEP_DASH);
+    }
+
+    /**
      * Dj_App_Plugins::getRelPath
      * @param $path
      * @return string
