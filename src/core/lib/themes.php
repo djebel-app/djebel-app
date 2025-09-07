@@ -115,6 +115,7 @@ class Dj_App_Themes {
                 $theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.functions_file', $theme_func_file, $ctx);
 
                 if (file_exists($theme_func_file)) {
+                    Dj_App_Hooks::doAction('app.core.theme.functions_before_load');
                     include_once $theme_func_file;
                     Dj_App_Hooks::doAction('app.core.theme.functions_loaded');
                 }
