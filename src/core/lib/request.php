@@ -198,6 +198,7 @@ class Dj_App_Request {
      */
     public function detectWebPath()
     {
+        // Method 1: Simple filter to tell what the web path is
         $web_path = Dj_App_Hooks::applyFilter('app.core.request.detect_web_path', '', []);
 
         if (!empty($web_path)) {
@@ -252,9 +253,9 @@ class Dj_App_Request {
             if (!empty($current_script_path)) {
                 $relative_path = str_replace($document_root, '', $current_script_path);
                 $relative_path = dirname($relative_path);
-                $relative_path = rtrim($relative_path, '/\\');
+                $relative_path = rtrim($relative_path, '/\\.');
                 
-                if (!empty($relative_path) && $relative_path !== '.') {
+                if (!empty($relative_path)) {
                     return $relative_path;
                 }
             }
