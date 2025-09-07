@@ -62,10 +62,12 @@ class Dj_App_Themes {
         $options_obj = Dj_App_Options::getInstance();
         $current_theme = 'default';
 
-        if (!empty($options_obj->site->theme_id)) {
-            $current_theme = $options_obj->site->theme_id;
+        if (!empty($options_obj->theme->theme)) {
+            $current_theme = $options_obj->theme->theme;
         } else if (!empty($options_obj->theme->theme_id)) {
             $current_theme = $options_obj->theme->theme_id;
+        } else if (!empty($options_obj->site->theme_id)) {
+            $current_theme = $options_obj->site->theme_id;
         } else if (!empty($options_obj->site->theme)) {
             $current_theme = $options_obj->site->theme;
         }
