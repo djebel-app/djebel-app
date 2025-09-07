@@ -110,7 +110,7 @@ class Dj_App_Request {
             $trimmed_url = substr($req_url, $prefix_position + strlen($web_path));
         }
 
-        $trimmed_url = rtrim($trimmed_url, '/');
+        $trimmed_url = Dj_App_Util::removeSlash($trimmed_url);
         $trimmed_url = empty($trimmed_url) ? '/' : $trimmed_url;
 
         // Split the web path into segments
@@ -207,7 +207,7 @@ class Dj_App_Request {
             
             if (($script_pos !== false) && ($script_pos + strlen($script_name) === strlen($request_uri))) {
                 $web_path = substr($request_uri, 0, $script_pos);
-                $web_path = rtrim($web_path, '/');
+                $web_path = Dj_App_Util::removeSlash($web_path);
                 
                 if (!empty($web_path)) {
                     return $web_path;
@@ -218,7 +218,7 @@ class Dj_App_Request {
         // Method 3: Traditional detection from SCRIPT_NAME or PHP_SELF
         if (!empty($script_name)) {
             $web_path = dirname($script_name);
-            $web_path = rtrim($web_path, '/\\');
+            $web_path = Dj_App_Util::removeSlash($web_path);
 
             if (!empty($web_path) && $web_path != '.') {
                 return $web_path;
@@ -229,7 +229,7 @@ class Dj_App_Request {
 
         if (!empty($php_self)) {
             $web_path = dirname($php_self);
-            $web_path = rtrim($web_path, '/\\');
+            $web_path = Dj_App_Util::removeSlash($web_path);
 
             if (!empty($web_path) && $web_path != '.') {
                 return $web_path;
@@ -245,8 +245,9 @@ class Dj_App_Request {
             if (!empty($current_script_path)) {
                 $relative_path = str_replace($document_root, '', $current_script_path);
                 $relative_path = dirname($relative_path);
-                $relative_path = rtrim($relative_path, '/\\.');
-                
+                $relative_path = Dj_App_Util::removeSlash($relative_path);
+                $relative_path = rtrim($relative_path, '.');
+
                 if (!empty($relative_path)) {
                     return $relative_path;
                 }
