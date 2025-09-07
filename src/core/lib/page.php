@@ -13,18 +13,20 @@ class Dj_App_Page {
         $name = $inp_name;
         $escape = false;
         $req_obj = Dj_App_Request::getInstance();
+        $ctx = [];
+        $ctx['name'] = $inp_name;
 
         if ($inp_name == 'full_page') {
             $all_segments = $req_obj->segments();
             $page = join('/', $all_segments);
             $page = empty($page) ? '' : $page;
-            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$inp_name", $page );
+            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$inp_name", $page, $ctx );
             return $page;
         } else if ($inp_name == 'page') {
             $all_segments = $req_obj->segments();
             $page = array_pop($all_segments);
             $page = empty($page) ? '' : $page;
-            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get", $page );
+            $page = Dj_App_Hooks::applyFilter( "app.core.request.page.get", $page, $ctx );
             return $page;
         }
 
@@ -36,7 +38,7 @@ class Dj_App_Page {
 
         if (isset($this->data[$name])) {
             $val = $this->data[$name];
-            $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val );
+            $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val, $ctx );
 
             if ($escape) {
                 $val = Djebel_App_HTML::encodeEntities($val);
@@ -47,7 +49,7 @@ class Dj_App_Page {
 
         $options_obj = Dj_App_Options::getInstance();
         $val = $options_obj->get($name);
-        $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val );
+        $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val, $ctx );
         $val = empty($val) ? $default : $val;
 
         if ($escape) {
