@@ -1217,69 +1217,6 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
-     * Checks if the request is for admin area
-     * @return bool
-     */
-    public function isAdminArea($url = '') {
-        $req_url = empty($url) ? $this->getCleanRequestUrl() : $url;
-
-        if (strpos($req_url, '/dj-admin/') !== false) {
-            return true;
-        }
-
-        if (strpos($req_url, '/wp-admin/') !== false) {
-            return true;
-        }
-
-        $ctx = [];
-        $ctx['req_url'] = $req_url;
-
-        // Wan we specify custom admin dir?
-        $is_admin_area = Dj_App_Hooks::applyFilter( 'app.core.request.is_admin_area', false, $ctx );
-
-        return $is_admin_area;
-    }
-
-    /**
-     * Checks if the request is for admin area
-     * @return Dj_App_Result
-     */
-    public function parseAdminUrlSegments($url = '') {
-        $res_obj = new Dj_App_Result();
-        $req_url = empty($url) ? $this->getCleanRequestUrl() : $url;
-
-        if (!$this->isAdminArea($req_url)) {
-            return $res_obj;
-        }
-
-        // parse the url and get the module and action
-        // e.g. /dj-admin/module/action -> dj-admin/dashboard -> module: dashboard, action: index
-        // e.g. /dj-admin/posts/edit/123 -> module: posts, action: edit, id: 123
-        // e.g. /dj-admin/plugins
-
-        // make it work with /dj-admin or whatever prefix it has
-        $regex = '#/[\w\-]+admin/([\w\-]+)(?:/([\w\-]+)(?:/(\d+))?)?#si';
-
-        if (preg_match($regex, $req_url, $matches)) {
-            $res_obj->data('module', empty($matches[1]) ? '' : $matches[1]);
-            $res_obj->data('action', empty($matches[2]) ? '' : $matches[2]);
-            $res_obj->data('id', empty($matches[3]) ? '' : $matches[3]);
-        }
-
-        if (empty($res_obj->data('module'))) {
-            $res_obj->data('module', 'dashboard');
-        }
-
-        if (empty($res_obj->data('action')) && !empty($res_obj->data('module'))) {
-            $res_obj->data('action', 'index');
-        }
-
-        $res_obj->status(true);
-
-        return $res_obj;
-    }
-
-    /**
      * @param string $str
      * @return string
      */
