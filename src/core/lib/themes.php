@@ -226,6 +226,7 @@ class Dj_App_Themes {
 
         $pages_dir = $current_theme_dir . '/pages';
         $ctx['pages_dir'] = $pages_dir;
+        $ctx['theme_dir'] = $current_theme_dir;
         $single_page = !empty($options_obj->theme->single_page) || !is_dir($pages_dir);
         $single_page = Dj_App_Hooks::applyFilter('app.themes.single_page', $single_page, $ctx);
 
