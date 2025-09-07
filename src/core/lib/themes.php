@@ -84,6 +84,7 @@ class Dj_App_Themes {
         try {
             $req_obj = Dj_App_Request::getInstance();
             $page_obj = Dj_App_Page::getInstance();
+            $options_obj = Dj_App_Options::getInstance();
 
             $ctx = [];
             $ctx['page'] = $page_obj->page;
@@ -103,18 +104,21 @@ class Dj_App_Themes {
             $this->current_theme_url = $req_obj->contentUrlPrefix() . '/themes/' . $current_theme;
             $default_theme_file = $current_theme_dir . '/index.php';
 
-            // organize funcs
-            $load_theme_func_file = !isset($site_section['theme_load_functions']) || !empty($site_section['theme_load_functions'])
-                ? true
-                : false;
-            $theme_func_file = $current_theme_dir . '/functions.php';
+            // should we load theme's functions file?
+            $load_theme_func_file = Dj_App_Util::isEnabled($options_obj->site->theme_load_functions);
             $load_theme_func_file = Dj_App_Config::cfg('app.core.theme.load_theme_functions', $load_theme_func_file);
             $load_theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_functions', $load_theme_func_file, $ctx);
 
             // we're loading it early so that the theme can schedule its hooks
-            if ($load_theme_func_file && file_exists($theme_func_file)) {
-                include_once $theme_func_file;
-                Dj_App_Hooks::doAction('app.core.theme.functions_loaded');
+            if ($load_theme_func_file) {
+                $theme_func_file = $current_theme_dir . '/functions.php';
+                $theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.functions_file', $theme_func_file, $ctx);
+
+                if (file_exists($theme_func_file)) {
+                    Dj_App_Hooks::doAction('app.core.theme.functions_before_load');
+                    include_once $theme_func_file;
+                    Dj_App_Hooks::doAction('app.core.theme.functions_loaded');
+                }
             }
 
             Dj_App_Hooks::doAction('app.core.theme.setup', $ctx);
@@ -222,6 +226,7 @@ class Dj_App_Themes {
 
         $pages_dir = $current_theme_dir . '/pages';
         $ctx['pages_dir'] = $pages_dir;
+        $ctx['theme_dir'] = $current_theme_dir;
         $single_page = !empty($options_obj->theme->single_page) || !is_dir($pages_dir);
         $single_page = Dj_App_Hooks::applyFilter('app.themes.single_page', $single_page, $ctx);
 
