@@ -227,6 +227,8 @@ class Dj_App_Themes {
         $options_obj = Dj_App_Options::getInstance();
 
         $pages_dir = $current_theme_dir . '/pages';
+        $pages_dir = Dj_App_Hooks::applyFilter('app.themes.current_theme.pages_dir', $pages_dir, $ctx);
+
         $ctx['pages_dir'] = $pages_dir;
         $ctx['theme_dir'] = $current_theme_dir;
         $single_page = !empty($options_obj->theme->single_page) || !is_dir($pages_dir);
@@ -260,11 +262,11 @@ class Dj_App_Themes {
             $file = $pages_dir . "/$page_fmt.php",
         ];
 
-        $page_file_candiates = Dj_App_Hooks::applyFilter('app.themes.page_file_candidates', $page_file_candiates, $ctx);
         $file = '';
+        $page_file_candiates = Dj_App_Hooks::applyFilter('app.themes.current_theme_page_file_candidates', $page_file_candiates, $ctx);
 
         foreach ($page_file_candiates as $loop_file) {
-            $loop_file = Dj_App_Hooks::applyFilter('app.themes.page_content_file', $loop_file, $ctx);
+            $loop_file = Dj_App_Hooks::applyFilter('app.themes.current_theme.page_content_file', $loop_file, $ctx);
 
             if (file_exists($loop_file)) {
                 $file = $loop_file;
