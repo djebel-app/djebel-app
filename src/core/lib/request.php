@@ -1346,6 +1346,7 @@ CLEAR_AND_REDIRECT_HTML;
 
         $options_obj = Dj_App_Options::getInstance();
         $site_url = $options_obj->site->site_url;
+        $site_url = Dj_App_Hooks::applyFilter('app.core.options.site_url', $site_url, []);
 
         // If we have a complete URL from options, use it
         if (!empty($site_url)) {
