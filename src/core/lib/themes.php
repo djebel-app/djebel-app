@@ -112,6 +112,7 @@ class Dj_App_Themes {
             // we're loading it early so that the theme can schedule its hooks
             if ($load_theme_func_file) {
                 $theme_func_file = $current_theme_dir . '/functions.php';
+                $theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.functions_file', $theme_func_file, $ctx);
 
                 if (file_exists($theme_func_file)) {
                     include_once $theme_func_file;
