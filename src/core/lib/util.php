@@ -1253,10 +1253,14 @@ MSG_EOF;
         // Define magic variables and their values
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
-            '__SITE_CONTENT_URL__' => $req_obj->getContentDirUrl(),
+            '__SITE_CONTENT_DIR_URL__' => $req_obj->getContentDirUrl(),
             '__SITE_WEB_PATH__' => $web_path,
             '__SITE_CONTENT_WEB_PATH__' => rtrim($web_path, '/') . '/' . Dj_App_Util::getContentDirName(),
         ];
+
+        // allows others to add other magic vars
+        $ctx = [];
+        $search_magic_vars = Dj_App_Hooks::applyFilter( 'app.page.content.magic_vars', $search_magic_vars, $ctx );
 
         // Replace magic variables
         $buff = str_ireplace(
