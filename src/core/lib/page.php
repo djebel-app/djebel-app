@@ -177,6 +177,7 @@ class Dj_App_Page {
 
             // put the web path prefix for relative URLs
             if (stripos($url, 'http') === false) {
+                $url = Dj_App_Util::removeSlash($url); // this prevents home or / to not end in trailing slash for consistency
                 $url = $req_obj->getWebPath() . $url;
             }
 
