@@ -25,17 +25,6 @@ class Dj_App_Plugins {
     }
 
     /**
-     * Dj_App_Plugins::getCorePluginsDir();
-     * @return string
-     */
-    public static function getCorePluginsDir()
-    {
-        $dir = Dj_App_Util::getAdminDir() . '/plugins';
-        $dir = Dj_App_Hooks::applyFilter( 'app.config.core_plugins_dir', $dir );
-        return $dir;
-    }
-
-    /**
      * Gets the plugins directory that we have for all sites /zzz_qs/djebel-app/app/shared_plugins/
      * Dj_App_Plugins::getSharedPluginsDir();
      * @return string
