@@ -1338,6 +1338,12 @@ CLEAR_AND_REDIRECT_HTML;
             return $site_url;
         }
 
+        $site_url = Dj_App_Hooks::applyFilter('app.core.site.site_url', '', []);
+
+        if (!empty($site_url)) {
+            return $site_url;
+        }
+
         $options_obj = Dj_App_Options::getInstance();
         $site_url = $options_obj->site->site_url;
 
