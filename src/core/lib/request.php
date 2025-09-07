@@ -759,6 +759,7 @@ CLEAR_AND_REDIRECT_HTML;
     /**
      * Smart redirect method. Sends header redirect or HTTP meta redirect.
      * @param string $url
+     * @return void
      */
     public function redirect($url = '', $force = self::REDIRECT_DEFAULT) {
         if (defined('WP_CLI') || empty($url)) {
