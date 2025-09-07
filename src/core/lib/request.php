@@ -171,10 +171,10 @@ class Dj_App_Request {
      * @param string $web_path
      * @return string
      */
-    public function getWebPath()
+    public function getWebPath($ctx = [])
     {
         $web_path = empty($this->request_data['web_path']) ? '/' : $this->request_data['web_path'];
-        $web_path = Dj_App_Hooks::applyFilter('app.core.request.web_path', $web_path, []);
+        $web_path = Dj_App_Hooks::applyFilter('app.core.request.web_path', $web_path, $ctx);
         return $web_path;
     }
 
@@ -182,12 +182,13 @@ class Dj_App_Request {
      * @param string $web_path
      * @return string
      */
-    public function contentUrlPrefix()
+    public function contentUrlPrefix($ctx = [])
     {
-        $content_web_path = $this->webPath();
+        $ctx['context'] = 'content_url';
+        $content_web_path = $this->webPath($ctx);
         $content_dir = Dj_App_Util::getContentDir();
         $content_web_path = $content_web_path . '/' . basename($content_dir);
-        $content_web_path = Dj_App_Hooks::applyFilter('app.core.request.content_web_path', $content_web_path, []);
+        $content_web_path = Dj_App_Hooks::applyFilter('app.core.request.content_web_path', $content_web_path, $ctx);
 
         return $content_web_path;
     }
