@@ -1044,6 +1044,7 @@ CLEAR_AND_REDIRECT_HTML;
             return;
         }
 
+        $ctx = [];
         $headers = [];
 
         // Allow from specific origin
@@ -1058,11 +1059,13 @@ CLEAR_AND_REDIRECT_HTML;
             $http_origin = strip_tags($http_origin);
             $http_origin = trim($http_origin);
             $http_origin = Dj_App_Hooks::applyFilter('app.request.cors.origin', $http_origin);
-
             $host = $this->getSiteHost();
 
+            $ctx['host'] = $host;
+            $ctx['http_origin'] = $http_origin;
+
             $allow_origin = !empty($http_origin) && substr($http_origin, -strlen($host)) == $host;
-            $allow_origin = Dj_App_Hooks::applyFilter('app.request.cors.allow_origin', $allow_origin, [ 'http_origin' => $http_origin, 'host' => $host, ]);
+            $allow_origin = Dj_App_Hooks::applyFilter('app.request.cors.allow_origin', $allow_origin, $ctx);
 
             // check if the origin ends with the host, then allow it
             if ($allow_origin) {
@@ -1075,11 +1078,16 @@ CLEAR_AND_REDIRECT_HTML;
         // Access-Control headers are received during OPTIONS requests
         if ($is_options_request) {
             if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD'])) {
-                $headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
+                $allow_methods = ['GET', 'POST', 'OPTIONS', 'HEAD'];
+                $allow_methods = Dj_App_Hooks::applyFilter('app.request.cors.allow_methods', $allow_methods, $ctx);
+                $ctx['allow_methods'] = $allow_methods;
+                $allow_methods_csv = join(', ', $allow_methods);
+                $headers['Access-Control-Allow-Methods'] = $allow_methods_csv;
             }
 
             if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
-                $headers['Access-Control-Allow-Headers'] = $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'];
+                $allow_headers = Dj_App_Hooks::applyFilter('app.request.cors.allow_headers', $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'], $ctx );
+                $headers['Access-Control-Allow-Headers'] = $allow_headers;
             }
         }
 
@@ -1654,6 +1662,7 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $this->clearHeaders(); // just in case
+        $this->sendCORS();
     }
 
     /**
