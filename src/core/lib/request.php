@@ -294,7 +294,13 @@ class Dj_App_Request {
         ) {
             $index = (int)$matches[1] - 1; // Convert to zero-based index
             $segments = $this->segments();
-            return empty($segments[$index]) ? '': $segments[$index];
+
+            // duplicate of __get
+            $ctx = [];
+            $ctx['index'] = $index;
+            $val = empty($segments[$index]) ? '': $segments[$index];
+            $val = Dj_App_Hooks::applyFilter( 'app.core.request.get_segment', $val, $ctx );
+            return $val;
         }
 
         throw new Exception("Method [$name] does not exist");
@@ -964,8 +970,14 @@ CLEAR_AND_REDIRECT_HTML;
         ) {
             $index = (int)$matches[1] - 1; // Convert to zero-based index
             $index = abs($index);
+            $index = $index <= 0 ? 0 : $index;
+
+            $ctx = [];
+            $ctx['index'] = $index;
             $segments = $this->segments();
-            return empty($segments[$index]) ? '': $segments[$index];
+            $val = empty($segments[$index]) ? '': $segments[$index];
+            $val = Dj_App_Hooks::applyFilter( 'app.core.request.get_segment', $val, $ctx );
+            return $val;
         }
 
         return null;
