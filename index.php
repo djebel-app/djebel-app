@@ -77,7 +77,8 @@ $boostrap_obj->installHooks();
 
 $req_obj = Dj_App_Request::getInstance();
 
-$app_process_missing_files = Dj_App_Env::getEnvConst('DJEBEL_APP_PROCESS_MISSING_STATIC_FILES');
+// if we're called about .css, .js that means it's missing but we don't need to handle them
+$app_process_missing_files = Dj_App_Config::cfg('app.core.process_missing_static_files', false);
 $app_load_admin = Dj_App_Config::cfg('app.core.process_missing_static_files', $app_process_missing_files);
 
 if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
@@ -158,7 +159,7 @@ Dj_App_Hooks::doAction( 'app.core.init' );
 // Output headers via system hook
 Dj_App_Hooks::doAction('app.page.output_http_headers');
 
-$load_theme_env = Dj_App_Env::getEnvConst('DJEBEL_APP_THEME_LOAD_THEME');
+$load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
 $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
 $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
 
