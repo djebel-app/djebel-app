@@ -102,27 +102,6 @@ if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
     }
 }
 
-$app_load_admin = false;
-$app_load_admin = Dj_App_Env::getEnvConst('DJEBEL_APP_ADMIN_LOAD_ADMIN');
-
-if (Dj_App_Util::isEnabled($app_load_admin)) {
-    $app_load_admin = true;
-} else {
-    $app_load_admin = Dj_App_Config::cfg('app.core.load_admin', false);
-}
-
-if (empty($app_load_admin)) {
-    $app_load_admin = Dj_App_Hooks::applyFilter('app.core.admin.load_admin', $app_load_admin);
-}
-
-if ($app_load_admin) {
-    if ($req_obj->isAdminArea()) {
-        $admin_dir = Dj_App_Util::getAdminDir();
-        $core_plugins_dir = Dj_App_Plugins::getCorePluginsDir();
-        Dj_App_Plugins::loadPlugins($core_plugins_dir, [ 'is_core' => true, 'ctx' => 'admin', ]);
-    }
-}
-
 // Loading system plugins
 $sys_plugins_dir = Dj_App_Plugins::getSysPluginsDir();
 
@@ -133,11 +112,6 @@ if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
 }
 
 $ctx = [];
-
-/*if (is_file($dj_app_core_dir . '/vendor/autoload.php')) {
-    require_once $dj_app_core_dir . '/vendor/autoload.php';
-}*/
-
 $plugin_dirs = [];
 
 // these are plugins that run for all sites on the server.
@@ -149,12 +123,14 @@ if (Dj_App_Util::isEnabled($load_core_shared_plugins) && !empty($app_core_shared
 }
 
 // Add non-public plugins if enabled
-$app_non_public_plugins_dir = Dj_App_Plugins::getNonPublicPluginsDir();
-$app_non_public_plugins_dir_load = is_dir($app_non_public_plugins_dir);
-$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', $app_non_public_plugins_dir_load);
+$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', false);
 
-if (Dj_App_Util::isEnabled($load_non_public_plugins) && !empty($app_non_public_plugins_dir)) {
-    $plugin_dirs[] = $app_non_public_plugins_dir;
+if (Dj_App_Util::isEnabled($load_non_public_plugins)) {
+    $app_non_public_plugins_dir = Dj_App_Plugins::getNonPublicPluginsDir();
+
+    if (!empty($app_non_public_plugins_dir) && is_dir($app_non_public_plugins_dir)) {
+        $plugin_dirs[] = $app_non_public_plugins_dir;
+    }
 }
 
 $load_plugins = Dj_App_Hooks::applyFilter( 'app.core.plugins.load_plugins', true );
@@ -182,25 +158,11 @@ Dj_App_Hooks::doAction( 'app.core.init' );
 // Output headers via system hook
 Dj_App_Hooks::doAction('app.page.output_http_headers');
 
-// in case we want to block admin access
-$load_admin_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ADMIN_LOAD_ADMIN');
-$load_admin = false;
-$load_admin = Dj_App_Util::isEnabled($load_admin_env) ? true : false;
-$load_admin = Dj_App_Hooks::applyFilter('app.core.admin.load_admin', $load_admin);
-
 $load_theme_env = Dj_App_Env::getEnvConst('DJEBEL_APP_THEME_LOAD_THEME');
 $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
 $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
 
-if ($req_obj->isAdminArea()) {
-    if ($app_load_admin) {
-        Dj_App_Hooks::doAction('app.core.admin.init');
-        //require_once $dj_app_sys_dir . '/admin/index.php';
-        //Dj_App_Hooks::doAction('app.core.admin.post_init');
-    } else {
-        Dj_App_Util::die("Resource not available.", "Error", ['code' => 503,]);
-    }
-} elseif ($load_theme) {
+if ($load_theme) {
     require_once $app_lib_dir . '/themes.php';
     $themes_obj = Dj_App_Themes::getInstance();
     $themes_obj->installHooks();
