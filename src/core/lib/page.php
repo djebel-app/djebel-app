@@ -177,7 +177,7 @@ class Dj_App_Page {
 
             // put the web path prefix for relative URLs
             if (stripos($url, 'http') === false) {
-                $url = $req_obj->webPath() . $url;
+                $url = $req_obj->getWebPath() . $url;
             }
 
             $is_current = $slug == $current_page || 0;

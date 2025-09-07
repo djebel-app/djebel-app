@@ -510,7 +510,7 @@ class Dj_App_Bootstrap {
         }
 
         $req_obj = Dj_App_Request::getInstance();
-        $current_url = $req_obj->webPath();
+        $current_url = $req_obj->getWebPath();
         $patterns = explode('|', $load_if_url);
         $patterns = Dj_App_String_Util::trim($patterns);
         $matched = false;

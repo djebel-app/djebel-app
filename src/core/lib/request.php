@@ -99,7 +99,7 @@ class Dj_App_Request {
         $ctx['req_url'] = $req_url;
 
         // Detect the web path with multiple fallback methods
-        $web_path = $this->webPath();
+        $web_path = $this->getWebPath();
         $ctx['web_path'] = $web_path;
 
         // We want to skip the web path and then get the segments
@@ -150,31 +150,22 @@ class Dj_App_Request {
     }
 
     /**
-     * @param string $web_path
-     * @return string
-     */
-    public function webPath($web_path = '')
-    {
-        if (!empty($web_path)) {
-            $this->request_data['web_path'] = $web_path;
-        } else {
-            $web_path = $this->detectWebPath();
-            $this->request_data['web_path'] = $web_path;
-        }
-
-        $web_path = Dj_App_Hooks::applyFilter('app.core.request.web_path', $web_path, []);
-
-        return $web_path;
-    }
-
-    /**
-     * @param string $web_path
-     * @return string
+     * Gets the web path
+     * @param array $ctx Optional context array for filters
+     * @return string The web path
      */
     public function getWebPath($ctx = [])
     {
-        $web_path = empty($this->request_data['web_path']) ? '/' : $this->request_data['web_path'];
+        // Get current web path or detect if not set
+        if (empty($this->request_data['web_path'])) {
+            $web_path = $this->detectWebPath();
+            $this->request_data['web_path'] = $web_path;
+        } else {
+            $web_path = $this->request_data['web_path'];
+        }
+
         $web_path = Dj_App_Hooks::applyFilter('app.core.request.web_path', $web_path, $ctx);
+
         return $web_path;
     }
 
@@ -185,7 +176,7 @@ class Dj_App_Request {
     public function contentUrlPrefix($ctx = [])
     {
         $ctx['context'] = 'content_url';
-        $content_web_path = $this->webPath($ctx);
+        $content_web_path = $this->getWebPath($ctx);
         $content_dir = Dj_App_Util::getContentDir();
         $content_web_path = $content_web_path . '/' . basename($content_dir);
         $content_web_path = Dj_App_Hooks::applyFilter('app.core.request.content_web_path', $content_web_path, $ctx);
