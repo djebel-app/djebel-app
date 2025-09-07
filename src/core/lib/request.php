@@ -198,10 +198,16 @@ class Dj_App_Request {
      */
     public function detectWebPath()
     {
+        $web_path = Dj_App_Hooks::applyFilter('app.core.request.detect_web_path', '', []);
+
+        if (!empty($web_path)) {
+            return $web_path;
+        }
+
         // Method 2: Simple prefix detection when SCRIPT_NAME is stripped
         $request_uri = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
         $script_name = empty($_SERVER['SCRIPT_NAME']) ? '' : $_SERVER['SCRIPT_NAME'];
-        
+
         // Check if REQUEST_URI ends with SCRIPT_NAME (stripped prefix scenario)
         if (!empty($request_uri) && !empty($script_name)) {
             $script_pos = strpos($request_uri, $script_name);
