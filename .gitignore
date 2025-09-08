@@ -1,4 +1,5 @@
 /dj-config.php
+./build
 .env*
 /.htaccess
 /.idea
@@ -11,4 +12,3 @@
 *.zip
 djebel*.phar*
 app.ini
-
