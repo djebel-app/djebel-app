@@ -239,6 +239,34 @@ class Dj_App_Util {
     }
 
     /**
+     * Get core cache directory with optional plugin parameter
+     * @param array $params
+     * @return string
+     */
+    public static function getCoreCacheDir($params = [])
+    {
+        $dir = Dj_App_Util::getCorePrivateDir();
+
+        if (empty($dir)) {
+            return '';
+        }
+
+        $dir .= '/cache';
+
+        $ctx = [];
+        $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_dir', $dir, $ctx);
+
+        if (!empty($params['plugin'])) {
+            $plugin = $params['plugin'];
+            $plugin = Dj_App_String_Util::formatStringId($plugin);
+            $dir .= '/plugins/' . $plugin;
+            $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_plugin_dir', $dir, $ctx);
+        }
+
+        return $dir;
+    }
+
+    /**
      * @param array $params
      * @return string
      */
