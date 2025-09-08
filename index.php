@@ -493,7 +493,10 @@ class Dj_App_Bootstrap {
      */
     public function filterConditionalPlugins($plugins_options, $ctx)
     {
-        if (empty($ctx['plugin_id'])) {
+        $req_obj = Dj_App_Request::getInstance();
+        $current_url = $req_obj->getCleanRequestUrl();
+
+        if (empty($ctx['plugin_id']) || empty($current_url)) {
             return $plugins_options;
         }
 
@@ -509,8 +512,6 @@ class Dj_App_Bootstrap {
             return $plugins_options;
         }
 
-        $req_obj = Dj_App_Request::getInstance();
-        $current_url = $req_obj->getWebPath();
         $patterns = explode('|', $load_if_url);
         $patterns = Dj_App_String_Util::trim($patterns);
         $matched = false;
