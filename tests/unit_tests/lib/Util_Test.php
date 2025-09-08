@@ -573,11 +573,11 @@ BUFF_EOF;
         // Test with plugin parameter
         $plugin_cache_dir = Dj_App_Util::getCoreCacheDir(['plugin' => 'test-plugin']);
         $this->assertNotEmpty($plugin_cache_dir);
-        $this->assertStringEndsWith('/cache/plugins/test_plugin', $plugin_cache_dir);
+        $this->assertStringEndsWith('/cache/plugins/test-plugin', $plugin_cache_dir);
         
         // Test with different plugin names
         $plugin_cache_dir2 = Dj_App_Util::getCoreCacheDir(['plugin' => 'my-awesome-plugin']);
-        $this->assertStringEndsWith('/cache/plugins/my_awesome_plugin', $plugin_cache_dir2);
+        $this->assertStringEndsWith('/cache/plugins/my-awesome-plugin', $plugin_cache_dir2);
         
         // Test with empty parameters
         $empty_cache_dir = Dj_App_Util::getCoreCacheDir([]);
@@ -600,11 +600,11 @@ BUFF_EOF;
         // Test with plugin parameter
         $plugin_temp_dir = Dj_App_Util::getCoreTempDir(['plugin' => 'test-plugin']);
         $this->assertNotEmpty($plugin_temp_dir);
-        $this->assertStringEndsWith('/tmp/plugins/test_plugin', $plugin_temp_dir);
+        $this->assertStringEndsWith('/tmp/plugins/test-plugin', $plugin_temp_dir);
         
         // Test with different plugin names
         $plugin_temp_dir2 = Dj_App_Util::getCoreTempDir(['plugin' => 'my-awesome-plugin']);
-        $this->assertStringEndsWith('/tmp/plugins/my_awesome_plugin', $plugin_temp_dir2);
+        $this->assertStringEndsWith('/tmp/plugins/my-awesome-plugin', $plugin_temp_dir2);
         
         // Test with empty parameters
         $empty_temp_dir = Dj_App_Util::getCoreTempDir([]);
@@ -682,4 +682,113 @@ BUFF_EOF;
         $cache_base = dirname($cache_dir);
         $this->assertEquals($temp_base, $cache_base);
     }
+
+    /**
+     * Test formatSlug method - basic functionality
+     */
+    public function testFormatSlug() {
+        // Test basic slug formatting
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My Awesome Plugin!'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_plugin'));
+        $this->assertEquals('uppercase-plugin', Dj_App_String_Util::formatSlug('UPPERCASE_PLUGIN'));
+        $this->assertEquals('plugin123', Dj_App_String_Util::formatSlug('plugin123'));
+        
+        // Test with special characters
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My Awesome Plugin!'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test-plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_plugin'));
+        
+        // Test with spaces
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My Awesome Plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('Test Plugin'));
+        
+        // Test with numbers
+        $this->assertEquals('plugin-123', Dj_App_String_Util::formatSlug('Plugin 123'));
+        $this->assertEquals('plugin123', Dj_App_String_Util::formatSlug('Plugin123'));
+    }
+
+    /**
+     * Test formatSlug method - comparison with formatStringId
+     */
+    public function testFormatSlugVsFormatStringId() {
+        $input = 'My Awesome Plugin!';
+        
+        // formatSlug should use dashes
+        $slug = Dj_App_String_Util::formatSlug($input);
+        $this->assertEquals('my-awesome-plugin', $slug);
+        
+        // formatStringId should use underscores by default
+        $id = Dj_App_String_Util::formatStringId($input);
+        $this->assertEquals('my_awesome_plugin', $id);
+        
+        // formatStringId with FORMAT_CONVERT_TO_DASHES should match formatSlug
+        $id_with_dashes = Dj_App_String_Util::formatStringId($input, Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES);
+        $this->assertEquals($slug, $id_with_dashes);
+    }
+
+    /**
+     * Test formatSlug method - edge cases
+     */
+    public function testFormatSlugEdgeCases() {
+        // Test empty input
+        $this->assertEquals('', Dj_App_String_Util::formatSlug(''));
+        $this->assertEquals('', Dj_App_String_Util::formatSlug(null));
+        
+        // Test with only special characters
+        $this->assertEquals('', Dj_App_String_Util::formatSlug('!!!'));
+        $this->assertEquals('', Dj_App_String_Util::formatSlug('   '));
+        
+        // Test with mixed dashes and underscores
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test-plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_-plugin'));
+        
+        // Test with multiple consecutive special characters
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test___plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test---plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_-_plugin'));
+    }
+
+    /**
+     * Test formatSlug method - with custom flags
+     */
+    public function testFormatSlugWithFlags() {
+        $input = 'My Awesome Plugin!';
+        
+        // Test with KEEP_CASE flag
+        $slug_keep_case = Dj_App_String_Util::formatSlug($input, Dj_App_String_Util::KEEP_CASE);
+        $this->assertEquals('My-Awesome-Plugin', $slug_keep_case);
+        
+        // Test with UPPERCASE flag
+        $slug_upper = Dj_App_String_Util::formatSlug($input, Dj_App_String_Util::UPPERCASE);
+        $this->assertEquals('MY-AWESOME-PLUGIN', $slug_upper);
+        
+        // Test with ALLOW_DOT flag
+        $slug_with_dots = Dj_App_String_Util::formatSlug('My.Awesome.Plugin', Dj_App_String_Util::ALLOW_DOT);
+        $this->assertEquals('my-awesome-plugin', $slug_with_dots);
+    }
+
+    /**
+     * Test formatSlug method - dots should always be converted to dashes
+     */
+    public function testFormatSlugConvertsDotsToDashes() {
+        // Test basic dot conversion
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My.Awesome.Plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test.plugin'));
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome.plugin'));
+        
+        // Test with mixed separators
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome_plugin'));
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my_awesome.plugin'));
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome-plugin'));
+        
+        // Test with multiple consecutive dots
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my..awesome...plugin'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test....plugin'));
+        
+        // Test with dots and other special characters
+        $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My.Awesome.Plugin!'));
+        $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('Test.Plugin@#$'));
+    }
+
 }
