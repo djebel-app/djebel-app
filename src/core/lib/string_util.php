@@ -114,6 +114,7 @@ class Dj_App_String_Util
 
         if (!is_scalar($tag)) {
             $tag = serialize($tag);
+            $tag = substr($tag, 0, $max_len);
         } else if (is_numeric($tag)) { // ctype_alnum(): Argument of type int will be interpreted as string in the future
             $tag = (string) $tag; // php complains about ctype_alnum when it receives numbers that will be treated as strings
         }
@@ -123,11 +124,6 @@ class Dj_App_String_Util
             // with no flag lowercase is the default option.
             // We're doing this as one of the tests failed.
             $tag = strtolower($tag);
-
-            if (($flags & Dj_App_String_Util::KEEP_DASH) == 0) {
-                $tag = str_replace('-', '_', $tag);
-            }
-
             return $tag;
         }
 
@@ -204,6 +200,29 @@ class Dj_App_String_Util
 
         return $tag;
     }
+
+    /**
+     * Format a string to a URL-friendly slug (converts underscores to dashes)
+     * Dj_App_String_Util::formatSlug();
+     * @param string $str
+     * @param int $flags
+     * @return string
+     */
+    public static function formatSlug($str, $flags = 0) {
+        // Default to converting underscores to dashes for URL-friendly slugs
+        if (($flags & self::FORMAT_CONVERT_TO_DASHES) == 0) {
+            $flags |= self::FORMAT_CONVERT_TO_DASHES;
+        }
+        
+        // Use formatStringId with the modified flags
+        $result = self::formatStringId($str, $flags);
+        
+        // For formatSlug, always convert dots to dashes (even with ALLOW_DOT flag)
+        $result = str_replace('.', '-', $result);
+        
+        return $result;
+    }
+
 
     /**
      * Dj_App_String_Util::jsonEncode();
