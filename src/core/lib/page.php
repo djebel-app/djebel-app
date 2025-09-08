@@ -160,16 +160,19 @@ class Dj_App_Page {
 
         $current_page = $this->get('page');
         $menu_items = [];
+        $submenus = [];
         
-        foreach ($nav_options as $item) {
+        // First pass: separate main items from submenus
+        foreach ($nav_options as $key => $item) {
             // Skip if explicitly set as inactive
             if (isset($item['active']) && empty($item['active'])) {
                 continue;
             }
 
-            $url = isset($item['url']) ? $item['url'] : '';
-            $slug = isset($item['slug']) ? $item['slug'] : $this->formatPageSlug($url);
-            $title = isset($item['title']) ? $item['title'] : '';
+            $url = empty($item['url']) ? '' : $item['url'];
+            $slug = empty($item['slug']) ? $this->formatPageSlug($url) : $item['slug'];
+            $title = empty($item['title']) ? '' : $item['title'];
+            $parent = empty($item['parent']) ? '' : $item['parent'];
 
             if (empty($title) || empty($url)) {
                 continue;
@@ -186,19 +189,72 @@ class Dj_App_Page {
             
             if ($is_current) {
                 $item_class .= ' dj-app-menu-item-current';
-                $menu_items[] = "        <li class='$item_class'><span class='dj-app-menu-text'>$title</span></li>";
+            }
+
+            $item_data = [
+                'key' => $key,
+                'title' => $title,
+                'url' => $url,
+                'slug' => $slug,
+                'is_current' => $is_current,
+                'item_class' => $item_class
+            ];
+
+            if (!empty($parent)) {
+                if (!isset($submenus[$parent])) {
+                    $submenus[$parent] = [];
+                }
+                $submenus[$parent][] = $item_data;
+                continue;
+            }
+
+            $menu_items[$key] = $item_data;
+        }
+
+        // Build HTML for menu items
+        $menu_html_items = [];
+
+        foreach ($menu_items as $key => $item) {
+            $submenu_html = '';
+            
+            // Check if this item has submenus
+            if (isset($submenus[$key])) {
+                $item['item_class'] .= ' dj-app-menu-item-has-submenu';
+                $submenu_items = [];
+
+                foreach ($submenus[$key] as $subitem) {
+                    $subitem_class = 'dj-app-menu-item';
+
+                    if ($subitem['is_current']) {
+                        $subitem_class .= ' dj-app-menu-item-current';
+                    }
+                    
+                    if ($subitem['is_current']) {
+                        $submenu_items[] = "            <li class='$subitem_class'><span class='dj-app-menu-text'>{$subitem['title']}</span></li>";
+                    } else {
+                        $submenu_items[] = "            <li class='$subitem_class'><a href='{$subitem['url']}' class='dj-app-menu-link'>{$subitem['title']}</a></li>";
+                    }
+                }
+                
+                if (!empty($submenu_items)) {
+                    $submenu_html = "\n        <ul class='dj-app-submenu'>\n" . implode("\n", $submenu_items) . "\n        </ul>";
+                }
+            }
+            
+            if ($item['is_current']) {
+                $menu_html_items[] = "        <li class='{$item['item_class']}'><span class='dj-app-menu-text'>{$item['title']}</span>$submenu_html</li>";
             } else {
-                $menu_items[] = "        <li class='$item_class'><a href='$url' class='dj-app-menu-link'>$title</a></li>";
+                $menu_html_items[] = "        <li class='{$item['item_class']}'><a href='{$item['url']}' class='dj-app-menu-link'>{$item['title']}</a>$submenu_html</li>";
             }
         }
 
         // Filter menu items array before building HTML
-        $menu_items = Dj_App_Hooks::applyFilter('app.page.menu.items', $menu_items, $args);
+        $menu_html_items = Dj_App_Hooks::applyFilter('app.page.menu.items', $menu_html_items, $args);
 
         $menu_parts = [
             '<div class="dj-app-menu-container">',
             '    <ul class="dj-app-menu-nav">',
-            implode("\n", $menu_items),
+            implode("\n", $menu_html_items),
             '    </ul>',
             '</div>',
         ];
