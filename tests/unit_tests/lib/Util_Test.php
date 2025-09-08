@@ -560,4 +560,126 @@ BUFF_EOF;
         $this->assertEquals('path///', Dj_App_Util::removeSlash('///path///', Dj_App_Util::FLAG_LEADING));
         $this->assertEquals('path', Dj_App_Util::removeSlash('///path///', Dj_App_Util::FLAG_BOTH));
     }
+
+    /**
+     * Test getCoreCacheDir method - basic functionality
+     */
+    public function testGetCoreCacheDir() {
+        // Test basic cache directory
+        $cache_dir = Dj_App_Util::getCoreCacheDir();
+        $this->assertNotEmpty($cache_dir);
+        $this->assertStringEndsWith('/cache', $cache_dir);
+        
+        // Test with plugin parameter
+        $plugin_cache_dir = Dj_App_Util::getCoreCacheDir(['plugin' => 'test-plugin']);
+        $this->assertNotEmpty($plugin_cache_dir);
+        $this->assertStringEndsWith('/cache/plugins/test_plugin', $plugin_cache_dir);
+        
+        // Test with different plugin names
+        $plugin_cache_dir2 = Dj_App_Util::getCoreCacheDir(['plugin' => 'my-awesome-plugin']);
+        $this->assertStringEndsWith('/cache/plugins/my_awesome_plugin', $plugin_cache_dir2);
+        
+        // Test with empty parameters
+        $empty_cache_dir = Dj_App_Util::getCoreCacheDir([]);
+        $this->assertEquals($cache_dir, $empty_cache_dir);
+        
+        // Test with null parameters
+        $null_cache_dir = Dj_App_Util::getCoreCacheDir(null);
+        $this->assertEquals($cache_dir, $null_cache_dir);
+    }
+
+    /**
+     * Test getCoreTempDir method - basic functionality
+     */
+    public function testGetCoreTempDir() {
+        // Test basic temp directory
+        $temp_dir = Dj_App_Util::getCoreTempDir();
+        $this->assertNotEmpty($temp_dir);
+        $this->assertStringEndsWith('/tmp', $temp_dir);
+        
+        // Test with plugin parameter
+        $plugin_temp_dir = Dj_App_Util::getCoreTempDir(['plugin' => 'test-plugin']);
+        $this->assertNotEmpty($plugin_temp_dir);
+        $this->assertStringEndsWith('/tmp/plugins/test_plugin', $plugin_temp_dir);
+        
+        // Test with different plugin names
+        $plugin_temp_dir2 = Dj_App_Util::getCoreTempDir(['plugin' => 'my-awesome-plugin']);
+        $this->assertStringEndsWith('/tmp/plugins/my_awesome_plugin', $plugin_temp_dir2);
+        
+        // Test with empty parameters
+        $empty_temp_dir = Dj_App_Util::getCoreTempDir([]);
+        $this->assertEquals($temp_dir, $empty_temp_dir);
+        
+        // Test with null parameters
+        $null_temp_dir = Dj_App_Util::getCoreTempDir(null);
+        $this->assertEquals($temp_dir, $null_temp_dir);
+    }
+
+    /**
+     * Test getCoreCacheDir method - plugin name formatting
+     */
+    public function testGetCoreCacheDirPluginFormatting() {
+        // Test with spaces and special characters
+        $plugin_cache_dir = Dj_App_Util::getCoreCacheDir(['plugin' => 'My Awesome Plugin!']);
+        $this->assertStringEndsWith('/cache/plugins/my_awesome_plugin', $plugin_cache_dir);
+        
+        // Test with uppercase
+        $plugin_cache_dir2 = Dj_App_Util::getCoreCacheDir(['plugin' => 'UPPERCASE_PLUGIN']);
+        $this->assertStringEndsWith('/cache/plugins/uppercase_plugin', $plugin_cache_dir2);
+        
+        // Test with numbers
+        $plugin_cache_dir3 = Dj_App_Util::getCoreCacheDir(['plugin' => 'plugin123']);
+        $this->assertStringEndsWith('/cache/plugins/plugin123', $plugin_cache_dir3);
+    }
+
+    /**
+     * Test getCoreTempDir method - plugin name formatting
+     */
+    public function testGetCoreTempDirPluginFormatting() {
+        // Test with spaces and special characters
+        $plugin_temp_dir = Dj_App_Util::getCoreTempDir(['plugin' => 'My Awesome Plugin!']);
+        $this->assertStringEndsWith('/tmp/plugins/my_awesome_plugin', $plugin_temp_dir);
+        
+        // Test with uppercase
+        $plugin_temp_dir2 = Dj_App_Util::getCoreTempDir(['plugin' => 'UPPERCASE_PLUGIN']);
+        $this->assertStringEndsWith('/tmp/plugins/uppercase_plugin', $plugin_temp_dir2);
+        
+        // Test with numbers
+        $plugin_temp_dir3 = Dj_App_Util::getCoreTempDir(['plugin' => 'plugin123']);
+        $this->assertStringEndsWith('/tmp/plugins/plugin123', $plugin_temp_dir3);
+    }
+
+    /**
+     * Test getCoreCacheDir method - consistency with getCorePrivateDataDir
+     */
+    public function testGetCoreCacheDirConsistency() {
+        // Both should use the same base directory
+        $cache_dir = Dj_App_Util::getCoreCacheDir();
+        $data_dir = Dj_App_Util::getCorePrivateDataDir();
+        
+        $this->assertStringContainsString('/cache', $cache_dir);
+        $this->assertStringContainsString('/data', $data_dir);
+        
+        // Both should have the same base path structure
+        $cache_base = dirname($cache_dir);
+        $data_base = dirname($data_dir);
+        $this->assertEquals($cache_base, $data_base);
+    }
+
+    /**
+     * Test getCoreTempDir method - consistency with other directory methods
+     */
+    public function testGetCoreTempDirConsistency() {
+        // Temp dir should use the same base directory as other methods
+        $temp_dir = Dj_App_Util::getCoreTempDir();
+        $cache_dir = Dj_App_Util::getCoreCacheDir();
+        
+        $this->assertStringContainsString('/tmp', $temp_dir);
+        $this->assertStringContainsString('/cache', $cache_dir);
+        
+        // Both should have the same base path structure
+        $temp_base = dirname($temp_dir);
+        $cache_base = dirname($cache_dir);
+        $this->assertEquals($temp_base, $cache_base);
+    }
 }
