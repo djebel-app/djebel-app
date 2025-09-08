@@ -184,7 +184,7 @@ class Dj_App_Page {
                 $url = $req_obj->getWebPath() . $url;
             }
 
-            $is_current = $slug == $current_page || 0;
+            $is_current = $slug == $current_page;
             $item_class = 'dj-app-menu-item';
             
             if ($is_current) {
