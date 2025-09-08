@@ -267,6 +267,34 @@ class Dj_App_Util {
     }
 
     /**
+     * Get core temporary directory with optional plugin parameter
+     * @param array $params
+     * @return string
+     */
+    public static function getCoreTempDir($params = [])
+    {
+        $dir = Dj_App_Util::getCorePrivateDir();
+
+        if (empty($dir)) {
+            return '';
+        }
+
+        $dir .= '/tmp';
+
+        $ctx = [];
+        $dir = Dj_App_Hooks::applyFilter('app.config.djebel_temp_dir', $dir, $ctx);
+
+        if (!empty($params['plugin'])) {
+            $plugin = $params['plugin'];
+            $plugin = Dj_App_String_Util::formatStringId($plugin);
+            $dir .= '/plugins/' . $plugin;
+            $dir = Dj_App_Hooks::applyFilter('app.config.djebel_temp_plugin_dir', $dir, $ctx);
+        }
+
+        return $dir;
+    }
+
+    /**
      * @param array $params
      * @return string
      */
