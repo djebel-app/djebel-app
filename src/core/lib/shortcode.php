@@ -17,8 +17,8 @@ class Dj_App_Shortcode {
         // [djebel_date_year]
         $this->addShortcode('djebel_date_year', [ $this, 'renderSysShortcodeYear' ]);
 
-        // [djebel_nav]
-        $this->addShortcode('djebel_nav', [ $this, 'renderNav' ]);
+        // [djebel_page_nav]
+        $this->addShortcode('djebel_page_nav', [ $this, 'renderNav' ]);
 
         //
         $this->addShortcode('djebel_page_content', [ $this, 'renderContent' ]);
@@ -28,7 +28,7 @@ class Dj_App_Shortcode {
     }
 
     /**
-     * replaces [djebel_nav] shortcode with whatever we have defined in app.ini in the nav
+     * replaces [djebel_page_nav] shortcode with whatever we have defined in app.ini in the nav
      * @todo add ids and position?
      * @param array $params
      * @return string
