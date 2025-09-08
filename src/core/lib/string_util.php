@@ -214,15 +214,15 @@ class Dj_App_String_Util
             $flags |= self::FORMAT_CONVERT_TO_DASHES;
         }
         
+        // For formatSlug, always convert dots to dashes (default behavior)
+        // Remove ALLOW_DOT flag and let formatStringId handle dots as underscores
+        $flags &= ~self::ALLOW_DOT;
+        
         // Use formatStringId with the modified flags
         $result = self::formatStringId($str, $flags);
         
-        // For formatSlug, always convert dots to dashes (even with ALLOW_DOT flag)
-        $result = str_replace('.', '-', $result);
-        
         return $result;
     }
-
 
     /**
      * Dj_App_String_Util::jsonEncode();
