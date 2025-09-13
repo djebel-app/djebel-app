@@ -1407,7 +1407,31 @@ CLEAR_AND_REDIRECT_HTML;
                 break;
             }
         }
-        
+
+        // The logic here is that we want to have an array of the current server ports
+        // so we can determine if the forwarded port is one of them. if yes, don't append to host.
+        // if it's a docker set up
+        // host:443 -> docker forwards to reverse proxy on 8443 -> backend 8443
+        $server_ports = [ 80, 443, ];
+
+        if (!empty(getenv('SERVER_PORT'))) {
+            $server_ports[] = getenv('SERVER_PORT');
+        }
+
+        if (!empty($_SERVER['SERVER_PORT'])) {
+            $server_ports[] = $_SERVER['SERVER_PORT'];
+        }
+
+        $server_ports = array_map('trim', $server_ports);
+        $server_ports = array_map('intval', $server_ports);
+        $server_ports = array_unique($server_ports);
+        $server_ports = array_filter($server_ports); // rm empty
+
+        // server may be behind a proxy but the user wants the port appended.
+        if (!empty($options_obj->site_port)) {
+            $detected_port = $options_obj->site_port;
+        }
+
         // If no colon found in host headers, check explicit port headers as fallback
         if (empty($detected_port)) {
             $port_headers = ['HTTP_X_FORWARDED_PORT',];
@@ -1422,17 +1446,10 @@ CLEAR_AND_REDIRECT_HTML;
             }
         }
 
-        // server may be behind a proxy and we don't want to append the internal port.
-        if (empty($detected_port)
-            && !empty($_SERVER['SERVER_PORT'])
-            && !empty($options_obj->site_use_port)) {
-            $detected_port = $_SERVER['SERVER_PORT'];
-        }
-
         $detected_port = (int) $detected_port;
 
         // append port to hostname if non-standard
-        if ($detected_port > 0 && !in_array($detected_port, [ 80, 443 ])) {
+        if ($detected_port > 0 && !in_array($detected_port, $server_ports)) {
             $port = ':' . $detected_port;
         }
 
