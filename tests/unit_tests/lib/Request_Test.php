@@ -71,8 +71,8 @@ class Request_Test extends TestCase
     {
         // Simulate server environment where SCRIPT_NAME is stripped
         unset($_SERVER['HTTP_X_FORWARDED_PREFIX']); // Ensure no prefix header
-        $_SERVER['SCRIPT_NAME'] = '/success.php';
         $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
@@ -177,8 +177,8 @@ class Request_Test extends TestCase
     {
         // Ensure no prefix header for traditional detection
         unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
-        $_SERVER['SCRIPT_NAME'] = '/success.php';
         $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
@@ -222,8 +222,8 @@ class Request_Test extends TestCase
         ];
 
         foreach ($test_cases as [$request_uri, $script_name, $expected_path]) {
-            $_SERVER['SCRIPT_NAME'] = $script_name;
             $_SERVER['PHP_SELF'] = $script_name;
+            $_SERVER['SCRIPT_NAME'] = $script_name;
             
             // Create a fresh instance to avoid singleton caching
             $req_obj = new Dj_App_Request();
