@@ -462,15 +462,11 @@ class Dj_App_Request {
 
         // ->get('contact_form_msg|msg|message')
         if (!empty($sep)) { // checking for multiple keys
-            $separtors = $this->getSeparators();
-            $separtors = array_map('trim', $separtors);
-            $separtors = array_unique($separtors);
-            $separtors_esc = array_map('preg_quote', $separtors);
-            $separtors_esc_str = join('', $separtors_esc); // we'll put them in a regex group [;\|]
-
-            // We split on all of them because there could be multiple separators.
-            // the getSep returned the first one that matched.
-            $multiple_keys = preg_split("/[$separtors_esc_str]+/si", $key);
+            $separators = $this->getSeparators();
+            
+            // Replace all separators with comma, then split by comma
+            $normalized_key = str_replace($separators, ',', $key);
+            $multiple_keys = explode(',', $normalized_key);
             $multiple_keys = array_map('trim', $multiple_keys);
             $multiple_keys = array_unique($multiple_keys);
 
