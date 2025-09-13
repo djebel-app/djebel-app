@@ -23,16 +23,54 @@ class Request_Test extends TestCase
     {
         // Restore original $_SERVER
         $_SERVER = $this->original_server;
+        
+        // Ensure no prefix header
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
+    }
+
+    /**
+     * Test web path detection with HTTP_X_FORWARDED_PREFIX header
+     * This is the primary method for modern proxy setups
+     */
+    public function testWebPathDetectionWithForwardedPrefix()
+    {
+        // Test with single prefix
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/some-cool-site';
+        
+        $req_obj = new Dj_App_Request();
+        $web_path = $req_obj->detectWebPath();
+        
+        $this->assertEquals('/some-cool-site', $web_path, 
+            'Web path should be /some-cool-site when HTTP_X_FORWARDED_PREFIX is set');
+    }
+
+    /**
+     * Test web path detection with comma-separated HTTP_X_FORWARDED_PREFIX
+     * Multiple proxies may append multiple values - takes the first one
+     */
+    public function testWebPathDetectionWithCommaSeparatedPrefix()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/proxy1,/some-cool-site,/proxy2';
+        
+        $req_obj = new Dj_App_Request();
+        $web_path = $req_obj->detectWebPath();
+        
+        $this->assertEquals('/proxy1', $web_path, 
+            'Web path should be /proxy1 (first value) when HTTP_X_FORWARDED_PREFIX has comma-separated values');
     }
 
     /**
      * Test web path detection when SCRIPT_NAME is stripped by server
-     * This is the main use case for servers that strip path prefixes
+     * This tests the traditional detection method when SCRIPT_NAME is stripped
      */
     public function testWebPathDetectionWithStrippedScriptName()
     {
         // Simulate server environment where SCRIPT_NAME is stripped
-        $_SERVER['REQUEST_URI'] = '/some-cool-site/success.php';
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']); // Ensure no prefix header
         $_SERVER['SCRIPT_NAME'] = '/success.php';
         $_SERVER['PHP_SELF'] = '/success.php';
         
@@ -40,8 +78,9 @@ class Request_Test extends TestCase
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        $this->assertEquals('/some-cool-site', $web_path, 
-            'Web path should be /some-cool-site when REQUEST_URI is /some-cool-site/success.php and SCRIPT_NAME is /success.php');
+        // With traditional detection, dirname('/success.php') returns '/'
+        $this->assertEquals('/', $web_path, 
+            'Web path should be / when SCRIPT_NAME is /success.php (traditional detection)');
     }
 
     /**
@@ -50,17 +89,19 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithDifferentSiteNames()
     {
+        // Ensure no prefix header for traditional detection tests
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
+        
         $test_cases = [
-            ['/dayana/success.php', '/success.php', '/dayana'],
-            ['/influencer-site/success.php', '/success.php', '/influencer-site'],
-            ['/my-blog/admin.php', '/admin.php', '/my-blog'],
-            ['/deep/nested/path/script.php', '/script.php', '/deep/nested/path'],
+            ['/dayana/success.php', '/success.php', '/'],  // dirname('/success.php') = '/'
+            ['/influencer-site/success.php', '/success.php', '/'],  // dirname('/success.php') = '/'
+            ['/my-blog/admin.php', '/admin.php', '/'],  // dirname('/admin.php') = '/'
+            ['/deep/nested/path/script.php', '/script.php', '/'],  // dirname('/script.php') = '/'
         ];
 
         foreach ($test_cases as [$request_uri, $script_name, $expected_path]) {
-            $_SERVER['REQUEST_URI'] = $request_uri;
-            $_SERVER['SCRIPT_NAME'] = $script_name;
             $_SERVER['PHP_SELF'] = $script_name;
+            $_SERVER['SCRIPT_NAME'] = $script_name;
             
             // Create a fresh instance to avoid singleton caching
             $req_obj = new Dj_App_Request();
@@ -77,9 +118,10 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithTraditionalConfig()
     {
-        $_SERVER['REQUEST_URI'] = '/site/admin/index.php';
-        $_SERVER['SCRIPT_NAME'] = '/site/admin/index.php';
+        // Ensure no prefix header for traditional detection
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
         $_SERVER['PHP_SELF'] = '/site/admin/index.php';
+        $_SERVER['SCRIPT_NAME'] = '/site/admin/index.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
@@ -95,16 +137,16 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithEmptyVariables()
     {
-        $_SERVER['REQUEST_URI'] = '';
-        $_SERVER['SCRIPT_NAME'] = '';
+        // Ensure no prefix header for traditional detection
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
         $_SERVER['PHP_SELF'] = '';
-        
+        $_SERVER['SCRIPT_NAME'] = '';
+
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        $this->assertEquals('/', $web_path, 
-            'Web path should be / when all server variables are empty');
+        $this->assertEquals('/', $web_path, 'Web path should be / when all server variables are empty');
     }
 
     /**
@@ -113,16 +155,18 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithComplexNestedPaths()
     {
-        $_SERVER['REQUEST_URI'] = '/dayana/dir1/success.php';
-        $_SERVER['SCRIPT_NAME'] = '/dir1/success.php';
+        // Ensure no prefix header for traditional detection
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
         $_SERVER['PHP_SELF'] = '/dir1/success.php';
-        
+        $_SERVER['SCRIPT_NAME'] = '/dir1/success.php';
+
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        $this->assertEquals('/dayana', $web_path, 
-            'Web path should be /dayana when REQUEST_URI is /dayana/dir1/success.php and SCRIPT_NAME is /dir1/success.php');
+        // With traditional detection, dirname('/dir1/success.php') returns '/dir1'
+        $this->assertEquals('/dir1', $web_path, 
+            'Web path should be /dir1 when SCRIPT_NAME is /dir1/success.php (traditional detection)');
     }
     
     /**
@@ -131,7 +175,8 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithStrippedSubdirectory()
     {
-        $_SERVER['REQUEST_URI'] = '/dayana/dir1/success.php';
+        // Ensure no prefix header for traditional detection
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
         $_SERVER['SCRIPT_NAME'] = '/success.php';
         $_SERVER['PHP_SELF'] = '/success.php';
         
@@ -139,8 +184,9 @@ class Request_Test extends TestCase
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        $this->assertEquals('/dayana/dir1', $web_path, 
-            'Web path should be /dayana/dir1 when REQUEST_URI is /dayana/dir1/success.php and SCRIPT_NAME is /success.php');
+        // With traditional detection, dirname('/success.php') returns '/'
+        $this->assertEquals('/', $web_path, 
+            'Web path should be / when SCRIPT_NAME is /success.php (traditional detection)');
     }
 
     /**
@@ -149,19 +195,18 @@ class Request_Test extends TestCase
      */
     public function testWebPathDetectionWithQueryParameters()
     {
-        $_SERVER['REQUEST_URI'] = '/site/page.php?param=value&test=123';
-        $_SERVER['SCRIPT_NAME'] = '/page.php';
+        // Ensure no prefix header for traditional detection
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
         $_SERVER['PHP_SELF'] = '/page.php';
+        $_SERVER['SCRIPT_NAME'] = '/page.php';
         
         // Create a fresh instance to avoid singleton caching
         $req_obj = new Dj_App_Request();
         $web_path = $req_obj->detectWebPath();
         
-        // This is not a true "stripped prefix" scenario
-        // In reality, if SCRIPT_NAME is stripped, REQUEST_URI should end with SCRIPT_NAME
-        // This test case falls back to traditional detection and returns '/'
+        // With traditional detection, dirname('/page.php') returns '/'
         $this->assertEquals('/', $web_path, 
-            'Web path should be / when REQUEST_URI contains SCRIPT_NAME but doesn\'t end with it');
+            'Web path should be / when SCRIPT_NAME is /page.php (traditional detection)');
     }
 
     /**
@@ -171,13 +216,12 @@ class Request_Test extends TestCase
     public function testWebPathDetectionWithVariousFormats()
     {
         $test_cases = [
-            ['/site/success.php', '/success.php', '/site'],
-            ['site/success.php', '/success.php', 'site'],  // REQUEST_URI without leading / returns 'site'
-            ['/success.php', '/success.php', '/'],
+            ['/site/success.php', '/success.php', '/'],  // dirname('/success.php') = '/'
+            ['site/success.php', '/success.php', '/'],  // dirname('/success.php') = '/'
+            ['/success.php', '/success.php', '/'],  // dirname('/success.php') = '/'
         ];
 
         foreach ($test_cases as [$request_uri, $script_name, $expected_path]) {
-            $_SERVER['REQUEST_URI'] = $request_uri;
             $_SERVER['SCRIPT_NAME'] = $script_name;
             $_SERVER['PHP_SELF'] = $script_name;
             
@@ -188,5 +232,42 @@ class Request_Test extends TestCase
             $this->assertEquals($expected_path, $web_path, 
                 "Web path should be $expected_path for REQUEST_URI: $request_uri, SCRIPT_NAME: $script_name");
         }
+    }
+
+    /**
+     * Test web path detection with HTTP_X_FORWARDED_PREFIX and traditional fallback
+     * Ensures both methods work together correctly
+     */
+    public function testWebPathDetectionWithPrefixAndTraditionalFallback()
+    {
+        // Test with prefix that should be used
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/proxy-prefix';
+        
+        $req_obj = new Dj_App_Request();
+        $web_path = $req_obj->detectWebPath();
+        
+        $this->assertEquals('/proxy-prefix', $web_path, 
+            'Web path should be /proxy-prefix when HTTP_X_FORWARDED_PREFIX is set');
+    }
+
+    /**
+     * Test web path detection with invalid HTTP_X_FORWARDED_PREFIX
+     * Ensures invalid prefix values are rejected and fallback is used
+     */
+    public function testWebPathDetectionWithInvalidPrefix()
+    {
+        // Test with invalid prefix (contains non-alphanumeric characters)
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/invalid@prefix!';
+        
+        $req_obj = new Dj_App_Request();
+        $web_path = $req_obj->detectWebPath();
+        
+        // Should fallback to traditional detection - dirname('/success.php') = '/'
+        $this->assertEquals('/', $web_path, 
+            'Web path should fallback to traditional detection when HTTP_X_FORWARDED_PREFIX is invalid');
     }
 }
