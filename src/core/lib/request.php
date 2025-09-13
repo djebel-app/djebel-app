@@ -231,10 +231,6 @@ class Dj_App_Request {
             if (empty($web_path) || $web_path == '.') {
                 $web_path = '/';
             }
-
-            if (empty($prefix_to_web_prefix)) {
-                return $web_path;
-            }
         }
 
         if (empty($web_path)) {
@@ -247,35 +243,32 @@ class Dj_App_Request {
                 if (empty($web_path) || $web_path == '.') {
                     $web_path = '/';
                 }
-
-                if (empty($prefix_to_web_prefix)) {
-                    return $web_path;
-                }
             }
         }
 
         if (empty($web_path)) { // Fallback to document root detection
+            $script_path = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
             $document_root = empty($_SERVER['DOCUMENT_ROOT']) ? '' : $_SERVER['DOCUMENT_ROOT'];
-            $current_script_path = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
 
-            if (!empty($document_root) && !empty($current_script_path)) {
-                $relative_path = str_replace($document_root, '', $current_script_path);
+            if (!empty($document_root) && !empty($script_path)) {
+                $relative_path = str_replace($document_root, '', $script_path);
                 $relative_path = dirname($relative_path);
                 $relative_path = Dj_App_Util::removeSlash($relative_path);
 
                 if (empty($relative_path) || $relative_path == '.') {
                     $web_path = $relative_path;
                 }
-
-                if (empty($prefix_to_web_prefix)) {
-                    return $web_path;
-                }
             }
         }
 
-        $web_path = Dj_App_Util::removeSlash($prefix_to_web_prefix) . $web_path;
+        // Simple concatenation: prefix + web_path
+        $prefix_clean = !empty($prefix_to_web_prefix) ? Dj_App_Util::removeSlash($prefix_to_web_prefix) : '';
+        $web_path_clean = !empty($web_path) ? Dj_App_Util::removeSlash($web_path) : '';
+        
+        $result = $prefix_clean . $web_path_clean;
+        $result = empty($result) ? '/' : $result;
 
-        return $web_path;
+        return $result;
     }
 
     /**
