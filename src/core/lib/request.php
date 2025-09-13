@@ -190,71 +190,92 @@ class Dj_App_Request {
      */
     public function detectWebPath()
     {
+        $ctx = [];
+
         // Method 1: Simple filter to tell what the web path is
-        $web_path = Dj_App_Hooks::applyFilter('app.core.request.detect_web_path', '', []);
+        $web_path = Dj_App_Hooks::applyFilter('app.core.request.detect_web_path', '', $ctx);
 
         if (!empty($web_path)) {
             return $web_path;
         }
 
-        // Method 2: Simple prefix detection when SCRIPT_NAME is stripped
-        $request_uri = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
+        // Multiple proxies may append multiple values in the X-Forwarded-Prefix header and it can be comma-separated paths; taking the first hop is common for mount-path logic.
+        $prefix_to_web_prefix = empty($_SERVER['HTTP_X_FORWARDED_PREFIX']) ? '' : $_SERVER['HTTP_X_FORWARDED_PREFIX'];
+
+        if (!empty($prefix_to_web_prefix)) {
+            // multiple web prefix values?
+            if (strpos($prefix_to_web_prefix, ',') !== false) {
+                $parts_from_web_prefix = explode(',', $prefix_to_web_prefix);
+                $prefix_to_web_prefix = $parts_from_web_prefix[0];
+            }
+
+            $prefix_to_web_prefix = Dj_App_File_Util::normalizePath($prefix_to_web_prefix);
+            $prefix_to_web_prefix = Dj_App_Hooks::applyFilter('app.core.request.detect_web_path_web_prefix', $prefix_to_web_prefix, $ctx);
+
+            // quick check if it's all good i.e. / and alpha nums
+            $prefix_to_web_prefix_sanitized = str_replace('/', '', $prefix_to_web_prefix);
+
+            if (!Dj_App_String_Util::isAlphaNumericExt($prefix_to_web_prefix_sanitized)) {
+                $prefix_to_web_prefix = '';
+            }
+        }
+
+        // Simple prefix detection when SCRIPT_NAME is stripped
         $script_name = empty($_SERVER['SCRIPT_NAME']) ? '' : $_SERVER['SCRIPT_NAME'];
 
-        // Check if REQUEST_URI ends with SCRIPT_NAME (stripped prefix scenario)
-        if (!empty($request_uri) && !empty($script_name)) {
-            $script_pos = strpos($request_uri, $script_name);
-            
-            if (($script_pos !== false) && ($script_pos + strlen($script_name) === strlen($request_uri))) {
-                $web_path = substr($request_uri, 0, $script_pos);
+        // Traditional detection from SCRIPT_NAME
+        if (!empty($script_name)) {
+            $web_path = dirname($script_name);
+            $web_path = Dj_App_Util::removeSlash($web_path);
+
+            if (empty($web_path) || $web_path == '.') {
+                $web_path = '/';
+            }
+
+            if (empty($prefix_to_web_prefix)) {
+                return $web_path;
+            }
+        }
+
+        if (empty($web_path)) {
+            $php_self = empty($_SERVER['PHP_SELF']) ? '' : $_SERVER['PHP_SELF'];
+
+            if (!empty($php_self)) {
+                $web_path = dirname($php_self);
                 $web_path = Dj_App_Util::removeSlash($web_path);
-                
-                if (!empty($web_path)) {
+
+                if (empty($web_path) || $web_path == '.') {
+                    $web_path = '/';
+                }
+
+                if (empty($prefix_to_web_prefix)) {
                     return $web_path;
                 }
             }
         }
 
-        // Method 3: Traditional detection from SCRIPT_NAME or PHP_SELF
-        if (!empty($script_name)) {
-            $web_path = dirname($script_name);
-            $web_path = Dj_App_Util::removeSlash($web_path);
-
-            if (!empty($web_path) && $web_path != '.') {
-                return $web_path;
-            }
-        }
-        
-        $php_self = empty($_SERVER['PHP_SELF']) ? '' : $_SERVER['PHP_SELF'];
-
-        if (!empty($php_self)) {
-            $web_path = dirname($php_self);
-            $web_path = Dj_App_Util::removeSlash($web_path);
-
-            if (!empty($web_path) && $web_path != '.') {
-                return $web_path;
-            }
-        }
-
-        // Method 4: Fallback to document root detection
-        $document_root = empty($_SERVER['DOCUMENT_ROOT']) ? '' : $_SERVER['DOCUMENT_ROOT'];
-        
-        if (!empty($request_uri) && !empty($document_root)) {
+        if (empty($web_path)) { // Fallback to document root detection
+            $document_root = empty($_SERVER['DOCUMENT_ROOT']) ? '' : $_SERVER['DOCUMENT_ROOT'];
             $current_script_path = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
-            
-            if (!empty($current_script_path)) {
+
+            if (!empty($document_root) && !empty($current_script_path)) {
                 $relative_path = str_replace($document_root, '', $current_script_path);
                 $relative_path = dirname($relative_path);
                 $relative_path = Dj_App_Util::removeSlash($relative_path);
-                $relative_path = rtrim($relative_path, '.');
 
-                if (!empty($relative_path)) {
-                    return $relative_path;
+                if (empty($relative_path) || $relative_path == '.') {
+                    $web_path = $relative_path;
+                }
+
+                if (empty($prefix_to_web_prefix)) {
+                    return $web_path;
                 }
             }
         }
 
-        return '/';
+        $web_path = Dj_App_Util::removeSlash($prefix_to_web_prefix) . $web_path;
+
+        return $web_path;
     }
 
     /**
