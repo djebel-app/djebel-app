@@ -270,4 +270,202 @@ class Request_Test extends TestCase
         $this->assertEquals('/', $web_path, 
             'Web path should fallback to traditional detection when HTTP_X_FORWARDED_PREFIX is invalid');
     }
+
+    /**
+     * Test basic get() method functionality
+     */
+    public function testGetMethodBasic()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set some test data
+        $req_obj->set('username', 'john_doe');
+        $req_obj->set('email', 'john@example.com');
+        $req_obj->set('age', '25');
+        
+        // Test basic get
+        $this->assertEquals('john_doe', $req_obj->get('username'));
+        $this->assertEquals('john@example.com', $req_obj->get('email'));
+        $this->assertEquals('25', $req_obj->get('age'));
+        
+        // Test non-existent key
+        $this->assertEquals('', $req_obj->get('non_existent'));
+        $this->assertEquals('default_value', $req_obj->get('non_existent', 'default_value'));
+    }
+
+    /**
+     * Test get() method with type forcing
+     */
+    public function testGetMethodWithTypeForcing()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('count', '42');
+        $req_obj->set('price', '19.99');
+        $req_obj->set('message', 'Hello <b>World</b>!');
+        
+        // Test INT type forcing
+        $this->assertEquals(42, $req_obj->get('count', '', Dj_App_Request::INT));
+        $this->assertEquals(19, $req_obj->get('price', '', Dj_App_Request::INT)); // intval('19.99') = 19
+        
+        // Test FLOAT type forcing
+        $this->assertEquals(19.99, $req_obj->get('price', '', Dj_App_Request::FLOAT));
+        $this->assertEquals(42.0, $req_obj->get('count', '', Dj_App_Request::FLOAT));
+        
+        // Test STRIP_ALL_TAGS - skip this test as it requires WordPress functions
+        // $this->assertEquals('Hello World!', $req_obj->get('message', '', Dj_App_Request::STRIP_ALL_TAGS));
+    }
+
+    /**
+     * Test get() method with single separator (pipe)
+     */
+    public function testGetMethodWithPipeSeparator()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('msg', 'Hello World');
+        $req_obj->set('message', 'Hi There');
+        $req_obj->set('contact_form_msg', 'Form Message');
+        
+        // Test pipe separator - should return first found
+        $this->assertEquals('Hello World', $req_obj->get('msg|message|contact_form_msg'));
+        $this->assertEquals('Hi There', $req_obj->get('message|msg|contact_form_msg'));
+        $this->assertEquals('Form Message', $req_obj->get('contact_form_msg|msg|message'));
+        
+        // Test with non-existent keys
+        $this->assertEquals('', $req_obj->get('nonexistent1|nonexistent2'));
+        $this->assertEquals('default', $req_obj->get('nonexistent1|nonexistent2', 'default'));
+    }
+
+    /**
+     * Test get() method with comma separator
+     */
+    public function testGetMethodWithCommaSeparator()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('title', 'Page Title');
+        $req_obj->set('page_title', 'Page Title Alt');
+        $req_obj->set('header', 'Header Text');
+        
+        // Test comma separator
+        $this->assertEquals('Page Title', $req_obj->get('title,page_title,header'));
+        $this->assertEquals('Page Title Alt', $req_obj->get('page_title,title,header'));
+        $this->assertEquals('Header Text', $req_obj->get('header,title,page_title'));
+    }
+
+    /**
+     * Test get() method with semicolon separator
+     */
+    public function testGetMethodWithSemicolonSeparator()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('name', 'John Doe');
+        $req_obj->set('full_name', 'John Doe Full');
+        $req_obj->set('user_name', 'johndoe');
+        
+        // Test semicolon separator
+        $this->assertEquals('John Doe', $req_obj->get('name;full_name;user_name'));
+        $this->assertEquals('John Doe Full', $req_obj->get('full_name;name;user_name'));
+        $this->assertEquals('johndoe', $req_obj->get('user_name;name;full_name'));
+    }
+
+    /**
+     * Test get() method with mixed separators
+     */
+    public function testGetMethodWithMixedSeparators()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('id', '123');
+        $req_obj->set('user_id', '456');
+        $req_obj->set('item_id', '789');
+        $req_obj->set('product_id', '101');
+        
+        // Test mixed separators - should normalize all to comma and split
+        $this->assertEquals('123', $req_obj->get('id|user_id,item_id;product_id'));
+        $this->assertEquals('456', $req_obj->get('user_id,id|item_id;product_id'));
+        $this->assertEquals('789', $req_obj->get('item_id;id,user_id|product_id'));
+        $this->assertEquals('101', $req_obj->get('product_id|id;user_id,item_id'));
+    }
+
+    /**
+     * Test get() method with whitespace handling
+     */
+    public function testGetMethodWithWhitespaceHandling()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('key1', 'value1');
+        $req_obj->set('key2', 'value2');
+        $req_obj->set('key3', 'value3');
+        
+        // Test with spaces around separators
+        $this->assertEquals('value1', $req_obj->get(' key1 | key2 , key3 '));
+        $this->assertEquals('value2', $req_obj->get('key2 , key1 | key3'));
+        $this->assertEquals('value3', $req_obj->get('key3 ; key1 , key2'));
+    }
+
+    /**
+     * Test get() method with duplicate keys
+     */
+    public function testGetMethodWithDuplicateKeys()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data
+        $req_obj->set('duplicate', 'first_value');
+        $req_obj->set('unique', 'unique_value');
+        
+        // Test with duplicate keys - should return first occurrence
+        $this->assertEquals('first_value', $req_obj->get('duplicate|duplicate|unique'));
+        $this->assertEquals('unique_value', $req_obj->get('unique|duplicate|duplicate'));
+    }
+
+    /**
+     * Test get() method with empty key
+     */
+    public function testGetMethodWithEmptyKey()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set some test data
+        $req_obj->set('key1', 'value1');
+        $req_obj->set('key2', 'value2');
+        
+        // Test with empty key - should return all data
+        $all_data = $req_obj->get('');
+        $this->assertIsArray($all_data);
+        $this->assertArrayHasKey('key1', $all_data);
+        $this->assertArrayHasKey('key2', $all_data);
+        $this->assertEquals('value1', $all_data['key1']);
+        $this->assertEquals('value2', $all_data['key2']);
+    }
+
+    /**
+     * Test get() method with email handling
+     */
+    public function testGetMethodWithEmailHandling()
+    {
+        $req_obj = new Dj_App_Request();
+        
+        // Set test data with email key
+        $req_obj->set('email', 'test+user@example.com');
+        $req_obj->set('user_email', 'user+test@domain.com');
+        
+        // Test email key handling - should replace spaces with +
+        $this->assertEquals('test+user@example.com', $req_obj->get('email'));
+        $this->assertEquals('user+test@domain.com', $req_obj->get('user_email'));
+        
+        // Test with spaces in email (should be converted to +)
+        $req_obj->set('email', 'test user@example.com');
+        $this->assertEquals('test+user@example.com', $req_obj->get('email'));
+    }
 }
