@@ -817,7 +817,8 @@ CLEAR_AND_REDIRECT_HTML;
             return $req_url;
         }
 
-        $req_url = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
+        $req_url = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL);
+        $req_url = empty($req_url) ? '/' : $req_url;
 
         return $req_url;
     }
@@ -1176,8 +1177,8 @@ CLEAR_AND_REDIRECT_HTML;
     public static function removeQueryParam($key, $url = '') {
         $keys = (array) $key;
 
-        if (empty($url) && !empty($_SERVER['REQUEST_URI'])) {
-            $url = $_SERVER['REQUEST_URI'];
+        if (empty($url)) {
+            $url = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL) ?? '';
         }
 
         $url = strip_tags( $url );
