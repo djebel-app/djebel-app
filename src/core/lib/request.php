@@ -1423,13 +1423,17 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         // server may be behind a proxy and we don't want to append the internal port.
-        if (empty($detected_port) && !empty($_SERVER['SERVER_PORT']) && !empty($options_obj->site_use_port)) {
+        if (empty($detected_port)
+            && !empty($_SERVER['SERVER_PORT'])
+            && !empty($options_obj->site_use_port)) {
             $detected_port = $_SERVER['SERVER_PORT'];
         }
 
-        if (!empty($detected_port)
-            && $detected_port != '80' 
-            && $detected_port != '443'
+        $detected_port = (int) $detected_port;
+
+        if ($detected_port > 0
+            && $detected_port != 80
+            && $detected_port != 443
         ) {
             $port = ':' . $detected_port;
         }
