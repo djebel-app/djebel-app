@@ -1431,10 +1431,8 @@ CLEAR_AND_REDIRECT_HTML;
 
         $detected_port = (int) $detected_port;
 
-        if ($detected_port > 0
-            && $detected_port != 80
-            && $detected_port != 443
-        ) {
+        // append port to hostname if non-standard
+        if ($detected_port > 0 && !in_array($detected_port, [ 80, 443 ])) {
             $port = ':' . $detected_port;
         }
 
