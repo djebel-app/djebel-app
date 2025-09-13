@@ -110,7 +110,7 @@ class Dj_App_File_Util {
             $res = file_put_contents($file, $buff, LOCK_EX);
 
             if (empty($res)) {
-                throw Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
+                throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
             }
 
             $res_obj->status = true;
@@ -140,11 +140,12 @@ class Dj_App_File_Util {
                 $res = mkdir($dir, $perm, true);
 
                 if (!$res) {
-                    throw Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
+                    throw new Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
                 }
             }
 
-            chmod($dir, $perm); // jic
+            $chmod_res = chmod($dir, $perm); // jic
+            $res_obj->chmod_res = $res_obj;
 
             $res_obj->status = true;
         } catch (Exception $e) {
@@ -154,6 +155,43 @@ class Dj_App_File_Util {
         }
 
         return $res_obj;
+    }
+
+    /**
+     * Dj_App_File_Util::normalizePath();
+     * Normalize a filesystem/web path:
+     *  - convert "\" to "/"
+     *  - collapse multiple "/" to single "/"
+     *  - trim spaces
+     *  - optionally run removeSlash() if available in this class
+     *  - ensure leading "/" when the result is non-empty
+     *  - keep "/" for root; remove trailing "/" otherwise
+     *
+     * @param string|null $path
+     * @return string
+     */
+    public static function normalizePath($path)
+    {
+        if (empty($path)) {
+            return '';
+        }
+
+        $path = (string)$path;
+        $path = trim($path);
+
+        // convert backslashes first
+        $path = str_replace('\\', '/', $path);
+
+        // collapse duplicate slashes, but do it in a loop to be safe
+        while (strpos($path, '//') !== false) {
+            $path = str_replace('//', '/', $path);
+        }
+
+        if (strlen($path) > 1) {
+            $path = Dj_App_Util::removeSlash($path);
+        }
+
+        return $path;
     }
 }
 
