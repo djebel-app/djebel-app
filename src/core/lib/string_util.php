@@ -80,13 +80,12 @@ class Dj_App_String_Util
 
         // check if it's alphanumeric before doing anything more resource intensive
         if (!Dj_App_String_Util::isAlphaNumericExt($str)) {
-            $str = Dj_App_String_Util::trim($str);
             $str = preg_replace( '#[^\w]+#si', '_', $str );
             $str = preg_replace( '#_+#si', '_', $str ); // single _
         }
 
+        $str = Dj_App_String_Util::trim($str, '_');
         $str = strtolower($str);
-        $str = trim($str, '_');
 
         return $str;
     }
