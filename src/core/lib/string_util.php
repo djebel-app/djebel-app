@@ -4,19 +4,39 @@
  */
 class Dj_App_String_Util
 {
-
     /**
      * Dj_App_String_Util::trim();
-     * @param string|array $data
-     * @return string|array
+     * Trims whitespace and optionally extra characters from string or array.
+     *
+     * @param string|array $data String or array to trim
+     * @param string|array $extra_chars Extra characters to trim (string or array of chars)
+     * @return string|array Trimmed data
      * Ideas gotten from: http://www.jonasjohn.de/snippets/php/trim-array.htm
      */
-    public static function trim($data) {
+    public static function trim($data, $extra_chars = '') {
         if ( is_scalar( $data ) ) {
             $data = str_replace( "\0", '', $data );
-            return trim( $data );
+
+            // Build character mask for trim
+            $char_mask = " \t\n\r\0\x0B";
+
+            if (!empty($extra_chars)) {
+                if (is_array($extra_chars)) {
+                    $extra_chars = implode('', $extra_chars);
+                }
+
+                $char_mask .= $extra_chars;
+            }
+
+            $data = trim( $data, $char_mask );
         } elseif (is_array($data)) {
-            return array_map( 'Dj_App_String_Util::trim', $data );
+            if (!empty($extra_chars)) {
+                $data = array_map(function($item) use ($extra_chars) {
+                    return Dj_App_String_Util::trim($item, $extra_chars);
+                }, $data);
+            } else {
+                $data = array_map('Dj_App_String_Util::trim', $data);
+            }
         }
 
         return $data; // not sure what to do with this thing.
