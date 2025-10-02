@@ -80,11 +80,33 @@ class Dj_App_String_Util
 
         // check if it's alphanumeric before doing anything more resource intensive
         if (!Dj_App_String_Util::isAlphaNumericExt($str)) {
-            $str = preg_replace( '#[^\w]+#si', '_', $str );
+            // Keep alphanumeric chars, replace non-alphanumeric with _, prevent consecutive underscores
+            $len = strlen($str);
+            $chars = [];
+            $underscore_ord = 95;
 
-            while (strpos($str, '__') !== false) {
-                $str = str_replace('__', '_', $str);
+            for ($i = 0; $i < $len; $i++) {
+                $char = $str[$i];
+                $prev_char = $i > 0 ? $chars[$i - 1] : '';
+
+                if (ord($char) === $underscore_ord) {
+                    if (ord($prev_char) === $underscore_ord) {
+                        continue;
+                    }
+
+                    $chars[] = '_';
+                } elseif (ctype_alnum($char)) {
+                    $chars[] = $char;
+                } else {
+                    if (ord($prev_char) === $underscore_ord) {
+                        continue;
+                    }
+
+                    $chars[] = '_';
+                }
             }
+
+            $str = implode('', $chars);
         }
 
         $str = Dj_App_String_Util::trim($str, '_');
