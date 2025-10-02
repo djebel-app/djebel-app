@@ -6,6 +6,137 @@
 class Dj_App_Cache
 {
     /**
+     * Get cached data by key
+     * Dj_App_Cache::get();
+     *
+     * @param string|array $key Cache key (string or array for namespacing)
+     * @param array $params Optional parameters
+     * @return mixed|null Cached data or null if invalid/not found/expired
+     */
+    public static function get($key, $params = [])
+    {
+        $ctx = ['key' => $key, 'params' => $params];
+
+        $result = [];
+        $result = Dj_App_Hooks::applyFilter('app.cache.pre_get.data', $result, $ctx);
+
+        if (!empty($result)) {
+            return $result;
+        }
+
+        $cache_file = self::getCacheFile($key, $params);
+        $cache_file = Dj_App_Hooks::applyFilter('app.cache.get.file', $cache_file, $ctx);
+
+        $result = self::read($cache_file);
+        $result = Dj_App_Hooks::applyFilter('app.cache.get.data', $result, $ctx);
+
+        return $result;
+    }
+
+    /**
+     * Set cached data by key
+     * Dj_App_Cache::set();
+     *
+     * @param string|array $key Cache key (string or array for namespacing)
+     * @param mixed $data Data to cache
+     * @param array $params Optional parameters (ttl, etc)
+     * @return Dj_App_Result
+     */
+    public static function set($key, $data, $params = [])
+    {
+        $cache_file = self::getCacheFile($key, $params);
+
+        $ctx = ['key' => $key, 'params' => $params];
+        $cache_file = Dj_App_Hooks::applyFilter('app.cache.set.file', $cache_file, $ctx);
+
+        $data = Dj_App_Hooks::applyFilter('app.cache.set.data', $data, $ctx);
+        $result = self::write($cache_file, $data, $params);
+
+        return $result;
+    }
+
+    /**
+     * Delete cached data by key
+     * Dj_App_Cache::remove();
+     *
+     * @param string|array $key Cache key
+     * @param array $params Optional parameters
+     * @return bool
+     */
+    public static function remove($key, $params = [])
+    {
+        $ctx = ['key' => $key, 'params' => $params];
+
+        $cache_file = self::getCacheFile($key, $params);
+        $cache_file = Dj_App_Hooks::applyFilter('app.cache.remove.file', $cache_file, $ctx);
+
+        $result = self::delete($cache_file);
+
+        return $result;
+    }
+
+    /**
+     * Get cache file path from key
+     * Dj_App_Cache::getCacheFile();
+     *
+     * @param string|array $key Cache key
+     * @param array $params Optional parameters
+     * @return string Cache file path
+     */
+    private static function getCacheFile($key, $params = [])
+    {
+        if (is_array($key)) {
+            ksort($key);
+            $key = implode('_', $key);
+        }
+
+        $key = Dj_App_String_Util::formatStringId($key);
+
+        $cache_dir_params = [];
+
+        if (!empty($params['plugin'])) {
+            $cache_dir_params['plugin'] = $params['plugin'];
+        }
+
+        $cache_dir = self::getCacheDir($cache_dir_params);
+        $cache_file = $cache_dir . '/' . $key . '.cache';
+
+        return $cache_file;
+    }
+
+    /**
+     * Get cache directory
+     * Dj_App_Cache::getCacheDir();
+     *
+     * @param array $params Optional parameters
+     * @return string
+     */
+    public static function getCacheDir($params = [])
+    {
+        $dir = Dj_App_Util::getCorePrivateDir();
+
+        if (empty($dir)) {
+            return '';
+        }
+
+        $dir .= '/cache';
+
+        $ctx = ['params' => $params];
+        $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_dir', $dir, $ctx);
+
+        if (!empty($params['plugin'])) {
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/plugins/' . $slug;
+            $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_plugin_dir', $dir, $ctx);
+        }
+
+        $dir = Dj_App_Hooks::applyFilter('app.cache.dir', $dir, $ctx);
+
+        return $dir;
+    }
+
+    /**
      * Read data from cache file
      * Dj_App_Cache::read();
      *
@@ -30,25 +161,24 @@ class Dj_App_Cache
             return null;
         }
 
-        // Check structure and TTL
-        if (is_array($cached_data) && isset($cached_data['meta']) && isset($cached_data['data'])) {
-            $meta = $cached_data['meta'];
-
-            // Check expiration if TTL is set
-            if (isset($meta['ttl']) && $meta['ttl'] > 0 && isset($meta['created_at'])) {
-                $expires_at = $meta['created_at'] + $meta['ttl'];
-
-                if (time() > $expires_at) {
-                    self::delete($cache_file);
-                    return null;
-                }
-            }
-
-            return $cached_data['data'];
+        // Check structure
+        if (!is_array($cached_data) || empty($cached_data['meta']) || empty($cached_data['data'])) {
+            return $cached_data;
         }
 
-        // Fallback for old format or direct data
-        return $cached_data;
+        $meta = $cached_data['meta'];
+
+        // Check expiration if TTL is set
+        if (!empty($meta['ttl']) && !empty($meta['created_at'])) {
+            $expires_at = $meta['created_at'] + $meta['ttl'];
+
+            if (time() > $expires_at) {
+                self::delete($cache_file);
+                return null;
+            }
+        }
+
+        return $cached_data['data'];
     }
 
     /**
