@@ -272,6 +272,7 @@ class Dj_App_Options implements ArrayAccess {
             // Handle array notation with auto-increment: var[] = value
             if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
                 $main_key = $matches[1];
+                $main_key = Dj_App_String_Util::formatKey($main_key);
                 
                 if (!empty($this->current_section)) {
                     $data[$this->current_section][$main_key] = isset($data[$this->current_section][$main_key]) ? 
@@ -288,8 +289,16 @@ class Dj_App_Options implements ArrayAccess {
             // Handle array notation with index: var[key] = value
             if (preg_match('/^([\w\-]+)\[[\s\'\"]*(\w+)[\s\'\"]*\](?:\[[\s\'\"]*(\w*)[\s\'\"]*\])?$/si', $key, $matches)) {
                 $main_key = $matches[1];
+                $main_key = Dj_App_String_Util::formatKey($main_key);
+
                 $sub_key = $matches[2];
+                $sub_key = Dj_App_String_Util::formatKey($sub_key);
+
                 $third_key = !empty($matches[3]) ? $matches[3] : null;
+
+                if ($third_key !== null) {
+                    $third_key = Dj_App_String_Util::formatKey($third_key);
+                }
                 
                 if (!empty($this->current_section)) {
                     if ($third_key !== null) {
@@ -328,10 +337,13 @@ class Dj_App_Options implements ArrayAccess {
         } elseif (strpos($key, '.') !== false) {
             $key = preg_replace('/[^\w\.\-]/si', '', $key);
             $parts = explode('.', $key);
-            
+
             if (count($parts) >= 2) {
                 $main_key = array_shift($parts);
+                $main_key = Dj_App_String_Util::formatKey($main_key);
+
                 $sub_key = array_shift($parts);
+                $sub_key = Dj_App_String_Util::formatKey($sub_key);
                 
                 if (!empty($this->current_section)) {
                     if (!isset($data[$this->current_section][$main_key])) {
@@ -351,6 +363,7 @@ class Dj_App_Options implements ArrayAccess {
 
         // Simple key cleanup for non-special keys
         $key = preg_replace('/[^\w\-]/si', '', $key);
+        $key = Dj_App_String_Util::formatKey($key);
 
         // Handle regular keys as scalar values
         if (!empty($this->current_section)) {
