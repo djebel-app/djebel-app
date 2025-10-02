@@ -229,10 +229,15 @@ class Dj_App_Util {
         $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_dir', $dir, $ctx );
 
         if (!empty($params['plugin'])) {
-            $plugin = $params['plugin'];
-            $plugin = Dj_App_String_Util::formatStringId($plugin);
-            $dir .= '/plugins/' . $plugin;
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/plugins/' . $slug;
             $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_plugin_dir', $dir, $ctx );
+        } else if (!empty($params['theme'])) {
+            $slug = $params['theme'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/themes/' . $slug;
+            $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_theme_dir', $dir, $ctx );
         }
 
         return $dir;
@@ -257,9 +262,9 @@ class Dj_App_Util {
         $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_dir', $dir, $ctx);
 
         if (!empty($params['plugin'])) {
-            $plugin = $params['plugin'];
-            $plugin = Dj_App_String_Util::formatStringId($plugin);
-            $dir .= '/plugins/' . $plugin;
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/plugins/' . $slug;
             $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_plugin_dir', $dir, $ctx);
         }
 
@@ -285,9 +290,9 @@ class Dj_App_Util {
         $dir = Dj_App_Hooks::applyFilter('app.config.djebel_temp_dir', $dir, $ctx);
 
         if (!empty($params['plugin'])) {
-            $plugin = $params['plugin'];
-            $plugin = Dj_App_String_Util::formatStringId($plugin);
-            $dir .= '/plugins/' . $plugin;
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/plugins/' . $slug;
             $dir = Dj_App_Hooks::applyFilter('app.config.djebel_temp_plugin_dir', $dir, $ctx);
         }
 
@@ -316,10 +321,10 @@ class Dj_App_Util {
         $config_dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_conf_dir', $config_dir );
 
         if (!empty($params['plugin'])) {
-            $plugin = $params['plugin'];
-            $plugin = Dj_App_String_Util::formatStringId($plugin);
-            $config_dir .= '/plugins/' . $plugin;
-            $ctx = [ 'plugin' => $plugin, ];
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $config_dir .= '/plugins/' . $slug;
+            $ctx = [ 'plugin' => $slug, ];
             $config_dir = Dj_App_Hooks::applyFilter( 'app.config.plugin_conf_dir', $config_dir, $ctx );
         }
 
