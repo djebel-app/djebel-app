@@ -5,6 +5,8 @@
  */
 class Dj_App_Cache
 {
+    private static $end_marker = '// ::dj_end::';
+
     /**
      * Get cached data by key
      * Dj_App_Cache::get();
@@ -99,7 +101,7 @@ class Dj_App_Cache
         }
 
         $cache_dir = self::getCacheDir($cache_dir_params);
-        $cache_file = $cache_dir . '/' . $key . '.cache';
+        $cache_file = $cache_dir . '/' . $key . '.php';
 
         return $cache_file;
     }
@@ -155,6 +157,15 @@ class Dj_App_Cache
             return null;
         }
 
+        // Skip protection header
+        $marker_pos = strpos($cache_content, self::$end_marker);
+
+        if ($marker_pos !== false) {
+            $offset = $marker_pos + strlen(self::$end_marker);
+            $cache_content = substr($cache_content, $offset);
+            $cache_content = trim($cache_content);
+        }
+
         $cached_data = Dj_App_Util::unserialize($cache_content);
 
         if ($cached_data === false) {
@@ -205,12 +216,15 @@ class Dj_App_Cache
             'data' => $data,
         ];
 
-        $cache_content = Dj_App_Util::serialize($cache_data);
+        $serialized_data = Dj_App_Util::serialize($cache_data);
 
-        if ($cache_content === false) {
+        if ($serialized_data === false) {
             $res_obj->msg = "Can't serialize data";
             return $res_obj;
         }
+
+        // Add protection header
+        $cache_content = "<?php exit; " . self::$end_marker . $serialized_data;
 
         $result = Dj_App_File_Util::write($cache_file, $cache_content);
 
