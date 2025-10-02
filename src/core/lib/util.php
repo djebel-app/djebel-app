@@ -487,9 +487,17 @@ class Dj_App_Util {
                 $value = substr($line, $pos + 1);
 
                 $key = Dj_App_String_Util::formatKey($key);
-                $value = Dj_App_String_Util::trim($value);
 
-                $meta[$key] = $value;
+                // Handle array notation: [item1, item2, item3]
+                $value = Dj_App_String_Util::trim($value, '[]');
+
+                if (strpos($value, ',') !== false) {
+                    $items = explode(',', $value);
+                    $items = Dj_App_String_Util::trim($items);
+                    $meta[$key] = array_filter($items);
+                } else {
+                    $meta[$key] = $value;
+                }
             }
 
             $meta['type']  = '';
