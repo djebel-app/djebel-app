@@ -309,8 +309,6 @@ class Dj_App_Shortcode {
             }
 
             // Extract value (handle quotes)
-            $quote_char = '';
-
             if ($params_str[$i] === '"' || $params_str[$i] === "'") {
                 $quote_char = $params_str[$i];
                 $i++; // Skip opening quote
