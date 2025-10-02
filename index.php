@@ -124,11 +124,10 @@ if (Dj_App_Util::isEnabled($load_core_shared_plugins) && !empty($app_core_shared
 }
 
 // Add non-public plugins if enabled
-$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', false);
+$app_non_public_plugins_dir = Dj_App_Plugins::getNonPublicPluginsDir();
+$load_non_public_plugins = Dj_App_Config::cfg('app.core.plugins.load_non_public_plugins', is_dir($app_non_public_plugins_dir));
 
 if (Dj_App_Util::isEnabled($load_non_public_plugins)) {
-    $app_non_public_plugins_dir = Dj_App_Plugins::getNonPublicPluginsDir();
-
     if (!empty($app_non_public_plugins_dir) && is_dir($app_non_public_plugins_dir)) {
         $plugin_dirs[] = $app_non_public_plugins_dir;
     }
