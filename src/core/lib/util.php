@@ -1452,6 +1452,98 @@ MSG_EOF;
 
         return $home;
     }
+
+    /**
+     * Safe serialize - converts objects to arrays to prevent exploits
+     * Dj_App_Util::serialize();
+     *
+     * @param mixed $data Data to serialize
+     * @return string|false Serialized data or false on failure
+     */
+    public static function serialize($data)
+    {
+        $data = self::normalizeForSerialization($data);
+        $result = serialize($data);
+        return $result;
+    }
+
+    /**
+     * Safe unserialize
+     * Dj_App_Util::unserialize();
+     *
+     * @param string $data Serialized data
+     * @return mixed|false Unserialized data or false on failure
+     */
+    public static function unserialize($data)
+    {
+        if (empty($data) || !is_string($data)) {
+            return false;
+        }
+
+        // Quick check on small buffer
+        $buffer_size = 64;
+        $small_buffer = substr($data, 0, $buffer_size);
+
+        // First char must be valid type, second must be ':'
+        $first_char = $small_buffer[0];
+        $valid_types = ['b', 'i', 'd', 's', 'a', 'N']; // bool, int, double, string, array, null
+
+        if (!in_array($first_char, $valid_types)) {
+            return false;
+        }
+
+        if (empty($small_buffer[1]) || $small_buffer[1] != ':') {
+            return false;
+        }
+
+        // Security: refuse if contains serialized objects (O: or C:)
+        if ((stripos($small_buffer, 'O:') !== false) || (stripos($small_buffer, 'C:') !== false)) {
+            return false;
+        }
+
+        $result = @unserialize($data);
+
+        return $result;
+    }
+
+    /**
+     * Normalize data for safe serialization
+     * Converts objects to arrays to prevent __wakeup/__unserialize exploits
+     * Dj_App_Util::normalizeForSerialization();
+     *
+     * @param mixed $data Data to normalize
+     * @return mixed Normalized data (scalars, arrays only - no objects)
+     */
+    public static function normalizeForSerialization($data)
+    {
+        if (is_scalar($data)) {
+            return $data;
+        } else if (is_null($data) || is_resource($data)) {
+            return null;
+        }
+
+        if (is_array($data)) {
+            $normalized = [];
+
+            foreach ($data as $key => $value) {
+                $normalized[$key] = self::normalizeForSerialization($value);
+            }
+
+            return $normalized;
+        }
+
+        if (is_object($data)) { // convert to array
+            if (method_exists($data, 'toArray')) {
+                $array_data = $data->toArray();
+            } else {
+                $array_data = (array) $data;
+            }
+
+            return self::normalizeForSerialization($array_data);
+        }
+
+        return null;
+    }
 }
 
 // https://stackoverflow.com/questions/22113541/using-additional-data-in-php-exceptions
