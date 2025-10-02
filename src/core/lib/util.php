@@ -489,15 +489,20 @@ class Dj_App_Util {
                 $key = Dj_App_String_Util::formatKey($key);
 
                 // Handle array notation: [item1, item2, item3]
+                $val_had_brackets = strpos($value, '[') !== false;
                 $value = Dj_App_String_Util::trim($value, '[]');
 
-                if (strpos($value, ',') !== false) {
-                    $items = explode(',', $value);
-                    $items = Dj_App_String_Util::trim($items);
-                    $meta[$key] = array_filter($items);
-                } else {
-                    $meta[$key] = $value;
+                if ($val_had_brackets) {
+                    if (strpos($value, ',') !== false) {
+                        $items = explode(',', $value);
+                        $items = Dj_App_String_Util::trim($items);
+                        $value = array_filter($items);
+                    } else {
+                        $value = empty($value) ? [] : (array) $value;
+                    }
                 }
+
+                $meta[$key] = $value;
             }
 
             $meta['type']  = '';
