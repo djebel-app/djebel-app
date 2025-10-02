@@ -419,7 +419,7 @@ class Dj_App_Util {
     /**
      *
      * Receives a small buffer and parses meta info in the plugin or theme file's header.
-     * Dj_App_Util::extractMetaInfo
+     * Dj_App_Util::extractMetaInfo()
      * @param string $buff
      * @return Dj_App_Result
      */
@@ -495,7 +495,7 @@ class Dj_App_Util {
                 if ($val_had_brackets) {
                     if (strpos($value, ',') !== false) {
                         $items = explode(',', $value);
-                        $items = Dj_App_String_Util::trim($items);
+                        $items = Dj_App_String_Util::trim($items, '\'"');
                         $value = array_filter($items);
                     } else {
                         $value = empty($value) ? [] : (array) $value;

@@ -945,6 +945,20 @@ BUFF_EOF;
     }
 
     /**
+     * Test extractMetaInfo method - array with quotes
+     */
+    public function testExtractMetaInfoArrayWithQuotes() {
+        $meta_text = "tags: ['php', \"web\", 'development']\nstatus: active";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['php', 'web', 'development'], $meta['tags']);
+        $this->assertEquals('active', $meta['status']);
+    }
+
+    /**
      * Test extractMetaInfo method - mixed array and scalar values
      */
     public function testExtractMetaInfoMixedArrayAndScalar() {
