@@ -988,4 +988,123 @@ META;
         $this->assertEquals(['php', 'framework'], $meta['keywords']);
     }
 
+    public function testSerializeScalar()
+    {
+        $data = 'test string';
+        $serialized = Dj_App_Util::serialize($data);
+        $this->assertNotFalse($serialized);
+        $this->assertStringContainsString('test string', $serialized);
+    }
+
+    public function testSerializeArray()
+    {
+        $data = ['key1' => 'value1', 'key2' => 'value2'];
+        $serialized = Dj_App_Util::serialize($data);
+        $this->assertNotFalse($serialized);
+        $unserialized = @unserialize($serialized);
+        $this->assertEquals($data, $unserialized);
+    }
+
+    public function testSerializeObject()
+    {
+        $obj = new stdClass();
+        $obj->name = 'test';
+        $obj->value = 123;
+
+        $serialized = Dj_App_Util::serialize($obj);
+        $this->assertNotFalse($serialized);
+
+        // Should be converted to array
+        $unserialized = @unserialize($serialized);
+        $this->assertIsArray($unserialized);
+        $this->assertEquals('test', $unserialized['name']);
+        $this->assertEquals(123, $unserialized['value']);
+    }
+
+    public function testSerializeNestedObject()
+    {
+        $inner = new stdClass();
+        $inner->value = 'inner';
+
+        $outer = new stdClass();
+        $outer->inner = $inner;
+        $outer->name = 'outer';
+
+        $serialized = Dj_App_Util::serialize($outer);
+        $this->assertNotFalse($serialized);
+
+        $unserialized = @unserialize($serialized);
+        $this->assertIsArray($unserialized);
+        $this->assertIsArray($unserialized['inner']);
+        $this->assertEquals('inner', $unserialized['inner']['value']);
+    }
+
+    public function testUnserializeValidData()
+    {
+        $data = ['test' => 'value', 'number' => 42];
+        $serialized = serialize($data);
+
+        $result = Dj_App_Util::unserialize($serialized);
+        $this->assertEquals($data, $result);
+    }
+
+    public function testUnserializeInvalidData()
+    {
+        // Empty string
+        $result = Dj_App_Util::unserialize('');
+        $this->assertFalse($result);
+
+        // Not a string
+        $result = Dj_App_Util::unserialize([]);
+        $this->assertFalse($result);
+
+        // Invalid serialized data
+        $result = Dj_App_Util::unserialize('invalid data');
+        $this->assertFalse($result);
+    }
+
+    public function testUnserializeRejectsObject()
+    {
+        $obj = new stdClass();
+        $obj->name = 'test';
+        $serialized = serialize($obj);
+
+        // Should reject serialized objects
+        $result = Dj_App_Util::unserialize($serialized);
+        $this->assertFalse($result);
+    }
+
+    public function testUnserializeRejectsCustomClass()
+    {
+        // Simulate serialized custom class (C: notation)
+        $serialized = 'C:8:"stdClass":0:{}';
+
+        $result = Dj_App_Util::unserialize($serialized);
+        $this->assertFalse($result);
+    }
+
+    public function testUnserializeAcceptsArrays()
+    {
+        $data = ['a' => 1, 'b' => 2];
+        $serialized = serialize($data);
+
+        $result = Dj_App_Util::unserialize($serialized);
+        $this->assertEquals($data, $result);
+    }
+
+    public function testUnserializeAcceptsScalars()
+    {
+        // String
+        $result = Dj_App_Util::unserialize(serialize('test'));
+        $this->assertEquals('test', $result);
+
+        // Integer
+        $result = Dj_App_Util::unserialize(serialize(42));
+        $this->assertEquals(42, $result);
+
+        // Boolean
+        $result = Dj_App_Util::unserialize(serialize(true));
+        $this->assertTrue($result);
+    }
+
 }
