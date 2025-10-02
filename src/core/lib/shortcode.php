@@ -179,28 +179,7 @@ class Dj_App_Shortcode {
 
                 // parse params
                 if (!empty($params_str)) {
-                    $params_str = preg_replace('#\h*\=+[\h\'\"]*#si', '=', $params_str);
-                    $params_str = preg_replace('#\h+#si', ' ', $params_str);
-                    $params_str = trim($params_str);
-                    $pairs_str_arr = explode(' ', $params_str);
-
-                    foreach ($pairs_str_arr as $pair_str) {
-                        $pair_str = trim($pair_str);
-                        $pair = explode('=', $pair_str);
-
-                        if (count($pair) != 2) {
-                            continue;
-                        }
-
-                        $key = $pair[0];
-                        $key = Dj_App_String_Util::trim($key);
-
-                        $val = $pair[1];
-                        $val = Dj_App_String_Util::trim($val);
-                        $val = trim($val, '"\'');
-
-                        $params[$key] = $val;
-                    }
+                    $params = $this->parseShortcodeParams($params_str);
                 }
 
                 // capture the output of the callback
@@ -281,6 +260,87 @@ class Dj_App_Shortcode {
     public function setShortcodes(array $shortcodes): void
     {
         $this->shortcodes = $shortcodes;
+    }
+
+    /**
+     * Parses shortcode parameters respecting quoted values.
+     * Handles: key="value with spaces" key2=simple_value
+     *
+     * @param string $params_str Raw parameter string
+     * @return array Parsed key-value pairs
+     */
+    public function parseShortcodeParams($params_str)
+    {
+        $i = 0;
+        $params = [];
+
+        if (empty($params_str) || !is_scalar($params_str)) {
+            return $params;
+        }
+
+        $len = strlen($params_str);
+
+        while ($i < $len) {
+            // Skip whitespace
+            while ($i < $len && ctype_space($params_str[$i])) {
+                $i++;
+            }
+
+            if ($i >= $len) {
+                break;
+            }
+
+            // Extract key
+            $key_start = $i;
+
+            while ($i < $len && $params_str[$i] !== '=' && !ctype_space($params_str[$i])) {
+                $i++;
+            }
+
+            $key = substr($params_str, $key_start, $i - $key_start);
+
+            // Skip whitespace and equals
+            while ($i < $len && (ctype_space($params_str[$i]) || $params_str[$i] === '=')) {
+                $i++;
+            }
+
+            if ($i >= $len) {
+                break;
+            }
+
+            // Extract value (handle quotes)
+            $quote_char = '';
+
+            if ($params_str[$i] === '"' || $params_str[$i] === "'") {
+                $quote_char = $params_str[$i];
+                $i++; // Skip opening quote
+                $val_start = $i;
+
+                // Find closing quote
+                while ($i < $len && $params_str[$i] !== $quote_char) {
+                    $i++;
+                }
+
+                $val = substr($params_str, $val_start, $i - $val_start);
+                $i++; // Skip closing quote
+            } else {
+                // Unquoted value: read until space
+                $val_start = $i;
+
+                while ($i < $len && !ctype_space($params_str[$i])) {
+                    $i++;
+                }
+
+                $val = substr($params_str, $val_start, $i - $val_start);
+            }
+
+            // Store parameter
+            if (!empty($key)) {
+                $params[$key] = $val;
+            }
+        }
+
+        return $params;
     }
 
     /**
