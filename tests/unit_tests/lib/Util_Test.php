@@ -776,19 +776,202 @@ BUFF_EOF;
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My.Awesome.Plugin'));
         $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test.plugin'));
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome.plugin'));
-        
+
         // Test with mixed separators
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome_plugin'));
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my_awesome.plugin'));
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my.awesome-plugin'));
-        
+
         // Test with multiple consecutive dots
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('my..awesome...plugin'));
         $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test....plugin'));
-        
+
         // Test with dots and other special characters
         $this->assertEquals('my-awesome-plugin', Dj_App_String_Util::formatSlug('My.Awesome.Plugin!'));
         $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('Test.Plugin@#$'));
+    }
+
+    /**
+     * Test trim method with extra characters - string parameter
+     */
+    public function testTrimWithExtraCharsString() {
+        // Test trimming brackets with string parameter
+        $this->assertEquals('value', Dj_App_String_Util::trim('[value]', '[]'));
+        $this->assertEquals('value', Dj_App_String_Util::trim(' [value] ', '[]'));
+        $this->assertEquals('value', Dj_App_String_Util::trim('[[value]]', '[]'));
+
+        // Test trimming custom characters
+        $this->assertEquals('hello', Dj_App_String_Util::trim('***hello***', '*'));
+        $this->assertEquals('test', Dj_App_String_Util::trim('##test##', '#'));
+        $this->assertEquals('data', Dj_App_String_Util::trim(' ___data___ ', '_'));
+
+        // Test trimming multiple custom characters
+        $this->assertEquals('value', Dj_App_String_Util::trim('<>value<>', '<>'));
+        $this->assertEquals('text', Dj_App_String_Util::trim('{}text{}', '{}'));
+    }
+
+    /**
+     * Test trim method with extra characters - array parameter
+     */
+    public function testTrimWithExtraCharsArray() {
+        // Test trimming with array of characters
+        $this->assertEquals('value', Dj_App_String_Util::trim('[value]', ['[', ']']));
+        $this->assertEquals('value', Dj_App_String_Util::trim(' <value> ', ['<', '>']));
+        $this->assertEquals('test', Dj_App_String_Util::trim('***test***', ['*']));
+
+        // Test with multiple characters in array
+        $this->assertEquals('data', Dj_App_String_Util::trim('{[data]}', ['{', '}', '[', ']']));
+        $this->assertEquals('hello', Dj_App_String_Util::trim('##__hello__##', ['#', '_']));
+    }
+
+    /**
+     * Test trim method with extra characters - array of strings
+     */
+    public function testTrimWithExtraCharsArrayOfStrings() {
+        // Test trimming array of strings with extra chars
+        $input = ['[value1]', ' [value2] ', '[[value3]]'];
+        $expected = ['value1', 'value2', 'value3'];
+        $this->assertEquals($expected, Dj_App_String_Util::trim($input, '[]'));
+
+        // Test with different extra chars
+        $input2 = ['***item1***', '##item2##', ' ___item3___ '];
+        $result = Dj_App_String_Util::trim($input2, '*#_');
+        $this->assertEquals(['item1', 'item2', 'item3'], $result);
+    }
+
+    /**
+     * Test trim method with extra characters - edge cases
+     */
+    public function testTrimWithExtraCharsEdgeCases() {
+        // Test with empty extra chars
+        $this->assertEquals('value', Dj_App_String_Util::trim(' value ', ''));
+        $this->assertEquals('value', Dj_App_String_Util::trim(' value ', []));
+
+        // Test with empty string
+        $this->assertEquals('', Dj_App_String_Util::trim('', '[]'));
+        $this->assertEquals('', Dj_App_String_Util::trim('   ', '[]'));
+
+        // Test when no extra chars to trim
+        $this->assertEquals('value', Dj_App_String_Util::trim('value', '[]'));
+        $this->assertEquals('value', Dj_App_String_Util::trim(' value ', '*'));
+
+        // Test with only extra chars
+        $this->assertEquals('', Dj_App_String_Util::trim('[[[', '[]'));
+        $this->assertEquals('', Dj_App_String_Util::trim('***', '*'));
+    }
+
+    /**
+     * Test extractMetaInfo method - parsing array notation
+     */
+    public function testExtractMetaInfoArrayNotation() {
+        // Test basic array notation with brackets
+        $meta_text = "tags: [php, web, development]\ncategory: general";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['php', 'web', 'development'], $meta['tags']);
+        $this->assertEquals('general', $meta['category']);
+    }
+
+    /**
+     * Test extractMetaInfo method - array with spaces
+     */
+    public function testExtractMetaInfoArrayWithSpaces() {
+        $meta_text = "tags: [framework, web development, testing]\nauthor: system";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['framework', 'web development', 'testing'], $meta['tags']);
+    }
+
+    /**
+     * Test extractMetaInfo method - multiple arrays
+     */
+    public function testExtractMetaInfoMultipleArrays() {
+        $meta_text = "tags: [php, javascript]\nrelated_faqs: [faq-001, faq-002, faq-003]\nstatus: active";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['php', 'javascript'], $meta['tags']);
+        $this->assertIsArray($meta['related_faqs']);
+        $this->assertEquals(['faq-001', 'faq-002', 'faq-003'], $meta['related_faqs']);
+        $this->assertEquals('active', $meta['status']);
+    }
+
+    /**
+     * Test extractMetaInfo method - empty array
+     */
+    public function testExtractMetaInfoEmptyArray() {
+        $meta_text = "tags: []\nstatus: active";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEmpty($meta['tags']);
+        $this->assertEquals('active', $meta['status']);
+    }
+
+    /**
+     * Test extractMetaInfo method - single item array
+     */
+    public function testExtractMetaInfoSingleItemArray() {
+        $meta_text = "tags: [single-tag]\ncategory: test";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['single-tag'], $meta['tags']);
+    }
+
+    /**
+     * Test extractMetaInfo method - array with extra whitespace
+     */
+    public function testExtractMetaInfoArrayExtraWhitespace() {
+        $meta_text = "tags: [  php  ,   web   ,  development  ]\nstatus: active";
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['php', 'web', 'development'], $meta['tags']);
+    }
+
+    /**
+     * Test extractMetaInfo method - mixed array and scalar values
+     */
+    public function testExtractMetaInfoMixedArrayAndScalar() {
+        $meta_text = <<<META
+title: My Plugin
+version: 1.0.0
+tags: [plugin, utility, helper]
+author: John Doe
+keywords: [php, framework]
+status: active
+META;
+        $result = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $this->assertTrue($result->status());
+        $meta = $result->data();
+
+        // Scalar values
+        $this->assertEquals('My Plugin', $meta['title']);
+        $this->assertEquals('1.0.0', $meta['version']);
+        $this->assertEquals('John Doe', $meta['author']);
+        $this->assertEquals('active', $meta['status']);
+
+        // Array values
+        $this->assertIsArray($meta['tags']);
+        $this->assertEquals(['plugin', 'utility', 'helper'], $meta['tags']);
+        $this->assertIsArray($meta['keywords']);
+        $this->assertEquals(['php', 'framework'], $meta['keywords']);
     }
 
 }
