@@ -12,42 +12,55 @@ class Dj_App_File_Util {
      */
     static function readPartially($file, $len_bytes = 2048, $seek_bytes = 0) {
         $res_obj = new Dj_App_Result();
+        $params = compact('file', 'len_bytes', 'seek_bytes');
 
         try {
-            Dj_App_Util::time( __METHOD__ . $file . $len_bytes . $seek_bytes );
+            Dj_App_Util::time( __METHOD__, $params );
 
             if (!file_exists($file)) {
                 throw new Dj_App_Exception("File not found", [ 'file' => $file ]);
             }
 
-            $file_handle = fopen($file, 'rb');
+            $fp = fopen($file, 'rb');
 
-            if (empty($file_handle)) {
+            if (empty($fp)) {
                 throw new Dj_App_Exception("Couldn't open file for reading", [ 'file' => $file ]);
             }
 
-            flock($file_handle, LOCK_SH);
+            flock($fp, LOCK_SH);
 
             if ($seek_bytes > 0) {
-                $fsee_res = fseek($file_handle, $seek_bytes);
+                $fsee_res = fseek($fp, $seek_bytes);
 
                 if ($fsee_res === -1) {
                     throw new Dj_App_Exception("Couldn't seek to position", [ 'file' => $file, 'seek_bytes' => $seek_bytes ]);
                 }
             }
 
-            $buff = fread($file_handle, $len_bytes);
+            $buff = '';
+            $buff_size = 8192;
+            $ctx = ['file' => $file, 'len_bytes' => $len_bytes, 'seek_bytes' => $seek_bytes];
+            $buff_size = Dj_App_Hooks::applyFilter('app.core.file_util.read_buffer_size', $buff_size, $ctx);
+
+            while (!feof($fp)) {
+                $buff .= fread($fp, $buff_size);
+
+                if (strlen($buff) >= $len_bytes) {
+                    break;
+                }
+            }
+
             $res_obj->output = $buff;
             $res_obj->status(true);
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
         } finally {
-            if (!empty($file_handle)) {
-                flock($file_handle, LOCK_UN);
-                fclose($file_handle);
+            if (!empty($fp)) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
             }
 
-            $res_obj->exec_time = Dj_App_Util::time( __METHOD__ . $file . $len_bytes . $seek_bytes );
+            $res_obj->exec_time = Dj_App_Util::time( __METHOD__, $params );
         }
 
         return $res_obj;
