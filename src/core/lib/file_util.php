@@ -75,9 +75,10 @@ class Dj_App_File_Util {
      * Dj_App_File_Util::write();
      * @param string $file
      * @param string|mixed $data
+     * @param array $params - ['flags' => FILE_APPEND] to pass custom flags
      * @return Dj_App_Result
      */
-    static public function write($file, $data)
+    static public function write($file, $data, $params = [])
     {
         $res_obj = new Dj_App_Result();
 
@@ -90,7 +91,13 @@ class Dj_App_File_Util {
             }
 
             $buff = is_scalar($data) ? $data : json_encode($data, JSON_PRETTY_PRINT);
-            $res = file_put_contents($file, $buff, LOCK_EX);
+            $flags = LOCK_EX;
+
+            if (!empty($params['flags'])) {
+                $flags |= $params['flags'];
+            }
+
+            $res = file_put_contents($file, $buff, $flags);
 
             if (empty($res)) {
                 throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
