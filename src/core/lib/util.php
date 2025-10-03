@@ -41,6 +41,8 @@ class Dj_App_Util {
     {
         if (!is_scalar($marker)) {
             $marker = serialize($marker);
+            $marker_hash = sha1($marker);
+            $marker = substr($marker_hash, 0, 8);
         }
 
         $marker = substr($marker, 0, 100);
