@@ -46,6 +46,7 @@ class Dj_App_File_Util {
                 $buff .= fread($fp, $buff_size);
 
                 if (strlen($buff) >= $len_bytes) {
+                    $buff = substr($buff, 0, $len_bytes); // be precise
                     break;
                 }
             }
