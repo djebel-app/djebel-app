@@ -60,31 +60,14 @@ class Dj_App_File_Util {
      * @return false|string
      */
     static public function read($file) {
-        if (!is_file($file)) {
+        $max_bytes = 1 * 1024 * 1024 * 1024; // 1GB
+        $res_obj = self::readPartially($file, $max_bytes);
+
+        if ($res_obj->isError()) {
             return false;
         }
 
-        $fp = fopen($file, 'rb');
-
-        if (empty($fp)) {
-            return false;
-        }
-
-        try {
-            flock($fp, LOCK_SH);
-            $buff = file_get_contents($file);
-
-            if (empty($buff)) {
-                return false;
-            }
-
-            return $buff;
-        } finally {
-            if (!empty($fp)) {
-                flock($fp, LOCK_UN);
-                fclose($fp);
-            }
-        }
+        return $res_obj->output;
     }
 
     /**
