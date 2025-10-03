@@ -1,6 +1,6 @@
 <?php
 
-class Dj_App_Result implements \JsonSerializable {
+class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     const OVERRIDE_FLAG = 2;
     const DONT_OVERRIDE_FLAG = 4;
     const CONVERT_DATA_KEYS_TO_LOWER_CASE = 8;
@@ -346,7 +346,7 @@ class Dj_App_Result implements \JsonSerializable {
      * For some odd reason the private members also end up into the JSON?!?
      * We'll have to remove them manually as they are not useful.
      * @see https://stackoverflow.com/questions/7005860/php-json-encode-class-private-members
-     * 
+     *
      * JsonSerializable interface method - suppress deprecation notice for return type compatibility
      * PHP 8.1+ expects mixed return type, but we need to maintain PHP 7.x compatibility
      * @return array
@@ -356,5 +356,30 @@ class Dj_App_Result implements \JsonSerializable {
         $vars = get_object_vars($this);
         unset($vars['expected_system_keys_regex']);
         return $vars;
+    }
+
+    // ArrayAccess interface methods
+    #[\ReturnTypeWillChange]
+    public function offsetExists($offset) {
+        return isset($this->data[$offset]);
+    }
+
+    #[\ReturnTypeWillChange]
+    public function offsetGet($offset) {
+        return $this->data[$offset] ?? null;
+    }
+
+    #[\ReturnTypeWillChange]
+    public function offsetSet($offset, $value) {
+        if (is_null($offset)) {
+            $this->data[] = $value;
+        } else {
+            $this->data[$offset] = $value;
+        }
+    }
+
+    #[\ReturnTypeWillChange]
+    public function offsetUnset($offset) {
+        unset($this->data[$offset]);
     }
 }
