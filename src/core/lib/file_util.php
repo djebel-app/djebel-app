@@ -12,10 +12,10 @@ class Dj_App_File_Util {
      */
     static function readPartially($file, $len_bytes = 2048, $seek_bytes = 0) {
         $res_obj = new Dj_App_Result();
-        $params = compact('file', 'len_bytes', 'seek_bytes');
+        $func_args = func_get_args();
 
         try {
-            Dj_App_Util::time( __METHOD__, $params );
+            Dj_App_Util::time( __METHOD__, $func_args );
 
             if (!file_exists($file)) {
                 throw new Dj_App_Exception("File not found", [ 'file' => $file ]);
@@ -60,7 +60,7 @@ class Dj_App_File_Util {
                 fclose($fp);
             }
 
-            $res_obj->exec_time = Dj_App_Util::time( __METHOD__, $params );
+            $res_obj->exec_time = Dj_App_Util::time( __METHOD__, $func_args );
         }
 
         return $res_obj;
