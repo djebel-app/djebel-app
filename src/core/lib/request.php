@@ -825,11 +825,20 @@ CLEAR_AND_REDIRECT_HTML;
      * @return string
      */
     public function getCleanRequestUrl($url = '') {
+        static $cache = [];
+
+        $cache_key = empty($url) ? '__req_url__' : $url;
+
+        if (isset($cache[$cache_key])) {
+            return $cache[$cache_key];
+        }
+
         $clean_url = empty($url) ? $this->getRequestUrl() : $url;
         $clean_url = strip_tags($clean_url);
         $clean_url = Dj_App_String_Util::trim($clean_url);
 
         if (empty($clean_url)) {
+            $cache[$cache_key] = '';
             return '';
         }
 
@@ -838,6 +847,8 @@ CLEAR_AND_REDIRECT_HTML;
         if ($question_mark_pos !== false) {
             $clean_url = substr($clean_url, 0, $question_mark_pos);
         }
+
+        $cache[$cache_key] = $clean_url;
 
         return $clean_url;
     }
