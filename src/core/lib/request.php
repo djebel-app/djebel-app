@@ -519,6 +519,10 @@ class Dj_App_Request {
 
         $val = is_scalar($val) ? trim($val) : $val;
 
+        if (is_array($default)) { // smart cast to array if the default val is array.
+            $val = (array) $val;
+        }
+
         return $val;
     }
 
