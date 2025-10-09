@@ -656,4 +656,53 @@ class Request_Test extends TestCase
         $this->assertStringContainsString('old123', $url, 'Should keep old hash_id value since we only updated page');
         $this->assertStringNotContainsString('page%5D=1', $url, 'Should not contain old page value');
     }
+
+    /**
+     * Test get() method with empty array default value
+     * Ensures that when passing [] as default, non-existent keys return an array
+     */
+    public function testGetMethodWithArrayDefault()
+    {
+        $req_obj = new Dj_App_Request();
+
+        // Test that when passing empty array as default, non-existent key returns array
+        $result = $req_obj->get('non_existent_key', []);
+        $this->assertIsArray($result, 'Should return array when default is array');
+        $this->assertEmpty($result, 'Returned array should be empty');
+
+        // Test with existing string value - should be cast to array when default is array
+        $req_obj->set('some_key', 'string_value');
+        $result = $req_obj->get('some_key', []);
+        $this->assertIsArray($result, 'Should cast string to array when default is array');
+        $this->assertEquals(['string_value'], $result, 'Should wrap string value in array');
+
+        // Test with existing array value - should remain array
+        $req_obj->set('array_key', ['value1', 'value2']);
+        $result = $req_obj->get('array_key', []);
+        $this->assertIsArray($result, 'Should remain array');
+        $this->assertEquals(['value1', 'value2'], $result, 'Should return original array');
+
+        // Test with plugin params scenario - non-existent key returns empty array
+        $plugin_params = $req_obj->get('djebel_plugin_static_blog_data', []);
+        $this->assertIsArray($plugin_params, 'Plugin params should be array when default is []');
+        $this->assertEmpty($plugin_params, 'Non-existent plugin params should be empty array');
+
+        // Test setting array and retrieving with array default - should match exactly
+        $expected_data = [
+            'page' => 2,
+            'hash_id' => 'abc123def456',
+            'category' => 'news'
+        ];
+        $req_obj->set('plugin_data', $expected_data);
+        $retrieved_data = $req_obj->get('plugin_data', []);
+
+        $this->assertIsArray($retrieved_data, 'Retrieved data should be array');
+        $this->assertEquals($expected_data, $retrieved_data, 'Retrieved array should match exactly what was set');
+        $this->assertArrayHasKey('page', $retrieved_data, 'Should have page key');
+        $this->assertArrayHasKey('hash_id', $retrieved_data, 'Should have hash_id key');
+        $this->assertArrayHasKey('category', $retrieved_data, 'Should have category key');
+        $this->assertEquals(2, $retrieved_data['page'], 'Page value should be 2');
+        $this->assertEquals('abc123def456', $retrieved_data['hash_id'], 'Hash ID should match');
+        $this->assertEquals('news', $retrieved_data['category'], 'Category should be news');
+    }
 }
