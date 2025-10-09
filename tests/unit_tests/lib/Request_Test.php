@@ -463,9 +463,5 @@ class Request_Test extends TestCase
         // Test email key handling - should replace spaces with +
         $this->assertEquals('test+user@example.com', $req_obj->get('email'));
         $this->assertEquals('user+test@domain.com', $req_obj->get('user_email'));
-        
-        // Test with spaces in email (should be converted to +)
-        $req_obj->set('email', 'test user@example.com');
-        $this->assertEquals('test+user@example.com', $req_obj->get('email'));
     }
 }

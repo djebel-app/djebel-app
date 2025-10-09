@@ -457,7 +457,7 @@ class Dj_App_Request {
             return $this->data;
         }
 
-        $key = trim( $key );
+        $key = Dj_App_String_Util::trim($key);
         $sep = $this->getSep($key);
 
         // ->get('contact_form_msg|msg|message')
@@ -500,27 +500,10 @@ class Dj_App_Request {
             }
         }
 
-        if ( $force_type & self::STRIP_SOME_TAGS ) {
-            $allowed_tags = [];
-
-            // Let's merge the tags with the default allowed attribs
-            foreach ($this->allowed_permissive_html_tags as $tag => $allowed_attribs) {
-                $allowed_attribs = array_replace_recursive($allowed_attribs, $this->allowed_permissive_html_tag_attribs);
-                $allowed_tags[$tag] = $allowed_attribs;
-            }
-
-            $val = wp_kses($val, $allowed_tags);
-        }
-
-        // Sanitizing a var
-        if ( $force_type & self::STRIP_ALL_TAGS ) {
-            $val = wp_kses($val, []);
-        }
-
-        $val = is_scalar($val) ? trim($val) : $val;
+        $val = Dj_App_String_Util::trim($val);
 
         if (is_array($default)) { // smart cast to array if the default val is array.
-            $val = (array) $val;
+            $val = empty($val) ? $default : (array) $val;
         }
 
         return $val;
