@@ -452,7 +452,7 @@ class Dj_App_Request {
      * @param string $key
      * @return mixed
      */
-    public function get( $key = '', $default = '', $force_type = 1 ) {
+    public function get( $key = '', $default = '', $force_type = 0 ) {
         if (empty($key)) {
             return $this->data;
         }
@@ -500,14 +500,6 @@ class Dj_App_Request {
             }
         }
 
-        if ( $force_type & self::ESC_ATTR ) {
-            $val = esc_attr($val);
-        }
-
-        if ( $force_type & self::JS_ESC_ATTR ) {
-            $val = esc_js($val);
-        }
-
         if ( $force_type & self::STRIP_SOME_TAGS ) {
             $allowed_tags = [];
 
@@ -526,11 +518,6 @@ class Dj_App_Request {
         }
 
         $val = is_scalar($val) ? trim($val) : $val;
-
-        // passing email via request param converts + to spaces. Sometimes I am too busy to encode the +
-        if (strpos($key, 'email') !== false) {
-            $val = str_replace( ' ', '+', $val );
-        }
 
         return $val;
     }
