@@ -623,4 +623,37 @@ class Request_Test extends TestCase
         $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded hash_id');
         $this->assertStringContainsString('page', $url, 'Should still have page param');
     }
+
+    /**
+     * Test addQueryParam() replacing existing params with mixed types
+     */
+    public function testAddQueryParamReplaceExistingMixed()
+    {
+        // Test replacing simple param when URL has both simple and array params
+        $url = '/blog?page=1&category=news&plugin_data[key]=value';
+        $url = Dj_App_Request::addQueryParam('page', 3, $url);
+
+        $this->assertStringContainsString('page=3', $url, 'Should update page to 3');
+        $this->assertStringContainsString('category=news', $url, 'Should keep category param');
+        $this->assertStringContainsString('plugin_data', $url, 'Should keep plugin_data array param');
+        $this->assertStringNotContainsString('page=1', $url, 'Should not contain old page value');
+
+        // Test replacing array param when URL has multiple params
+        $url = '/blog?page=2&plugin_data[page]=1&category=news';
+        $url = Dj_App_Request::addQueryParam('plugin_data[page]', 5, $url);
+
+        $this->assertStringContainsString('plugin_data%5Bpage%5D=5', $url, 'Should update plugin_data[page] to 5');
+        $this->assertStringContainsString('page=2', $url, 'Should keep simple page param');
+        $this->assertStringContainsString('category=news', $url, 'Should keep category param');
+        $this->assertStringNotContainsString('plugin_data%5Bpage%5D=1', $url, 'Should not contain old plugin_data[page] value');
+
+        // Test updating multiple array keys for same namespace
+        $url = '/blog?djebel_plugin_static_blog_data[page]=1&djebel_plugin_static_blog_data[hash_id]=old123';
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[page]', 3, $url);
+
+        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bpage%5D=3', $url, 'Should update page to 3');
+        $this->assertStringContainsString('hash_id', $url, 'Should keep hash_id param');
+        $this->assertStringContainsString('old123', $url, 'Should keep old hash_id value since we only updated page');
+        $this->assertStringNotContainsString('page%5D=1', $url, 'Should not contain old page value');
+    }
 }
