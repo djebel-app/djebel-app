@@ -455,13 +455,172 @@ class Request_Test extends TestCase
     public function testGetMethodWithEmailHandling()
     {
         $req_obj = new Dj_App_Request();
-        
+
         // Set test data with email key
         $req_obj->set('email', 'test+user@example.com');
         $req_obj->set('user_email', 'user+test@domain.com');
-        
+
         // Test email key handling - should replace spaces with +
         $this->assertEquals('test+user@example.com', $req_obj->get('email'));
         $this->assertEquals('user+test@domain.com', $req_obj->get('user_email'));
+    }
+
+    /**
+     * Test addQueryParam() with simple key-value pairs
+     */
+    public function testAddQueryParamSimple()
+    {
+        // Test adding simple param to clean URL
+        $url = Dj_App_Request::addQueryParam('page', 2, '/blog');
+        $this->assertEquals('/blog?page=2', $url);
+
+        // Test adding param to URL with existing params
+        $url = Dj_App_Request::addQueryParam('page', 3, '/blog?category=news');
+        $this->assertEquals('/blog?category=news&page=3', $url);
+
+        // Test replacing existing param
+        $url = Dj_App_Request::addQueryParam('page', 5, '/blog?page=2');
+        $this->assertEquals('/blog?page=5', $url);
+    }
+
+    /**
+     * Test addQueryParam() with array parameter (associative array format)
+     */
+    public function testAddQueryParamWithArrayKeys()
+    {
+        // Test adding array-style parameter xyz_data[key] with value
+        $url = Dj_App_Request::addQueryParam('xyz_data[key]', 'value1', '/test');
+        $this->assertStringContainsString('xyz_data%5Bkey%5D=value1', $url, 'Should contain URL-encoded xyz_data[key]=value1');
+
+        // Test adding array-style parameter with multiple keys
+        $url = Dj_App_Request::addQueryParam('plugin_data[page]', 2, '/blog');
+        $this->assertStringContainsString('plugin_data%5Bpage%5D=2', $url, 'Should contain URL-encoded plugin_data[page]=2');
+
+        // Test adding array-style parameter with hash_id
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[hash_id]', 'abc123def456', '/blog');
+        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded brackets');
+    }
+
+    /**
+     * Test addQueryParam() with array of key-value pairs
+     */
+    public function testAddQueryParamWithArrayOfPairs()
+    {
+        // Test passing array of key-value pairs
+        $params = [
+            'page' => 2,
+            'category' => 'news',
+            'tag' => 'php'
+        ];
+        $url = Dj_App_Request::addQueryParam($params, '/blog');
+
+        $this->assertStringContainsString('page=2', $url);
+        $this->assertStringContainsString('category=news', $url);
+        $this->assertStringContainsString('tag=php', $url);
+    }
+
+    /**
+     * Test addQueryParam() with nested array parameters
+     */
+    public function testAddQueryParamWithNestedArrays()
+    {
+        // Test adding nested array parameter
+        $params = [
+            'plugin_data' => [
+                'page' => 2,
+                'hash_id' => 'abc123'
+            ]
+        ];
+        $url = Dj_App_Request::addQueryParam($params, '/blog');
+
+        // http_build_query creates plugin_data[page]=2&plugin_data[hash_id]=abc123
+        $this->assertStringContainsString('plugin_data', $url);
+        $this->assertStringContainsString('page', $url);
+        $this->assertStringContainsString('2', $url);
+        $this->assertStringContainsString('hash_id', $url);
+        $this->assertStringContainsString('abc123', $url);
+    }
+
+    /**
+     * Test addQueryParam() replaces existing array-style params
+     */
+    public function testAddQueryParamReplacesArrayParams()
+    {
+        // Test replacing array-style parameter
+        $url = '/blog?plugin_data[page]=1';
+        $url = Dj_App_Request::addQueryParam('plugin_data[page]', 3, $url);
+
+        // Check for URL-encoded brackets in the result
+        $this->assertStringContainsString('plugin_data%5Bpage%5D=3', $url, 'Should contain plugin_data[page]=3 with URL-encoded brackets');
+        // Should not contain old value
+        $this->assertStringNotContainsString('=1', $url, 'Should not contain old value =1');
+    }
+
+    /**
+     * Test addQueryParam() with special characters
+     */
+    public function testAddQueryParamWithSpecialCharacters()
+    {
+        // Test with special characters that need URL encoding
+        $url = Dj_App_Request::addQueryParam('search', 'hello world', '/search');
+        $this->assertStringContainsString('search=hello', $url);
+        $this->assertStringContainsString('world', $url);
+
+        // Test with array param containing special characters
+        $url = Dj_App_Request::addQueryParam('data[name]', 'John Doe', '/profile');
+        $this->assertStringContainsString('data', $url);
+        $this->assertStringContainsString('name', $url);
+        $this->assertStringContainsString('John', $url);
+    }
+
+    /**
+     * Test addQueryParam() with empty values
+     */
+    public function testAddQueryParamWithEmptyValues()
+    {
+        // Test with empty value
+        $url = Dj_App_Request::addQueryParam('debug', '', '/test');
+        $this->assertStringContainsString('debug', $url);
+
+        // Test with zero value
+        $url = Dj_App_Request::addQueryParam('page', 0, '/blog');
+        $this->assertStringContainsString('page=0', $url);
+    }
+
+    /**
+     * Test addQueryParam() without URL parameter (uses current request URL)
+     */
+    public function testAddQueryParamWithoutUrl()
+    {
+        // Test with explicit URL since REQUEST_URI may not be set consistently in tests
+        // The method should use getRequestUrl() internally which reads from $_SERVER
+        $url1 = Dj_App_Request::addQueryParam('new', 'value', '/current/page?existing=param');
+        $this->assertStringContainsString('new=value', $url1);
+        $this->assertStringContainsString('existing=param', $url1);
+
+        // Test that empty URL parameter defaults to current request
+        // Since we can't reliably test singleton behavior, we test with explicit URL
+        $url2 = Dj_App_Request::addQueryParam('page', 2, '');
+        $this->assertStringContainsString('page=2', $url2);
+    }
+
+    /**
+     * Test addQueryParam() with real-world blog plugin scenario
+     */
+    public function testAddQueryParamBlogPluginScenario()
+    {
+        // Simulate blog plugin pagination URL generation
+        $base_url = '/blog';
+
+        // Add page parameter using array notation
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[page]', 2, $base_url);
+
+        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bpage%5D=2', $url, 'Should contain URL-encoded djebel_plugin_static_blog_data[page]=2');
+
+        // Simulate adding hash_id parameter
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[hash_id]', 'abc123def456', $url);
+
+        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded hash_id');
+        $this->assertStringContainsString('page', $url, 'Should still have page param');
     }
 }
