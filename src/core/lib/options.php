@@ -175,6 +175,30 @@ class Dj_App_Options implements ArrayAccess {
     }
 
     /**
+     * Convenience method to check if an option is enabled
+     * @param string $key
+     * @param mixed $default
+     * @return bool
+     */
+    public function isEnabled($key, $default = false)
+    {
+        $val = $this->get($key, $default);
+        return Dj_App_Util::isEnabled($val);
+    }
+
+    /**
+     * Convenience method to check if an option is disabled
+     * @param string $key
+     * @param mixed $default
+     * @return bool
+     */
+    public function isDisabled($key, $default = true)
+    {
+        $val = $this->get($key, $default);
+        return Dj_App_Util::isDisabled($val);
+    }
+
+    /**
      * Returns member data or a key from data. It's easier e.g. $data_res->output
      * Supports nested access by returning the options object itself
      * @param string $name
