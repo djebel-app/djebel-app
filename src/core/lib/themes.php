@@ -265,8 +265,17 @@ class Dj_App_Themes {
         $file = '';
         $page_file_candiates = Dj_App_Hooks::applyFilter('app.themes.current_theme_page_file_candidates', $page_file_candiates, $ctx);
 
+        // Remove duplicate candidates while preserving order
+        if (count($page_file_candiates) > 0) {
+            $page_file_candiates = array_unique($page_file_candiates);
+        }
+
         foreach ($page_file_candiates as $loop_file) {
             $loop_file = Dj_App_Hooks::applyFilter('app.themes.current_theme.page_content_file', $loop_file, $ctx);
+
+            if (empty($loop_file)) {
+                continue;
+            }
 
             if (file_exists($loop_file)) {
                 $file = $loop_file;
