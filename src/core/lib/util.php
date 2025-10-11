@@ -22,22 +22,22 @@ class Dj_App_Util {
      * Smart, eh?
      *
      * Usage 1:
-     * $time_ms = Dj_App_Util::time();
-     * sprintf( "%.02f", abs( $time_ms - Dj_App_Util::time() ) );
+     * $time_ms = Dj_App_Util::microtime();
+     * sprintf( "%.02f", abs( $time_ms - Dj_App_Util::microtime() ) );
      *
      * Usage 2:
-     * Dj_App_Util::time( 'setup_vhost' );
+     * Dj_App_Util::microtime( 'setup_vhost' );
      * ......
-     * $time_delta = Dj_App_Util::time( 'setup_vhost' );
+     * $time_delta = Dj_App_Util::microtime( 'setup_vhost' );
      *
      * if you don't want the time formatted (to 2 decimals) pass 0 as 2nd param.
-     * $time_delta = Dj_App_Util::time( 'setup_vhost', 0 );
+     * $time_delta = Dj_App_Util::microtime( 'setup_vhost', 0 );
      * sprintf( "%.02f", $time_delta );
      *
      * @param string $marker optional
      * @return float|string
      */
-    public static function time($marker = '', $fmt = 1, $precision = 6)
+    public static function microtime($marker = '', $fmt = 1, $precision = 6)
     {
         if (!is_scalar($marker)) {
             $marker = serialize($marker);
@@ -99,6 +99,100 @@ class Dj_App_Util {
         $diff = sprintf("%.0{$precision}f", $diff);
 
         return $diff;
+    }
+
+    /**
+     * Timezone-aware time() - returns current Unix timestamp in configured timezone
+     * Falls back to server timezone if not configured in site.timezone
+     *
+     * Usage:
+     * $timestamp = Dj_App_Util::time();
+     *
+     * @return int Unix timestamp
+     */
+    public static function time()
+    {
+        $timezone = self::getTimezone();
+
+        if ($timezone) {
+            $dt = new DateTime('now', $timezone);
+            return $dt->getTimestamp();
+        }
+
+        return time();
+    }
+
+    /**
+     * Timezone-aware strtotime() - converts string to Unix timestamp in configured timezone
+     * Falls back to server timezone if not configured in site.timezone
+     *
+     * Usage:
+     * $timestamp = Dj_App_Util::strtotime('2025-01-01 12:00:00');
+     * $timestamp = Dj_App_Util::strtotime('+1 day');
+     *
+     * @param string $datetime Date/time string to parse
+     * @param int|null $baseTimestamp Optional base timestamp (default: current time)
+     * @return int|false Unix timestamp or false on failure
+     */
+    public static function strtotime($datetime, $baseTimestamp = null)
+    {
+        if (empty($datetime)) {
+            return false;
+        }
+
+        $timezone = self::getTimezone();
+
+        try {
+            if ($timezone) {
+                // Create base DateTime in configured timezone
+                if ($baseTimestamp === null) {
+                    $dt = new DateTime('now', $timezone);
+                } else {
+                    $dt = new DateTime('@' . $baseTimestamp);
+                    $dt->setTimezone($timezone);
+                }
+
+                // Modify with the datetime string
+                $dt->modify($datetime);
+                return $dt->getTimestamp();
+            }
+
+            // Fallback to PHP's strtotime
+            return $baseTimestamp === null ? strtotime($datetime) : strtotime($datetime, $baseTimestamp);
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get configured timezone or server default
+     * Returns DateTimeZone object or null if using server default
+     *
+     * @return DateTimeZone|null
+     */
+    protected static function getTimezone()
+    {
+        static $timezone = false;
+
+        if ($timezone !== false) {
+            return $timezone;
+        }
+
+        $options_obj = Dj_App_Options::getInstance();
+        $timezone_str = $options_obj->get('site.timezone');
+
+        if (empty($timezone_str)) {
+            $timezone = null;
+            return $timezone;
+        }
+
+        try {
+            $timezone = new DateTimeZone($timezone_str);
+            return $timezone;
+        } catch (Exception $e) {
+            $timezone = null;
+            return $timezone;
+        }
     }
 
     /**
@@ -428,7 +522,7 @@ class Dj_App_Util {
     public static function extractMetaInfo($buff)
     {
         $res_obj = new Dj_App_Result();
-        Dj_App_Util::time( __METHOD__ );
+        Dj_App_Util::microtime( __METHOD__ );
 
         try {
             if (empty($buff)) {
@@ -520,7 +614,7 @@ class Dj_App_Util {
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
         } finally {
-            $res_obj->exec_time = Dj_App_Util::time( __METHOD__ );
+            $res_obj->exec_time = Dj_App_Util::microtime( __METHOD__ );
         }
 
         return $res_obj;

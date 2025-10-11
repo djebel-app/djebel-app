@@ -40,7 +40,7 @@ $env_cfg_data = Dj_App_Config::loadIniFile($config_env_file);
 set_exception_handler(['Dj_App_Bootstrap', 'handleException']);
 register_shutdown_function(['Dj_App_Bootstrap', 'handleFatalError']);
 
-Dj_App_Util::time( 'dj_app_timer' );
+Dj_App_Util::microtime( 'dj_app_timer' );
 
 require_once $app_lib_dir . '/page.php';
 require_once $app_lib_dir . '/plugins.php';
@@ -182,7 +182,7 @@ if ($load_theme) {
     echo $content;
 }
 
-$exec_time = Dj_App_Util::time( 'dj_app_timer' ); // move this to shutdown
+$exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 
 class Dj_App_Config {
     const APP_ENV = 'env';

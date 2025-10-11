@@ -15,7 +15,7 @@ class Dj_App_File_Util {
         $func_args = func_get_args();
 
         try {
-            Dj_App_Util::time( __METHOD__, $func_args );
+            Dj_App_Util::microtime( __METHOD__, $func_args );
 
             if (!file_exists($file)) {
                 throw new Dj_App_Exception("File not found", [ 'file' => $file ]);
@@ -61,7 +61,7 @@ class Dj_App_File_Util {
                 fclose($fp);
             }
 
-            $res_obj->exec_time = Dj_App_Util::time( __METHOD__, $func_args );
+            $res_obj->exec_time = Dj_App_Util::microtime( __METHOD__, $func_args );
         }
 
         return $res_obj;

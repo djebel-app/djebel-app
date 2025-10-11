@@ -59,7 +59,7 @@ class Dj_App_Plugins {
     public static function loadPlugins($dir = '', $ctx = [])
     {
         $timer_id = __METHOD__ . sha1($dir.serialize($ctx));
-        Dj_App_Util::time($timer_id);
+        Dj_App_Util::microtime($timer_id);
         $res_obj = new Dj_App_Result();
         $dir = empty($dir) ? Dj_App_Plugins::getPluginsDir() : $dir;
         $plugins = [];
@@ -161,7 +161,7 @@ class Dj_App_Plugins {
 
             foreach ($plugins as $plugin_file => $plugin_meta_info) {
                 try {
-                    $load_time = Dj_App_Util::time($plugin_file);
+                    $load_time = Dj_App_Util::microtime($plugin_file);
                     include_once $plugin_file;
                 } catch (Throwable $e) {
                     // some plugin failed or crashed
@@ -170,7 +170,7 @@ class Dj_App_Plugins {
                     $msg = $e->getMessage();
                     echo "Plugin [$basename] crashed: Error: " . Dj_App_Util::msg($msg);
                 } finally {
-                    $load_time = Dj_App_Util::time($plugin_file);
+                    $load_time = Dj_App_Util::microtime($plugin_file);
                     $plugin_load_times[$plugin_file] = $load_time;
                 }
                 
@@ -199,7 +199,7 @@ class Dj_App_Plugins {
             $res_obj->msg = $e->getMessage();
         } finally {
             $res_obj->plugins = $plugins;
-            $res_obj->exec_time = Dj_App_Util::time( $timer_id );
+            $res_obj->exec_time = Dj_App_Util::microtime( $timer_id );
             $res_obj->plugin_load_times = $plugin_load_times;
         }
 
