@@ -238,12 +238,12 @@ class Dj_App_Util {
 
     /**
      * Get public content data directory with optional plugin/theme parameter
-     * Creates organized directories for plugins in the public dj-content/data/ area
+     * Creates organized directories for plugins in the public dj-content/data/app/ area
      * Similar to getCorePrivateDataDir but for public content
      *
      * Usage:
      * Dj_App_Util::getContentDataDir(['plugin' => 'my-plugin']);
-     * Returns: /path/to/site/dj-content/data/plugins/my-plugin
+     * Returns: /path/to/site/dj-content/data/app/plugins/my-plugin
      *
      * @param array $params Optional parameters (plugin or theme)
      * @return string The content data directory path
@@ -256,7 +256,7 @@ class Dj_App_Util {
             return '';
         }
 
-        $dir .= '/data';
+        $dir .= '/data/app';
 
         $ctx = [];
         $dir = Dj_App_Hooks::applyFilter('app.config.content_data_dir', $dir, $ctx);
