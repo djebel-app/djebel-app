@@ -497,8 +497,8 @@ class Request_Test extends TestCase
         $this->assertStringContainsString('plugin_data%5Bpage%5D=2', $url, 'Should contain URL-encoded plugin_data[page]=2');
 
         // Test adding array-style parameter with hash_id
-        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[hash_id]', 'abc123def456', '/blog');
-        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded brackets');
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_content_data[hash_id]', 'abc123def456', '/blog');
+        $this->assertStringContainsString('djebel_plugin_static_content_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded brackets');
     }
 
     /**
@@ -613,14 +613,14 @@ class Request_Test extends TestCase
         $base_url = '/blog';
 
         // Add page parameter using array notation
-        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[page]', 2, $base_url);
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_content_data[page]', 2, $base_url);
 
-        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bpage%5D=2', $url, 'Should contain URL-encoded djebel_plugin_static_blog_data[page]=2');
+        $this->assertStringContainsString('djebel_plugin_static_content_data%5Bpage%5D=2', $url, 'Should contain URL-encoded djebel_plugin_static_content_data[page]=2');
 
         // Simulate adding hash_id parameter
-        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[hash_id]', 'abc123def456', $url);
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_content_data[hash_id]', 'abc123def456', $url);
 
-        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded hash_id');
+        $this->assertStringContainsString('djebel_plugin_static_content_data%5Bhash_id%5D=abc123def456', $url, 'Should contain URL-encoded hash_id');
         $this->assertStringContainsString('page', $url, 'Should still have page param');
     }
 
@@ -648,10 +648,10 @@ class Request_Test extends TestCase
         $this->assertStringNotContainsString('plugin_data%5Bpage%5D=1', $url, 'Should not contain old plugin_data[page] value');
 
         // Test updating multiple array keys for same namespace
-        $url = '/blog?djebel_plugin_static_blog_data[page]=1&djebel_plugin_static_blog_data[hash_id]=old123';
-        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_blog_data[page]', 3, $url);
+        $url = '/blog?djebel_plugin_static_content_data[page]=1&djebel_plugin_static_content_data[hash_id]=old123';
+        $url = Dj_App_Request::addQueryParam('djebel_plugin_static_content_data[page]', 3, $url);
 
-        $this->assertStringContainsString('djebel_plugin_static_blog_data%5Bpage%5D=3', $url, 'Should update page to 3');
+        $this->assertStringContainsString('djebel_plugin_static_content_data%5Bpage%5D=3', $url, 'Should update page to 3');
         $this->assertStringContainsString('hash_id', $url, 'Should keep hash_id param');
         $this->assertStringContainsString('old123', $url, 'Should keep old hash_id value since we only updated page');
         $this->assertStringNotContainsString('page%5D=1', $url, 'Should not contain old page value');
@@ -683,7 +683,7 @@ class Request_Test extends TestCase
         $this->assertEquals(['value1', 'value2'], $result, 'Should return original array');
 
         // Test with plugin params scenario - non-existent key returns empty array
-        $plugin_params = $req_obj->get('djebel_plugin_static_blog_data', []);
+        $plugin_params = $req_obj->get('djebel_plugin_static_content_data', []);
         $this->assertIsArray($plugin_params, 'Plugin params should be array when default is []');
         $this->assertEmpty($plugin_params, 'Non-existent plugin params should be empty array');
 
