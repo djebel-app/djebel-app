@@ -237,6 +237,46 @@ class Dj_App_Util {
     }
 
     /**
+     * Get public content data directory with optional plugin/theme parameter
+     * Creates organized directories for plugins in the public dj-content/data/ area
+     * Similar to getCorePrivateDataDir but for public content
+     *
+     * Usage:
+     * Dj_App_Util::getContentDataDir(['plugin' => 'my-plugin']);
+     * Returns: /path/to/site/dj-content/data/plugins/my-plugin
+     *
+     * @param array $params Optional parameters (plugin or theme)
+     * @return string The content data directory path
+     */
+    public static function getContentDataDir($params = [])
+    {
+        $dir = Dj_App_Util::getContentDir();
+
+        if (empty($dir)) {
+            return '';
+        }
+
+        $dir .= '/data';
+
+        $ctx = [];
+        $dir = Dj_App_Hooks::applyFilter('app.config.content_data_dir', $dir, $ctx);
+
+        if (!empty($params['plugin'])) {
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/plugins/' . $slug;
+            $dir = Dj_App_Hooks::applyFilter('app.config.content_data_plugin_dir', $dir, $ctx);
+        } elseif (!empty($params['theme'])) {
+            $slug = $params['theme'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $dir .= '/themes/' . $slug;
+            $dir = Dj_App_Hooks::applyFilter('app.config.content_data_theme_dir', $dir, $ctx);
+        }
+
+        return $dir;
+    }
+
+    /**
      * Dj_App_Util::getDocRootDir();
      * @return string
      */
