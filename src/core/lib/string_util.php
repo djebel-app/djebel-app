@@ -333,4 +333,38 @@ class Dj_App_String_Util
 
         return $d;
     }
+
+    /**
+     * Get the first character of a string
+     * Dj_App_String_Util::getFirstChar();
+     * @param string $str
+     * @return string First character or empty string if input is empty
+     */
+    public static function getFirstChar($str)
+    {
+        if (empty($str)) {
+            return '';
+        }
+
+        $first_char = substr($str, 0, 1);
+
+        return $first_char;
+    }
+
+    /**
+     * Get the last character of a string
+     * Dj_App_String_Util::getLastChar();
+     * @param string $str
+     * @return string Last character or empty string if input is empty
+     */
+    public static function getLastChar($str)
+    {
+        if (empty($str)) {
+            return '';
+        }
+
+        $last_char = substr($str, -1);
+
+        return $last_char;
+    }
 }
