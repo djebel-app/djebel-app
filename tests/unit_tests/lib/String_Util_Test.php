@@ -19,13 +19,13 @@ class String_Util_Test extends TestCase {
     public function testGetFirstCharWithEmptyString()
     {
         $result = Dj_App_String_Util::getFirstChar('');
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
     }
 
     public function testGetFirstCharWithNull()
     {
         $result = Dj_App_String_Util::getFirstChar(null);
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
     }
 
     public function testGetFirstCharWithNumber()
@@ -61,13 +61,13 @@ class String_Util_Test extends TestCase {
     public function testGetLastCharWithEmptyString()
     {
         $result = Dj_App_String_Util::getLastChar('');
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
     }
 
     public function testGetLastCharWithNull()
     {
         $result = Dj_App_String_Util::getLastChar(null);
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
     }
 
     public function testGetLastCharWithNumber()
