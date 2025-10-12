@@ -288,4 +288,129 @@ class String_Util_Test extends TestCase {
         $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
+
+    public function testCutWithDefaults()
+    {
+        $string = str_repeat('abcdefghij', 100);
+        $result = Dj_App_String_Util::cut($string);
+
+        $this->assertEquals(512, strlen($result));
+        $this->assertEquals(substr($string, 0, 512), $result);
+    }
+
+    public function testCutWithCustomLength()
+    {
+        $string = 'hello world test';
+        $result = Dj_App_String_Util::cut($string, 5);
+
+        $this->assertEquals('hello', $result);
+    }
+
+    public function testCutWithStartIndex()
+    {
+        $string = 'hello world test';
+        $result = Dj_App_String_Util::cut($string, 5, 6);
+
+        $this->assertEquals('world', $result);
+    }
+
+    public function testCutWithStartIndexAndLength()
+    {
+        $string = '0123456789ABCDEFGHIJ';
+        $result = Dj_App_String_Util::cut($string, 10, 5);
+
+        $this->assertEquals('56789ABCDE', $result);
+    }
+
+    public function testCutWithEmptyString()
+    {
+        $result = Dj_App_String_Util::cut('');
+        $this->assertEmpty($result);
+    }
+
+    public function testCutWithNull()
+    {
+        $result = Dj_App_String_Util::cut(null);
+        $this->assertEmpty($result);
+    }
+
+    public function testCutExceedsLength()
+    {
+        $string = 'short';
+        $result = Dj_App_String_Util::cut($string, 100);
+
+        $this->assertEquals('short', $result);
+    }
+
+    public function testCutFromBeginning()
+    {
+        $string = 'abcdefghijklmnop';
+        $result = Dj_App_String_Util::cut($string, 5, 0);
+
+        $this->assertEquals('abcde', $result);
+    }
+
+    public function testCutFromMiddle()
+    {
+        $string = 'The quick brown fox';
+        $result = Dj_App_String_Util::cut($string, 5, 4);
+
+        $this->assertEquals('quick', $result);
+    }
+
+    public function testCutSingleCharacter()
+    {
+        $string = 'hello';
+        $result = Dj_App_String_Util::cut($string, 1, 0);
+
+        $this->assertEquals('h', $result);
+    }
+
+    public function testCutLargeString()
+    {
+        $large_string = str_repeat('test', 1000);
+        $result = Dj_App_String_Util::cut($large_string, 512);
+
+        $this->assertEquals(512, strlen($result));
+    }
+
+    public function testCutWithZeroLength()
+    {
+        $string = 'hello world';
+        $result = Dj_App_String_Util::cut($string, 0);
+
+        $this->assertEmpty($result);
+    }
+
+    public function testCutWithNegativeLength()
+    {
+        $string = 'hello world';
+        $result = Dj_App_String_Util::cut($string, -5);
+
+        $this->assertEquals('hello ', $result);
+    }
+
+    public function testCutEntireString()
+    {
+        $string = 'complete';
+        $result = Dj_App_String_Util::cut($string, 1000);
+
+        $this->assertEquals('complete', $result);
+    }
+
+    public function testCutWithWhitespace()
+    {
+        $string = '   hello   ';
+        $result = Dj_App_String_Util::cut($string, 5, 3);
+
+        $this->assertEquals('hello', $result);
+    }
+
+    public function testCutWithSpecialChars()
+    {
+        $string = '!@#$%^&*()';
+        $result = Dj_App_String_Util::cut($string, 3, 2);
+
+        $this->assertEquals('#$%', $result);
+    }
 }

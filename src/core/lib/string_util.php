@@ -367,4 +367,23 @@ class Dj_App_String_Util
 
         return $last_char;
     }
+
+    /**
+     * Cut/extract a portion of a string
+     * Dj_App_String_Util::cut();
+     * @param string $string The input string
+     * @param int $len The length to extract (default 512)
+     * @param int $start_index The starting position (default 0)
+     * @return string The extracted portion or empty string if input is empty
+     */
+    public static function cut($string, $len = 512, $start_index = 0)
+    {
+        if (empty($string)) {
+            return '';
+        }
+
+        $result = substr($string, $start_index, $len);
+
+        return $result;
+    }
 }
