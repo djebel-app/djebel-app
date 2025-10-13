@@ -401,6 +401,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // Handle comments in values
         $pos = strpos($val, '#');
 
+        // remove comment/text after # unless # is escaped
         if ($pos !== false && substr($val, $pos - 1, 1) !== "\\" ) {
             $val = substr($val, 0, $pos);
         }
