@@ -4,13 +4,21 @@
  * they can be loaded from ini file and the db
  */
 
-class Dj_App_Options implements ArrayAccess {
+class Dj_App_Options implements ArrayAccess, Countable {
     const SECTION_SEP = '::';
 
-    protected $data = [];
+    protected $data = null;
     protected $extra_opts_data = [];
 
     private function __construct() {}
+
+    /**
+     * Countable interface - allows count($options_obj)
+     * @return int
+     */
+    public function count(): int {
+        return is_array($this->data) ? count($this->data) : 0;
+    }
 
     public function load()
     {
@@ -99,10 +107,46 @@ class Dj_App_Options implements ArrayAccess {
                 continue;
             }
 
-            $data = array_merge_recursive($data, $res);
+            // Smart merge: convert scalar to array when duplicate key is encountered
+            $data = $this->smartMerge($data, $res);
         }
 
         return $data;
+    }
+
+    /**
+     * Smart merge that converts scalars to arrays when duplicate keys are encountered
+     * @param array $existing
+     * @param array $new
+     * @return array
+     */
+    private function smartMerge($existing, $new) {
+        foreach ($new as $key => $value) {
+            if (!isset($existing[$key])) {
+                // Key doesn't exist yet, just set it
+                $existing[$key] = $value;
+            } else {
+                // Key already exists
+                $existing_value = $existing[$key];
+
+                if (is_array($value) && is_array($existing_value)) {
+                    // Both are arrays, recursively merge
+                    $existing[$key] = $this->smartMerge($existing_value, $value);
+                } elseif (is_array($existing_value) && !is_array($value)) {
+                    // Existing is array, new is scalar - append to array
+                    $existing[$key][] = $value;
+                } elseif (!is_array($existing_value) && is_array($value)) {
+                    // Existing is scalar, new is array - convert scalar to array and merge
+                    $existing[$key] = array_merge([$existing_value], $value);
+                } else {
+                    // Both are scalars - convert to indexed array
+                    // This is the duplicate key case: convert first scalar to array
+                    $existing[$key] = [$existing_value, $value];
+                }
+            }
+        }
+
+        return $existing;
     }
 
     /**
@@ -203,7 +247,8 @@ class Dj_App_Options implements ArrayAccess {
             $val = $data[$section][$sub_section][$key];
         } elseif (!empty($section) && isset($data[$section][$key])) {
             $val = $data[$section][$key];
-        } elseif (isset($data[$key])) {
+        } elseif (empty($section) && isset($data[$key])) {
+            // Only check top-level key if no section was specified
             $val = $data[$key];
         }
 
@@ -244,38 +289,45 @@ class Dj_App_Options implements ArrayAccess {
 
     /**
      * Returns member data or a key from data. It's easier e.g. $data_res->output
-     * Supports nested access by returning the options object itself
+     *
+     * Supports intuitive property chaining:
+     * - $obj->theme->theme returns scalar string (or '' if not exists)
+     * - $obj->theme->theme_id returns scalar string
+     * - Works naturally with !empty() checks
+     * - Fast and efficient for high-traffic sites
+     *
      * @param string $name
-     * @return mixed|null|Dj_App_Options
+     * @return mixed|Dj_App_Options
      */
     public function __get($name) {
-        // Use current data - don't call load() to avoid overriding test data
         $data = $this->data;
 
-        // Check if the name exists as a direct key in the data
+        // If data is null, load it first
+        if (is_null($data)) {
+            $this->load();
+            $data = $this->data;
+        }
+
+        // If key exists in data
         if (isset($data[$name])) {
             $val = $data[$name];
 
-            // If the value is an array, return a new options instance for nested access
+            // Array values return nested Options object for chaining
             if (is_array($val)) {
                 $nested_options = new static();
                 $nested_options->data = $val;
                 return $nested_options;
             }
 
+            // Scalar values return the value directly
             return $val;
         }
 
-        // Fallback to the get() method for other cases
-        $val = $this->get($name);
-
-        if (empty($val)) {
-            $empty_options = new static();
-            $empty_options->data = [];
-            return $empty_options;
-        }
-
-        return $val;
+        // Key doesn't exist: return empty Options object for safe chaining
+        // This allows $obj->nonexistent->key->more to work without warnings
+        $empty_options = new static();
+        $empty_options->data = [];
+        return $empty_options;
     }
 
     public function __set($key, $val) {
@@ -290,7 +342,14 @@ class Dj_App_Options implements ArrayAccess {
      * @param string $key Property key
      */
     public function __isset($key) {
-        return !is_null($this->__get($key));
+        $data = $this->data;
+
+        if (is_null($data)) {
+            $this->load();
+            $data = $this->data;
+        }
+
+        return isset($data[$key]);
     }
 
     /**
@@ -298,12 +357,15 @@ class Dj_App_Options implements ArrayAccess {
      * @return string
      */
     public function __toString() {
-        if (empty($this->data)) {
+        $data = $this->data;
+
+        // Empty array means this is an empty Options object (non-existent key)
+        if (is_array($data) && count($data) === 0) {
             return '';
         }
 
-        if (is_scalar($this->data)) {
-            return (string) $this->data;
+        if (is_scalar($data)) {
+            return (string) $data;
         }
 
         return '';
