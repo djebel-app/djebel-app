@@ -13,6 +13,97 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Test dependencies are managed in `tests/composer.json`
 - Install test dependencies: `cd tests && composer install`
 
+## Coding Standards (10x PHP Developer Rules)
+
+Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Every line is optimized for performance, readability, and security.
+
+### Performance & Optimization Rules
+
+1. **Know your regex**: `\w` already includes underscore `[A-Za-z0-9_]` - NEVER add `_` redundantly
+   - ✅ CORRECT: `/[^\w\[\]\.\-]/si`
+   - ❌ WRONG: `/[^\w\[\]\.\-_]/si` (redundant underscore!)
+
+2. **No recursion for performance-critical code**: Explicit depth handling beats recursive calls
+   - For a framework targeting 1,000,000 sites, function call overhead matters
+   - Use explicit if/elseif chains for known depths (2-4 levels)
+
+3. **Inline operations when faster**: Only normalize slashes when key contains them
+   ```php
+   if (strpos($key, '/') !== false) {
+       $key = str_replace('/', '__SLASH__', $key);
+   }
+   ```
+
+### Variable Naming Standards
+
+4. **Use descriptive variable names from examples**:
+   - ✅ CORRECT: `$matches` for preg_match results
+   - ❌ WRONG: `$m`, `$result`, or other shortcuts
+   - When shown an example, use EXACTLY that variable name
+
+5. **Consistent naming**: Follow existing codebase patterns religiously
+
+### Code Quality Rules
+
+6. **NEVER use `isset()`** - use `empty()` instead per Djebel standards
+
+7. **ALWAYS use curly braces `{}`** - even for single-line if statements
+
+8. **NO nested function calls**:
+   - ❌ WRONG: `formatKey(substr($key, 0, $pos))`
+   - ✅ CORRECT: Split into separate lines:
+   ```php
+   $main_key = substr($key, 0, $pos);
+   $main_key = Dj_App_String_Util::formatKey($main_key);
+   ```
+
+9. **Proper spacing**: Add blank line after variable assignments before if blocks
+   ```php
+   $bracket_pos = strpos($key, '[');
+
+   if ($bracket_pos !== false) {
+   ```
+
+### Professional Patterns
+
+10. **ALWAYS check function return values**:
+    ```php
+    if (preg_match('/pattern/', $key, $matches)) {
+        // Use $matches here
+    }
+    ```
+
+11. **NO references (`&`) anywhere**:
+    - Not in function parameters
+    - Not in variable assignments
+    - Explicit code is secure code - easy to audit and impossible to hack
+
+12. **Support whitespace and quotes in user input**:
+    - Use `[\s\'\"]*` in regex patterns for brackets
+    - Example: `/\[[\s\'\"]*(\w+)[\s\'\"]*\]/`
+
+### Security Through Simplicity
+
+13. **Clean, auditable code**: No magic, no hidden behavior
+    - Every array access should be visible and traceable
+    - Explicit depth handling over dynamic loops
+    - Simple code prevents security vulnerabilities
+
+14. **Zero tolerance for waste**: Every character in code must have a purpose
+    - Remove redundant checks
+    - Eliminate duplicate branches
+    - Optimize regex patterns
+
+### Target: 1,000,000 Sites
+
+When code runs on 1,000,000 sites:
+- Every microsecond matters
+- Every redundant operation costs real money
+- Clean code prevents security incidents
+- Simple code is maintainable code
+
+**Remember**: You're a 10x PHP developer. Act like one. Know your language. Optimize ruthlessly. Write clean, fast, secure code.
+
 ## High-Level Architecture
 
 This is **Djebel**, a PHP-based CMS framework (v0.0.1) with a plugin-based architecture.
