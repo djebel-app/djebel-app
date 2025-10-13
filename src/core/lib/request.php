@@ -290,6 +290,20 @@ class Dj_App_Request {
     }
 
     /**
+     * Gets the request path relative to web path (URL after web path is stripped).
+     * This value is already calculated during parseRequest().
+     * Example: For URL /myapp/en/docs/intro with web path /myapp, returns /en/docs/intro
+     * @return string Relative path (trimmed_url)
+     */
+    public function getRelativeWebPath()
+    {
+        $relative_path = empty($this->request_data['trimmed_url']) ? '/' : $this->request_data['trimmed_url'];
+        $relative_path = Dj_App_Hooks::applyFilter('app.core.request.relative_web_path', $relative_path);
+
+        return $relative_path;
+    }
+
+    /**
      * Magic method to handle dynamic method calls.
      * @param string $name
      * @param array $arguments
