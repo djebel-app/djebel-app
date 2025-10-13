@@ -386,4 +386,49 @@ class Dj_App_String_Util
 
         return $result;
     }
+
+    /**
+     * Normalize newlines to Unix-style (\n) and remove null bytes
+     * Dj_App_String_Util::normalizeNewLines();
+     *
+     * Converts all newlines to \n (Unix/Linux style):
+     * - \r\n (Windows/CRLF) -> \n
+     * - \r (old Mac/CR) -> \n
+     * - Removes \0 (null bytes) for security
+     *
+     * This is useful for:
+     * - Consistent text processing across platforms
+     * - Parsing content that may come from different OS
+     * - Security: removing null bytes that can cause issues
+     *
+     * @param string $str The input string to normalize
+     * @return string Normalized string with Unix newlines and no null bytes
+     *
+     * Example:
+     *   $windows_text = "Line 1\r\nLine 2\r\nLine 3";
+     *   $normalized = Dj_App_String_Util::normalizeNewLines($windows_text);
+     *   // Result: "Line 1\nLine 2\nLine 3"
+     *
+     *   $mixed_text = "Line 1\r\nLine 2\rLine 3\nLine 4";
+     *   $normalized = Dj_App_String_Util::normalizeNewLines($mixed_text);
+     *   // Result: "Line 1\nLine 2\nLine 3\nLine 4"
+     *
+     *   $with_nulls = "Text\0with\0nulls\r\nand\r\nlines";
+     *   $normalized = Dj_App_String_Util::normalizeNewLines($with_nulls);
+     *   // Result: "Textwithnulls\nand\nlines"
+     */
+    public static function normalizeNewLines($str)
+    {
+        if (empty($str)) {
+            return '';
+        }
+
+        // Remove null bytes (security)
+        $str = str_replace("\0", '', $str);
+
+        // Normalize line endings (order matters: \r\n must be replaced before \r)
+        $str = str_replace(["\r\n", "\r"], "\n", $str);
+
+        return $str;
+    }
 }

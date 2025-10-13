@@ -413,4 +413,110 @@ class String_Util_Test extends TestCase {
 
         $this->assertEquals('#$%', $result);
     }
+
+    public function testNormalizeNewLinesWithWindowsLineEndings()
+    {
+        $text = "Line 1\r\nLine 2\r\nLine 3";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Line 1\nLine 2\nLine 3", $result);
+        $this->assertStringNotContainsString("\r", $result);
+    }
+
+    public function testNormalizeNewLinesWithOldMacLineEndings()
+    {
+        $text = "Line 1\rLine 2\rLine 3";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Line 1\nLine 2\nLine 3", $result);
+        $this->assertStringNotContainsString("\r", $result);
+    }
+
+    public function testNormalizeNewLinesWithUnixLineEndings()
+    {
+        $text = "Line 1\nLine 2\nLine 3";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Line 1\nLine 2\nLine 3", $result);
+    }
+
+    public function testNormalizeNewLinesWithMixedLineEndings()
+    {
+        $text = "Line 1\r\nLine 2\rLine 3\nLine 4";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Line 1\nLine 2\nLine 3\nLine 4", $result);
+        $this->assertStringNotContainsString("\r", $result);
+    }
+
+    public function testNormalizeNewLinesWithNullBytes()
+    {
+        $text = "Text\0with\0nulls\r\nand\r\nlines";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Textwithnulls\nand\nlines", $result);
+        $this->assertStringNotContainsString("\0", $result);
+        $this->assertStringNotContainsString("\r", $result);
+    }
+
+    public function testNormalizeNewLinesWithEmptyString()
+    {
+        $result = Dj_App_String_Util::normalizeNewLines('');
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizeNewLinesWithNull()
+    {
+        $result = Dj_App_String_Util::normalizeNewLines(null);
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizeNewLinesWithNoNewLines()
+    {
+        $text = "Just a simple text with no line endings";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals($text, $result);
+    }
+
+    public function testNormalizeNewLinesWithMultipleConsecutiveNewLines()
+    {
+        $text = "Line 1\r\n\r\nLine 2\n\n\nLine 3";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Line 1\n\nLine 2\n\n\nLine 3", $result);
+    }
+
+    public function testNormalizeNewLinesWithOnlyNewLines()
+    {
+        $text = "\r\n\r\n\r\n";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("\n\n\n", $result);
+    }
+
+    public function testNormalizeNewLinesWithTrailingAndLeadingNewLines()
+    {
+        $text = "\r\nStart\r\nMiddle\r\nEnd\r\n";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("\nStart\nMiddle\nEnd\n", $result);
+    }
+
+    public function testNormalizeNewLinesWithSpecialCharacters()
+    {
+        $text = "Special!@#$%\r\nChars&*()\rEverywhere\nTest";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $this->assertEquals("Special!@#$%\nChars&*()\nEverywhere\nTest", $result);
+    }
+
+    public function testNormalizeNewLinesRealWorldExample()
+    {
+        $text = "---\r\ntitle: Test\r\nauthor: John\r\n---\r\n# Heading\r\n\r\nContent here.";
+        $result = Dj_App_String_Util::normalizeNewLines($text);
+
+        $expected = "---\ntitle: Test\nauthor: John\n---\n# Heading\n\nContent here.";
+        $this->assertEquals($expected, $result);
+    }
 }
