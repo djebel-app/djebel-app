@@ -69,12 +69,24 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
 
 7. **ALWAYS use curly braces `{}`** - even for single-line if statements
 
-8. **NO nested function calls**:
+8. **NO nested function calls** and **NO complex ternary operators**:
    - ❌ WRONG: `formatKey(substr($key, 0, $pos))`
-   - ✅ CORRECT: Split into separate lines:
+   - ❌ WRONG: `$keys[] = strpos($x, '__SLASH__') !== false ? str_replace('__SLASH__', '/', $x) : formatKey($x);`
+   - ✅ CORRECT: Use local variables and clear if/else:
    ```php
    $main_key = substr($key, 0, $pos);
    $main_key = Dj_App_String_Util::formatKey($main_key);
+
+   // OR for conditionals:
+   $key2 = $matches[2];
+
+   if (strpos($key2, '__SLASH__') !== false) {
+       $key2 = str_replace('__SLASH__', '/', $key2);
+   } else {
+       $key2 = Dj_App_String_Util::formatKey($key2);
+   }
+
+   $keys[] = $key2;
    ```
 
 9. **Proper spacing**: Add blank line after variable assignments before if blocks
@@ -84,32 +96,59 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
    if ($bracket_pos !== false) {
    ```
 
+10. **Blank line before return statements**: When a block has complex logic, add blank line before return for clarity
+    ```php
+    if (preg_match('/pattern/', $key, $matches)) {
+        $main_key = $matches[1];
+        $main_key = Dj_App_String_Util::formatKey($main_key);
+
+        if (!empty($section)) {
+            $data[$section][$main_key] = [];
+            $data[$section][$main_key][] = $val;
+        } else {
+            $data[$main_key] = [];
+            $data[$main_key][] = $val;
+        }
+
+        return $data;  // Blank line above for visual clarity
+    }
+    ```
+
 ### Professional Patterns
 
-10. **ALWAYS check function return values**:
+11. **ALWAYS check function return values**:
     ```php
     if (preg_match('/pattern/', $key, $matches)) {
         // Use $matches here
     }
     ```
 
-11. **NO references (`&`) anywhere**:
+12. **NO references (`&`) anywhere**:
     - Not in function parameters
     - Not in variable assignments
     - Explicit code is secure code - easy to audit and impossible to hack
 
-12. **Support whitespace and quotes in user input**:
+13. **Support whitespace and quotes in user input**:
     - Use `[\s\'\"]*` in regex patterns for brackets
     - Example: `/\[[\s\'\"]*(\w+)[\s\'\"]*\]/`
 
+14. **Comment complex logic BEFORE the code**:
+    - Format: `// [Action]: [explanation]`
+    - Explain WHAT the code does and WHY
+    - Example:
+    ```php
+    // Handle array notation with auto-increment: var[] = value
+    if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
+    ```
+
 ### Security Through Simplicity
 
-13. **Clean, auditable code**: No magic, no hidden behavior
+15. **Clean, auditable code**: No magic, no hidden behavior
     - Every array access should be visible and traceable
     - Explicit depth handling over dynamic loops
     - Simple code prevents security vulnerabilities
 
-14. **Zero tolerance for waste**: Every character in code must have a purpose
+16. **Zero tolerance for waste**: Every character in code must have a purpose
     - Remove redundant checks
     - Eliminate duplicate branches
     - Optimize regex patterns
