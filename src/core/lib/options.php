@@ -79,7 +79,7 @@ class Dj_App_Options implements ArrayAccess {
             $lines = $lines_or_buff;
         } elseif (is_scalar($lines_or_buff)) {
             $lines_or_buff = (string) $lines_or_buff;
-            $lines_or_buff = str_replace(["\r\n", "\r"], "\n", $lines_or_buff);
+            $lines_or_buff = Dj_App_String_Util::normalizeNewLines($lines_or_buff);
             $lines = explode("\n", $lines_or_buff);
         } else {
             return $data;
