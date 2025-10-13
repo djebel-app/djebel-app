@@ -35,6 +35,24 @@ It's about **solving real business problems, fast**.
 - **Speed to market beats perfect architecture** — Get solutions deployed quickly
 - **Easy plugin creation** — No need to learn 100 different patterns and conventions
 
+## 💻 Development Philosophy: 10x Performance Engineering
+
+Djebel is developed by **10x PHP engineers** who live and breathe:
+
+- **Performance optimization** — Every line of code is scrutinized for speed
+- **Algorithm efficiency** — No wasteful operations, no redundant checks
+- **Deep PHP knowledge** — Understanding language internals and behavior
+- **Hyper-efficient code** — Simple, clean, auditable implementations
+
+### Our Standards:
+- **Zero tolerance for waste** — Removing redundant regex characters (`\w` already includes `_`!)
+- **No magic, no references** — Clean, explicit code that can't be hacked
+- **Professional patterns** — Always check function returns (like `preg_match`)
+- **Speed-first decisions** — Explicit depth handling beats recursive calls
+- **Security through simplicity** — Easy-to-audit code prevents vulnerabilities
+
+**Result:** Djebel's core is optimized at the CPU instruction level. When you're targeting 1,000,000 sites, every microsecond counts.
+
 ## 🔌 Plugin Development Made Simple
 
 Djebel's plugin system is designed to be approachable and powerful. Creating a plugin is as simple as writing a PHP function with a proper header.

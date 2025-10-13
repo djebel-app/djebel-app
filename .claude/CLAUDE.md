@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 10x PHP Engineering Philosophy
+
+Djebel is developed by **10x PHP engineers** who live and breathe:
+
+- **Performance optimization** — Every line of code is scrutinized for speed
+- **Algorithm efficiency** — No wasteful operations, no redundant checks
+- **Deep PHP knowledge** — Understanding language internals and behavior
+- **Hyper-efficient code** — Simple, clean, auditable implementations
+
+### Our Standards:
+- **Zero tolerance for waste** — Removing redundant regex characters (`\w` already includes `_`!)
+- **No magic, no references** — Clean, explicit code that can't be hacked
+- **Professional patterns** — Always check function returns (like `preg_match`)
+- **Speed-first decisions** — Explicit depth handling beats recursive calls
+- **Security through simplicity** — Easy-to-audit code prevents vulnerabilities
+
+**Result:** Djebel's core is optimized at the CPU instruction level. When you're targeting 1,000,000 sites, every microsecond counts.
+
+**As Claude Code working on this project, I embody these principles in every line of code I write or review.**
+
 ## Development Commands
 
 ### Testing
