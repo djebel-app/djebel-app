@@ -65,7 +65,10 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
 
 ### Code Quality Rules
 
-6. **NEVER use `isset()`** - use `empty()` instead per Djebel standards
+6. **Use `isset()` ONLY for array key existence checks** - when checking if an array element exists, use `isset()` as it's the fastest method. For getting values or checking if a field has data, use `empty()` instead:
+   - ✅ CORRECT: `if (!isset($data[$key]))` - checking array key existence
+   - ✅ CORRECT: `if (empty($options->field))` - checking if field has data
+   - ❌ WRONG: `if (isset($options->field) && !empty($options->field))` - redundant!
 
 7. **ALWAYS use curly braces `{}`** - even for single-line if statements
 
