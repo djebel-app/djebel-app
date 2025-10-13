@@ -474,29 +474,29 @@ class Dj_App_Options implements ArrayAccess, Countable {
                 // Fast explicit level handling - ensure each level is an array
                 $level = count($keys);
 
-                if ($level == 2) {
-                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
-                        $data[$keys[0]] = [];
-                    }
-                    $data[$keys[0]][$keys[1]] = $val;
-                } elseif ($level == 3) {
-                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
-                        $data[$keys[0]] = [];
-                    }
-                    if (empty($data[$keys[0]][$keys[1]]) || !is_array($data[$keys[0]][$keys[1]])) {
+                // Ensure all parent levels exist
+                if (!isset($data[$keys[0]])) {
+                    $data[$keys[0]] = [];
+                }
+
+                if ($level >= 3) {
+                    if (!isset($data[$keys[0]][$keys[1]])) {
                         $data[$keys[0]][$keys[1]] = [];
                     }
-                    $data[$keys[0]][$keys[1]][$keys[2]] = $val;
-                } elseif ($level == 4) {
-                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
-                        $data[$keys[0]] = [];
-                    }
-                    if (empty($data[$keys[0]][$keys[1]]) || !is_array($data[$keys[0]][$keys[1]])) {
-                        $data[$keys[0]][$keys[1]] = [];
-                    }
-                    if (empty($data[$keys[0]][$keys[1]][$keys[2]]) || !is_array($data[$keys[0]][$keys[1]][$keys[2]])) {
+                }
+
+                if ($level == 4) {
+                    if (!isset($data[$keys[0]][$keys[1]][$keys[2]])) {
                         $data[$keys[0]][$keys[1]][$keys[2]] = [];
                     }
+                }
+
+                // Assign value based on level
+                if ($level == 2) {
+                    $data[$keys[0]][$keys[1]] = $val;
+                } elseif ($level == 3) {
+                    $data[$keys[0]][$keys[1]][$keys[2]] = $val;
+                } elseif ($level == 4) {
                     $data[$keys[0]][$keys[1]][$keys[2]][$keys[3]] = $val;
                 }
 
