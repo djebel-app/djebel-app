@@ -71,13 +71,22 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
 
 8. **NO nested function calls** and **NO complex ternary operators**:
    - ❌ WRONG: `formatKey(substr($key, 0, $pos))`
+   - ❌ WRONG: `foreach (explode('.', $key) as $part)`
    - ❌ WRONG: `$keys[] = strpos($x, '__SLASH__') !== false ? str_replace('__SLASH__', '/', $x) : formatKey($x);`
    - ✅ CORRECT: Use local variables and clear if/else:
    ```php
+   // Function calls
    $main_key = substr($key, 0, $pos);
    $main_key = Dj_App_String_Util::formatKey($main_key);
 
-   // OR for conditionals:
+   // Loops
+   $parts = explode('.', $matches[1]);
+
+   foreach ($parts as $part) {
+       $keys[] = Dj_App_String_Util::formatKey($part);
+   }
+
+   // Conditionals
    $key2 = $matches[2];
 
    if (strpos($key2, '__SLASH__') !== false) {
