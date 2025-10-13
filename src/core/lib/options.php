@@ -406,6 +406,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
             $val = substr($val, 0, $pos);
         }
 
+        // The values may have quotes
         $val = Dj_App_String_Util::trim($val, '\'"');
 
         // Remove spaces from key
