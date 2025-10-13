@@ -5,9 +5,10 @@
  */
 
 class Dj_App_Options implements ArrayAccess {
-    protected $data = null;
+    const SECTION_SEP = '::';
+
+    protected $data = [];
     protected $extra_opts_data = [];
-    protected $current_section = '';
 
     private function __construct() {}
 
@@ -79,6 +80,7 @@ class Dj_App_Options implements ArrayAccess {
             $lines = $lines_or_buff;
         } elseif (is_scalar($lines_or_buff)) {
             $lines_or_buff = (string) $lines_or_buff;
+            $lines_or_buff = str_replace("\0", '', $lines_or_buff);
             $lines_or_buff = Dj_App_String_Util::normalizeNewLines($lines_or_buff);
             $lines = explode("\n", $lines_or_buff);
         } else {
@@ -86,6 +88,9 @@ class Dj_App_Options implements ArrayAccess {
         }
 
         $lines = array_filter( $lines );
+
+        // Pre-process lines to add section prefix
+        $lines = $this->preprocessLines($lines);
 
         foreach ($lines as $line) {
             $res = $this->parseLine($line);
@@ -98,6 +103,45 @@ class Dj_App_Options implements ArrayAccess {
         }
 
         return $data;
+    }
+
+    /**
+     * Pre-process lines to prefix each with its section
+     * @param array $lines
+     * @return array
+     */
+    private function preprocessLines($lines) {
+        $current_section = '';
+        $processed_lines = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            $first_char = substr($line, 0, 1);
+
+            // Skip empty lines and comments
+            if (empty($line)
+                || $first_char == '#'
+                || $first_char == ';'
+                || ($first_char == '/' && substr($line, 1, 1) == '/')
+            ) {
+                continue;
+            }
+
+            // Check if this is a section header
+            if ($first_char == '[' && substr($line, -1) == ']') {
+                $current_section = Dj_App_String_Util::trim($line, '[]');
+                continue;
+            }
+
+            // Prefix line with section if we have one
+            if (!empty($current_section)) {
+                $line = $current_section . self::SECTION_SEP . $line;
+            }
+
+            $processed_lines[] = $line;
+        }
+
+        return $processed_lines;
     }
 
     /**
@@ -207,23 +251,31 @@ class Dj_App_Options implements ArrayAccess {
     public function __get($name) {
         // Use current data - don't call load() to avoid overriding test data
         $data = $this->data;
-        
+
         // Check if the name exists as a direct key in the data
         if (isset($data[$name])) {
             $val = $data[$name];
-            
+
             // If the value is an array, return a new options instance for nested access
             if (is_array($val)) {
                 $nested_options = new static();
-                $nested_options->setData($val);
+                $nested_options->data = $val;
                 return $nested_options;
             }
-            
+
             return $val;
         }
-        
+
         // Fallback to the get() method for other cases
-        return $this->get($name);
+        $val = $this->get($name);
+
+        if (empty($val)) {
+            $empty_options = new static();
+            $empty_options->data = [];
+            return $empty_options;
+        }
+
+        return $val;
     }
 
     public function __set($key, $val) {
@@ -242,6 +294,22 @@ class Dj_App_Options implements ArrayAccess {
     }
 
     /**
+     * Convert to string when Options object is used in string context
+     * @return string
+     */
+    public function __toString() {
+        if (empty($this->data)) {
+            return '';
+        }
+
+        if (is_scalar($this->data)) {
+            return (string) $this->data;
+        }
+
+        return '';
+    }
+
+    /**
      * Parses a line from INI file supporting sections and array notation
      * @param string $line
      * @return array
@@ -249,26 +317,14 @@ class Dj_App_Options implements ArrayAccess {
     public function parseLine($line) {
         $data = [];
 
-        $line = empty($line) ? '' : trim($line);
-        $first_char = substr($line, 0, 1);
+        // Extract section prefix if present
+        $section = '';
+        $prefix_pos = strpos($line, self::SECTION_SEP);
 
-        // empty or single line comments - check these first as they're simpler operations
-        if (empty($line) 
-            || $first_char == '#' 
-            || $first_char == ';' 
-            || ($first_char == '/' && substr($line, 1, 1) == '/')
-        ) {
-            return [];
-        }
-
-        $line = str_replace("\0", '', $line); // no null bytes
-
-        // Check for section after eliminating empty/comment lines
-        if ($first_char == '[' && substr($line, -1) == ']') {
-            $section_content = substr($line, 1, -1);
-            $section_content = trim($section_content);
-            $this->current_section = $section_content;
-            return [];
+        if ($prefix_pos !== false) {
+            $section = substr($line, 0, $prefix_pos);
+            $sep_len = strlen(self::SECTION_SEP);
+            $line = substr($line, $prefix_pos + $sep_len);
         }
 
         $eq_pos = strpos($line, '=');
@@ -283,115 +339,111 @@ class Dj_App_Options implements ArrayAccess {
         // Handle comments in values
         $pos = strpos($val, '#');
 
-        if ($pos !== false && substr($val, $pos - 1, 1) != "\\" ) {
+        if ($pos !== false && substr($val, $pos - 1, 1) !== "\\" ) {
             $val = substr($val, 0, $pos);
         }
 
-        $val = trim($val, '\'" ');
+        $val = Dj_App_String_Util::trim($val, '\'"');
 
-        // Only run regex if we have special characters
-        if (strpos($key, '[') !== false) {
-            $key = preg_replace('/[^\w\[\]\.\-\'\"]/si', '', $key);
-            
-            // Handle array notation with auto-increment: var[] = value
-            if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
-                $main_key = $matches[1];
+        // Remove spaces from key
+        $key = str_replace(' ', '', $key);
+
+        // Normalize bracket notation to dot notation
+        $bracket_pos = strpos($key, '[');
+
+        if ($bracket_pos !== false) {
+            // Handle slashes in bracket keys first
+            $has_slash = strpos($key, '/');
+
+            if ($has_slash !== false) {
+                $key = str_replace('/', '__SLASH__', $key);
+            }
+
+            // Check for auto-increment: var[]
+            $empty_bracket_pos = strpos($key, '[]');
+
+            if ($empty_bracket_pos !== false) {
+                // Auto-increment: var[] = value
+                $main_key = substr($key, 0, $empty_bracket_pos);
                 $main_key = Dj_App_String_Util::formatKey($main_key);
-                
-                if (!empty($this->current_section)) {
-                    $data[$this->current_section][$main_key] = isset($data[$this->current_section][$main_key]) ? 
-                        (array)$data[$this->current_section][$main_key] : [];
-                    $data[$this->current_section][$main_key][] = $val;
+
+                if ($section) {
+                    $data[$section][$main_key] = empty($data[$section][$main_key]) ? [] : (array) $data[$section][$main_key];
+                    $data[$section][$main_key][] = $val;
                 } else {
-                    $data[$main_key] = isset($data[$main_key]) ? (array)$data[$main_key] : [];
+                    $data[$main_key] = empty($data[$main_key]) ? [] : (array) $data[$main_key];
                     $data[$main_key][] = $val;
                 }
-                
+
                 return $data;
             }
-            
-            // Handle array notation with index: var[key] = value
-            if (preg_match('/^([\w\-]+)\[[\s\'\"]*(\w+)[\s\'\"]*\](?:\[[\s\'\"]*(\w*)[\s\'\"]*\])?$/si', $key, $matches)) {
-                $main_key = $matches[1];
-                $main_key = Dj_App_String_Util::formatKey($main_key);
 
-                $sub_key = $matches[2];
-                $sub_key = Dj_App_String_Util::formatKey($sub_key);
+            // Convert bracket notation to dot notation: ][, [, ] all become dots
+            // site2[id] → site2.id. → site2.id (after trim)
+            // site2[id][name] → site2[id.name] → site2.id.name. → site2.id.name (after trim)
+            $key = str_replace(['][', '[', ']'], '.', $key);
+            $key = Dj_App_String_Util::trim($key, '.[]');
+        }
 
-                $third_key = !empty($matches[3]) ? $matches[3] : null;
+        // Dot notation: site.title
+        $dot_pos = strpos($key, '.');
 
-                if ($third_key !== null) {
-                    $third_key = Dj_App_String_Util::formatKey($third_key);
-                }
-                
-                if (!empty($this->current_section)) {
-                    if ($third_key !== null) {
-                        if (!isset($data[$this->current_section][$main_key])) {
-                            $data[$this->current_section][$main_key] = [];
-                        }
-                        if (!isset($data[$this->current_section][$main_key][$sub_key])) {
-                            $data[$this->current_section][$main_key][$sub_key] = [];
-                        }
-                        $data[$this->current_section][$main_key][$sub_key][$third_key] = $val;
-                    } else {
-                        if (!isset($data[$this->current_section][$main_key])) {
-                            $data[$this->current_section][$main_key] = [];
-                        }
-                        $data[$this->current_section][$main_key][$sub_key] = $val;
-                    }
-                } else {
-                    if ($third_key !== null) {
-                        if (!isset($data[$main_key])) {
-                            $data[$main_key] = [];
-                        }
-                        if (!isset($data[$main_key][$sub_key])) {
-                            $data[$main_key][$sub_key] = [];
-                        }
-                        $data[$main_key][$sub_key][$third_key] = $val;
-                    } else {
-                        if (!isset($data[$main_key])) {
-                            $data[$main_key] = [];
-                        }
-                        $data[$main_key][$sub_key] = $val;
-                    }
-                }
-                
-                return $data;
-            }
-        } elseif (strpos($key, '.') !== false) {
+        if ($dot_pos !== false) {
+            // Sanitize key: remove invalid characters, keep only word chars, dots, and hyphens
             $key = preg_replace('/[^\w\.\-]/si', '', $key);
-            $parts = explode('.', $key);
+            $keys = explode('.', $key);
 
-            if (count($parts) >= 2) {
-                $main_key = array_shift($parts);
-                $main_key = Dj_App_String_Util::formatKey($main_key);
-
-                $sub_key = array_shift($parts);
-                $sub_key = Dj_App_String_Util::formatKey($sub_key);
-                
-                if (!empty($this->current_section)) {
-                    if (!isset($data[$this->current_section][$main_key])) {
-                        $data[$this->current_section][$main_key] = [];
+            if (count($keys) >= 2) {
+                foreach ($keys as $i => $k) {
+                    if (strpos($k, '__SLASH__') !== false) {
+                        $keys[$i] = str_replace('__SLASH__', '/', $k);
+                    } else {
+                        $keys[$i] = Dj_App_String_Util::formatKey($k);
                     }
-                    $data[$this->current_section][$main_key][$sub_key] = $val;
-                } else {
-                    if (!isset($data[$main_key])) {
-                        $data[$main_key] = [];
-                    }
-                    $data[$main_key][$sub_key] = $val;
                 }
-                
+
+                // Prepend section to keys if present
+                if ($section) {
+                    array_unshift($keys, $section);
+                }
+
+                // Fast explicit level handling - ensure each level is an array
+                $level = count($keys);
+
+                if ($level == 2) {
+                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
+                        $data[$keys[0]] = [];
+                    }
+                    $data[$keys[0]][$keys[1]] = $val;
+                } elseif ($level == 3) {
+                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
+                        $data[$keys[0]] = [];
+                    }
+                    if (empty($data[$keys[0]][$keys[1]]) || !is_array($data[$keys[0]][$keys[1]])) {
+                        $data[$keys[0]][$keys[1]] = [];
+                    }
+                    $data[$keys[0]][$keys[1]][$keys[2]] = $val;
+                } elseif ($level == 4) {
+                    if (empty($data[$keys[0]]) || !is_array($data[$keys[0]])) {
+                        $data[$keys[0]] = [];
+                    }
+                    if (empty($data[$keys[0]][$keys[1]]) || !is_array($data[$keys[0]][$keys[1]])) {
+                        $data[$keys[0]][$keys[1]] = [];
+                    }
+                    if (empty($data[$keys[0]][$keys[1]][$keys[2]]) || !is_array($data[$keys[0]][$keys[1]][$keys[2]])) {
+                        $data[$keys[0]][$keys[1]][$keys[2]] = [];
+                    }
+                    $data[$keys[0]][$keys[1]][$keys[2]][$keys[3]] = $val;
+                }
+
                 return $data;
             }
         }
 
-        // Simple key cleanup for non-special keys
-        $key = preg_replace('/[^\w\-]/si', '', $key);
         $key = Dj_App_String_Util::formatKey($key);
 
-        // Handle regular keys as scalar values
-        if (!empty($this->current_section)) {
-            $data[$this->current_section][$key] = $val;
+        if ($section) {
+            $data[$section][$key] = $val;
         } else {
             $data[$key] = $val;
         }
@@ -400,14 +452,13 @@ class Dj_App_Options implements ArrayAccess {
     }
 
     /**
-     * This clears the section and data. Useful for testing
+     * This clears the data. Useful for testing
      * @return void
      */
     public function clear()
     {
         $this->data = null;
         $this->extra_opts_data = [];
-        $this->current_section = '';
     }
 
     /**
@@ -419,7 +470,6 @@ class Dj_App_Options implements ArrayAccess {
     {
         $this->data = $data;
         $this->extra_opts_data = [];
-        $this->current_section = '';
     }
 
     /**
