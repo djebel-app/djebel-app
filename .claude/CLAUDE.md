@@ -150,14 +150,74 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
     if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
     ```
 
+15. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`
+    - ❌ WRONG: Calling `load()` inside `__get()` method
+    - ❌ WRONG: Calling `setData()` inside `__get()` method
+    - ❌ WRONG: Creating new objects with `new static()` inside `__get()`
+    - ❌ WRONG: Type checking with `is_array()`, `is_object()`, etc. inside `__get()`
+    - ✅ CORRECT: `__get()` only reads and returns existing data
+    - ✅ CORRECT: Simple return: `return $data[$name]` or `return ''`
+    - Getters should be pure functions without state modifications, type checks, or object creation
+
+### Options Class Pattern
+
+**Use get() method with dot notation** - NOT property chaining!
+
+Options is a **singleton** - don't create new instances unnecessarily. The `get()` method supports dot notation for nested keys:
+
+```php
+// ✅ CORRECT: Use get() method with dot notation
+$site_url = $options_obj->get('site.site_url');
+$meta_title = $options_obj->get('meta.default.title');
+
+// ❌ WRONG: Property chaining creates warnings when keys don't exist
+$site_url = $options_obj->site->site_url;  // WARNING if 'site' doesn't exist!
+```
+
+The `__get()` method is SIMPLE - just return the value:
+
+```php
+public function __get($name) {
+    $data = $this->data;
+
+    if (!empty($data) && isset($data[$name])) {
+        return $data[$name];  // Return the value directly
+    }
+
+    return '';  // Return empty string if not found
+}
+```
+
+Combined with `__toString()` for string contexts:
+```php
+public function __toString() {
+    if (empty($this->data)) {
+        return '';
+    }
+
+    if (is_scalar($this->data)) {
+        return (string) $this->data;
+    }
+
+    return '';
+}
+```
+
+**Why this is correct**:
+- ✅ NO type checking - just return the value
+- ✅ NO object creation - respects singleton pattern
+- ✅ NO side effects - pure getter
+- ✅ Use `get()` method for nested access - it's designed for dot notation!
+- ✅ Clean, simple, ZERO hacks
+
 ### Security Through Simplicity
 
-15. **Clean, auditable code**: No magic, no hidden behavior
+16. **Clean, auditable code**: No magic, no hidden behavior
     - Every array access should be visible and traceable
     - Explicit depth handling over dynamic loops
     - Simple code prevents security vulnerabilities
 
-16. **Zero tolerance for waste**: Every character in code must have a purpose
+17. **Zero tolerance for waste**: Every character in code must have a purpose
     - Remove redundant checks
     - Eliminate duplicate branches
     - Optimize regex patterns
