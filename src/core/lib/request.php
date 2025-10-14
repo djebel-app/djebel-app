@@ -295,7 +295,7 @@ class Dj_App_Request {
      * Example: For URL /myapp/en/docs/intro with web path /myapp, returns /en/docs/intro
      * @return string Relative path (trimmed_url)
      */
-    public function getRelativeWebPath()
+    public function getRelWebPath()
     {
         $relative_path = empty($this->request_data['trimmed_url']) ? '/' : $this->request_data['trimmed_url'];
         $relative_path = Dj_App_Hooks::applyFilter('app.core.request.relative_web_path', $relative_path);
