@@ -211,13 +211,13 @@ class String_Util_Test extends TestCase {
     public function testFormatStringIdWithEmpty()
     {
         $result = Dj_App_String_Util::formatStringId('');
-        $this->assertFalse($result);
+        $this->assertEmpty($result);
     }
 
     public function testFormatStringIdWithNull()
     {
         $result = Dj_App_String_Util::formatStringId(null);
-        $this->assertFalse($result);
+        $this->assertEmpty($result);
     }
 
     public function testFormatStringIdWithUppercaseFlag()
