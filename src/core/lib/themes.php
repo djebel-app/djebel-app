@@ -266,11 +266,14 @@ class Dj_App_Themes {
         $page_file_candiates = Dj_App_Hooks::applyFilter('app.themes.current_theme_page_file_candidates', $page_file_candiates, $ctx);
 
         // Remove duplicate candidates while preserving order
-        if (count($page_file_candiates) > 0) {
-            $page_file_candiates = array_unique($page_file_candiates);
-        }
+        $page_file_candiates = array_unique($page_file_candiates);
 
         foreach ($page_file_candiates as $loop_file) {
+            // If path doesn't start with /, treat as relative and prepend pages_dir
+            if (Dj_App_String_Util::getFirstChar($loop_file) !== '/') {
+                $loop_file = $pages_dir . '/' . $loop_file;
+            }
+
             $loop_file = Dj_App_Hooks::applyFilter('app.themes.current_theme.page_content_file', $loop_file, $ctx);
 
             if (empty($loop_file)) {
