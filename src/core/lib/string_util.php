@@ -424,4 +424,46 @@ class Dj_App_String_Util
 
         return $str;
     }
+
+    /**
+     * Collapse consecutive duplicate characters in a string
+     * Dj_App_String_Util::singlefy();
+     *
+     * Examples:
+     *   singlefy('app///core', '/') => 'app/core'
+     *   singlefy('my___hook', '_') => 'my_hook'
+     *   singlefy('app///core___hook', ['/', '_']) => 'app/core_hook'
+     *   singlefy('test', '/')  => 'test' (no change if char not found)
+     *   singlefy('', '/') => '' (empty string returns empty)
+     *
+     * @param string $str The input string
+     * @param string|array $chars Character(s) to collapse - can be a string or array
+     * @return string String with consecutive duplicates collapsed to single occurrence
+     */
+    public static function singlefy($str, $chars) {
+        if (empty($str) || empty($chars)) {
+            return $str;
+        }
+
+        // Cast to array if it's a string
+        if (is_string($chars)) {
+            $chars = str_split($chars);
+        }
+
+        // Collapse consecutive duplicates for each character
+        foreach ($chars as $char) {
+            $double = $char . $char;
+
+            // Check if double exists before processing
+            if (strpos($str, $double) === false) {
+                continue;
+            }
+
+            while (strpos($str, $double) !== false) {
+                $str = str_replace($double, $char, $str);
+            }
+        }
+
+        return $str;
+    }
 }
