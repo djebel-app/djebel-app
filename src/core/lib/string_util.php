@@ -454,11 +454,6 @@ class Dj_App_String_Util
         foreach ($chars as $char) {
             $double = $char . $char;
 
-            // Check if double exists before processing
-            if (strpos($str, $double) === false) {
-                continue;
-            }
-
             while (strpos($str, $double) !== false) {
                 $str = str_replace($double, $char, $str);
             }
