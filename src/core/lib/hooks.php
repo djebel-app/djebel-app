@@ -214,11 +214,14 @@ class Dj_App_Hooks {
         // Handle null or empty values
         if (empty($hook_name)) {
             return '';
+        } elseif (!is_scalar($hook_name)) {
+            throw new Dj_App_Exception("Invalid hook name. It must be a scalar", [ 'hook_name' => $hook_name ] );
         }
-        
-        $hook_name = preg_replace( '#^[\s\d_\-/:]+#si', '', $hook_name );
-        $hook_name = preg_replace( '#[\s\d_\-/]+$#si', '', $hook_name );
-        $hook_name = preg_replace( '#\h+#si', '/', $hook_name );
+
+        $hook_name = substr($hook_name, 0, 100);
+        $hook_name = preg_replace( '#^[\s\d_\-/:]+#si', '', $hook_name ); // leading
+        $hook_name = preg_replace( '#[\s\d_\-/]+$#si', '', $hook_name ); // trailing
+        $hook_name = preg_replace( '#\s+#si', '/', $hook_name );
         $hook_name = preg_replace( '#[/:\.]+#si', '/', $hook_name ); // : -> becomes /
         $hook_name = preg_replace( '#[^\w/:]+#si', '_', $hook_name );
         $hook_name = preg_replace( '#_+#si', '_', $hook_name );
@@ -226,7 +229,7 @@ class Dj_App_Hooks {
         $hook_name = trim($hook_name, '_/');
 
         // if we have app.plugins.my-plugin.action -> app.plugin.my_plugin.action
-        if (strpos($hook_name, 's') !== false) { // plural?
+        if (strpos($hook_name, 's') !== false) { // plural? - make it singular
             $hook_name = preg_replace( '#([\.\-])(core|plugin|theme|app|page)s?([\.\-])#si', '${1}${2}${3}', $hook_name ); // single
         }
 
