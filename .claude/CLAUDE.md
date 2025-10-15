@@ -108,7 +108,31 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
    if ($bracket_pos !== false) {
    ```
 
-10. **Blank line before return statements**: When a block has complex logic, add blank line before return for clarity
+10. **Use local variables for array operations** - NEVER do inline array operations with str_replace:
+    - ❌ WRONG: `str_replace(['/plugins/', '/themes/'], ['/plugin/', '/theme/'], $str)` (inline arrays)
+    - ❌ WRONG: `str_replace(array_keys($map), array_values($map), $str)` (inline function calls)
+    - ❌ WRONG: `strpbrk($str, implode('', $chars))` (inline implode)
+    - ✅ CORRECT: Use local variables for clarity and performance:
+    ```php
+    // Define the mapping once
+    $replace_vars = [
+        '/plugins/' => '/plugin/',
+        '/themes/' => '/theme/',
+        '/apps/' => '/app/',
+    ];
+    $hook_name = str_replace(array_keys($replace_vars), array_values($replace_vars), $hook_name);
+    ```
+    ```php
+    // For strpbrk optimization
+    $separator_chars = [' ', "\t", "\n", "\r", ':', '.'];
+    $separator_chars_str = implode('', $separator_chars);
+
+    if (strpbrk($hook_name, $separator_chars_str) !== false) {
+        $hook_name = str_replace($separator_chars, '/', $hook_name);
+    }
+    ```
+
+11. **Blank line before return statements**: When a block has complex logic, add blank line before return for clarity
     ```php
     if (preg_match('/pattern/', $key, $matches)) {
         $main_key = $matches[1];
@@ -126,25 +150,31 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
     }
     ```
 
+12. **Prefer str_replace over regex** - Use `str_replace()` instead of `preg_replace()` for simple character replacements:
+    - ❌ WRONG: `preg_replace('#[\s:\.]+#si', '/', $str)` (regex overhead)
+    - ✅ CORRECT: `str_replace([' ', "\t", "\n", "\r", ':', '.'], '/', $str)` (faster)
+    - Only use regex when pattern matching is actually needed
+    - Simple character replacements are much faster with `str_replace()`
+
 ### Professional Patterns
 
-11. **ALWAYS check function return values**:
+13. **ALWAYS check function return values**:
     ```php
     if (preg_match('/pattern/', $key, $matches)) {
         // Use $matches here
     }
     ```
 
-12. **NO references (`&`) anywhere**:
+14. **NO references (`&`) anywhere**:
     - Not in function parameters
     - Not in variable assignments
     - Explicit code is secure code - easy to audit and impossible to hack
 
-13. **Support whitespace and quotes in user input**:
+15. **Support whitespace and quotes in user input**:
     - Use `[\s\'\"]*` in regex patterns for brackets
     - Example: `/\[[\s\'\"]*(\w+)[\s\'\"]*\]/`
 
-14. **Comment complex logic BEFORE the code**:
+16. **Comment complex logic BEFORE the code**:
     - Format: `// [Action]: [explanation]`
     - Explain WHAT the code does and WHY
     - Example:
@@ -153,7 +183,7 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
     if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
     ```
 
-15. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`
+17. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`
     - ❌ WRONG: Calling `load()` inside `__get()` method
     - ❌ WRONG: Calling `setData()` inside `__get()` method
     - ❌ WRONG: Creating new objects with `new static()` inside `__get()`
@@ -215,15 +245,35 @@ public function __toString() {
 
 ### Security Through Simplicity
 
-16. **Clean, auditable code**: No magic, no hidden behavior
+18. **Clean, auditable code**: No magic, no hidden behavior
     - Every array access should be visible and traceable
     - Explicit depth handling over dynamic loops
     - Simple code prevents security vulnerabilities
 
-17. **Zero tolerance for waste**: Every character in code must have a purpose
+19. **Zero tolerance for waste**: Every character in code must have a purpose
     - Remove redundant checks
     - Eliminate duplicate branches
     - Optimize regex patterns
+
+20. **Check before processing** - Use `strpos()` or `strpbrk()` to check if characters exist before doing replacements:
+    - ❌ WRONG: Always doing `str_replace()` even when no matches exist
+    - ✅ CORRECT: Check first, then replace:
+    ```php
+    // Single character check
+    if (strpos($str, '__') !== false) {
+        while (strpos($str, '__') !== false) {
+            $str = str_replace('__', '_', $str);
+        }
+    }
+
+    // Multiple character check with strpbrk
+    $separator_chars = [' ', "\t", "\n", "\r", ':', '.'];
+    $separator_chars_str = implode('', $separator_chars);
+
+    if (strpbrk($str, $separator_chars_str) !== false) {
+        $str = str_replace($separator_chars, '/', $str);
+    }
+    ```
 
 ### Target: 1,000,000 Sites
 
