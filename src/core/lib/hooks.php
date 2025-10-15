@@ -225,21 +225,34 @@ class Dj_App_Hooks {
         // Strip leading and trailing junk
         $hook_name = Dj_App_String_Util::trim($hook_name, "0123456789:");
 
-        // Normalize separators: spaces, :, . -> /
-        $hook_name = preg_replace( '#[\s:\.]+#si', '/', $hook_name );
+        // Normalize separators: spaces, tabs, newlines, colons, dots -> /
+        $separator_chars = [' ', "\t", "\n", "\r", ':', '.'];
+        $separator_chars_str = implode('', $separator_chars);
+
+        if (strpbrk($hook_name, $separator_chars_str) !== false) {
+            $hook_name = str_replace($separator_chars, '/', $hook_name);
+        }
 
         // Convert remaining non-word chars to _
         $hook_name = preg_replace( '#[^\w/:]+#si', '_', $hook_name );
 
-        // Collapse duplicate separators
-        $hook_name = preg_replace( '#([/_])\1+#si', '$1', $hook_name );
+        // Collapse consecutive duplicate characters
+        $hook_name = Dj_App_String_Util::singlefy($hook_name, ['_', '/']);
 
         $hook_name = Dj_App_String_Util::trim($hook_name, '_/-');
         $hook_name = strtolower($hook_name);
 
-        // if we have app.plugins.my-plugin.action -> app.plugin.my_plugin.action
-        if (strpos($hook_name, 's') !== false) { // plural? - make it singular
-            $hook_name = preg_replace( '#([\.\-])(core|plugin|theme|app|page)s?([\.\-])#si', '${1}${2}${3}', $hook_name );
+        // if we have app/plugins/my_plugin/action -> app/plugin/my_plugin/action
+        // Note: dots and dashes are already converted by this point
+        if (strpos($hook_name, 's/') !== false) { // plural? - make it singular
+            $replace_vars = [
+                '/apps/' => '/app/',
+                '/pages/' => '/page/',
+                '/themes/' => '/theme/',
+                '/plugins/' => '/plugin/',
+            ];
+
+            $hook_name = str_replace(array_keys($replace_vars), array_values($replace_vars), $hook_name);
         }
 
         return $hook_name;
