@@ -144,103 +144,96 @@ class Dj_App_String_Util
     const SHORTEN_TO_MAX_SUBDOMAIN_LENGTH = 2**10;
 
     /**
+     * Formats a string and to not have any special chars.
      * Dj_App_String_Util::formatStringId();
      * @param string $str
      * @return string
      * Ideas gotten from: http://www.jonasjohn.de/snippets/php/trim-array.htm
      */
     public static function formatStringId($tag, $flags = 0) {
-        if (is_null($tag) || $tag === '' || $tag === false) {
-            return false; // early return for empty values
+        if (empty($tag)) {
+            if (is_null($tag)) {
+                return '';
+            }
+
+            if (strcmp($tag, '0') == 0) { // 0 ???
+                return $tag;
+            }
+
+            return ''; // early return for empty values
         }
 
-        $max_len = 255;
+        // shorten so we operate on shorter string
+        $max_len = ($flags & Dj_App_String_Util::SHORTEN_TO_MAX_SUBDOMAIN_LENGTH) ? 63 : 255;
 
-        if (!is_scalar($tag)) {
-            $tag = serialize($tag);
-            $tag = substr($tag, 0, $max_len);
-        } else if (is_numeric($tag)) { // ctype_alnum(): Argument of type int will be interpreted as string in the future
+        if (is_numeric($tag)) { // ctype_alnum(): Argument of type int will be interpreted as string in the future
             $tag = (string) $tag; // php complains about ctype_alnum when it receives numbers that will be treated as strings
+        } elseif (!is_scalar($tag)) {
+            $tag = serialize($tag);
         }
+
+        $tag = substr($tag, 0, $max_len);
 
         // Fast path: if already alphanumeric extended (a-z0-9_-) and no flags, just lowercase
-        if (empty($flags) && self::isAlphaNumericExt($tag)) {
-            // with no flag lowercase is the default option.
-            // We're doing this as one of the tests failed.
+        // with no flag lowercase is the default option. We're doing this as one of the tests failed.
+        if (empty($flags) && Dj_App_String_Util::isAlphaNumericExt($tag)) {
             $tag = strtolower($tag);
             return $tag;
         }
 
-        // checking for an empty str because the value could be null
-        // we don't want the null thing serialized
-        $tag = is_null($tag) || $tag == '' || $tag === false ? '' : $tag; // 0 is ok
-
-        if ( !is_scalar( $tag ) ) {
-            $tag = serialize($tag);
-        }
-
-        $tag = strip_tags($tag);
-        $tag = trim($tag);
-
         $extra_allowed_chars = [];
-
-        if ($flags & Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES) { // subdomain?
-            $extra_allowed_chars[] = '-';
-        } else {
-            $extra_allowed_chars[] = '_';
-            $extra_allowed_chars[] = '-';
-        }
+        $extra_allowed_chars[] = '-'; // dash
 
         if ($flags & Dj_App_String_Util::ALLOW_DOT) {
             $extra_allowed_chars[] = '.';
-        } else {
-            $tag = str_replace('.', '_', $tag);
         }
 
+        if ($flags & Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES) {
+            $replace_char = '-';
+        } else {
+            $replace_char = '_';
+            $extra_allowed_chars[] = '_'; // underscore
+        }
+
+        // Let's prefix the chars just in case so they are not that special like '.'
         $extra_allowed_chars_q = array_map('preg_quote', $extra_allowed_chars);
+        $extra_allowed_chars_q_str = join('', $extra_allowed_chars_q);
+
+        // so all chars that are not allowed get replaced by - or _ (default).
+        $tag = preg_replace('/[^[a-z\d' . $extra_allowed_chars_q_str . ']/si', $replace_char, $tag);
+
+        // singlefy allowed chars?
+        foreach ($extra_allowed_chars as $char) {
+            $search = $char . $char;
+
+            while (strpos($tag, $search) !== false) {
+                $tag = str_replace($search, $char, $tag);
+            }
+        }
+
+        // fix the replacement char around the dot
+        if ($flags & Dj_App_String_Util::ALLOW_DOT) {
+            $tag = str_replace('.' . $replace_char, '.', $tag); // ._ -> .
+            $tag = str_replace($replace_char . '.', '.', $tag); // _. -> .
+        }
+
+        if (($flags & Dj_App_String_Util::KEEP_LEADING_DASH) == 0) { // subdomain prefix?
+            $tag = ltrim( $tag, '-_.' );
+        }
+
+        if (($flags & Dj_App_String_Util::KEEP_TRAILING_DASH) == 0) { // subdomain prefix?
+            $tag = rtrim( $tag, '-_.' );
+        }
 
         if ($flags & Dj_App_String_Util::KEEP_CASE) {
-            // ok use it as is
-        } elseif ($flags & Dj_App_String_Util::UPPERCASE) {
+            return $tag;
+        }
+
+        if ($flags & Dj_App_String_Util::UPPERCASE) {
             $tag = strtoupper($tag);
         } else {
             $tag = strtolower($tag);
         }
-
-        // Let's prefix the chars just in case so they are not that special like '.'
-        $tag = preg_replace('/[^\w' . join('', $extra_allowed_chars_q) . ']/si', '_', $tag);
-
-        // special chars near each other get collapsed e.g. -_- but not when dot is used as it breaks subdomains
-//		if (!($flags & Dj_App_String_Util::ALLOW_DOT)) {
-//			$tag = preg_replace('/[' . join('', $extra_allowed_chars_q) . ']+/si', '_', $tag);
-//		}
-
-        foreach ($extra_allowed_chars as $char) {
-            $char_q = preg_quote($char);
-            $tag = preg_replace('/[' . $char_q . ']+/si', $char, $tag); // singlfy
-        }
-
-        if ($flags & Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES) { // subdomain?
-            $tag = preg_replace('#[\-\_]+#si', '-', $tag);
-            $tag = preg_replace('#[\-\_]+\.#si', '.', $tag); // a dash after the dot
-            $tag = preg_replace('#\.[\-\_]+#si', '.', $tag); // a dash before the dot
-        }
-
-        if (($flags & Dj_App_String_Util::KEEP_LEADING_DASH) == 0) { // subdomain prefix?
-            $tag = ltrim( $tag, '-_' );
-        }
-
-        if (($flags & Dj_App_String_Util::KEEP_TRAILING_DASH) == 0) { // subdomain prefix?
-            $tag = rtrim( $tag, '-_' );
-        }
-
-        $tag = trim($tag, join('', $extra_allowed_chars));
-
-        if ($flags & Dj_App_String_Util::SHORTEN_TO_MAX_SUBDOMAIN_LENGTH) {
-            $max_len = 63;
-        }
-
-        $tag = substr($tag, 0, $max_len);
 
         return $tag;
     }
@@ -254,16 +247,16 @@ class Dj_App_String_Util
      */
     public static function formatSlug($str, $flags = 0) {
         // Default to converting underscores to dashes for URL-friendly slugs
-        if (($flags & self::FORMAT_CONVERT_TO_DASHES) == 0) {
-            $flags |= self::FORMAT_CONVERT_TO_DASHES;
+        if (($flags & Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES) == 0) {
+            $flags |= Dj_App_String_Util::FORMAT_CONVERT_TO_DASHES;
         }
         
         // For formatSlug, always convert dots to dashes (default behavior)
         // Remove ALLOW_DOT flag and let formatStringId handle dots as underscores
-        $flags &= ~self::ALLOW_DOT;
+        $flags &= ~Dj_App_String_Util::ALLOW_DOT;
         
         // Use formatStringId with the modified flags
-        $result = self::formatStringId($str, $flags);
+        $result = Dj_App_String_Util::formatStringId($str, $flags);
         
         return $result;
     }
