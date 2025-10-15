@@ -631,6 +631,163 @@ class Hooks_Test extends TestCase {
         }
     }
 
+    public function testFormatHookNameBasic()
+    {
+        // Test basic formatting - spaces are converted to /, case to lowercase
+        $this->assertEquals('my/hook', Dj_App_Hooks::formatHookName('my hook'));
+        $this->assertEquals('my/hook', Dj_App_Hooks::formatHookName('MY HOOK'));
+        $this->assertEquals('my/hook', Dj_App_Hooks::formatHookName('My Hook'));
+        $this->assertEquals('test/hook/name', Dj_App_Hooks::formatHookName('test hook name'));
+
+        // Test with underscores (underscores are preserved)
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook'));
+        $this->assertEquals('test_hook_name', Dj_App_Hooks::formatHookName('TEST_HOOK_NAME'));
+    }
+
+    public function testFormatHookNameLeadingTrailingJunk()
+    {
+        // Test leading junk removal (spaces, tabs, newlines, numbers, special chars)
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('   my_hook'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('123my_hook'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('___my_hook'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('---my_hook'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName(':::my_hook'));
+
+        // Test trailing junk removal
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook   '));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook123'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook___'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook---'));
+
+        // Test both leading and trailing
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('123___my_hook___456'));
+    }
+
+    public function testFormatHookNameSeparatorNormalization()
+    {
+        // Test spaces, colons, dots -> forward slash
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app core hook'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app:core:hook'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app.core.hook'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app : core . hook'));
+
+        // Test mixed separators
+        $this->assertEquals('app/core/test/hook', Dj_App_Hooks::formatHookName('app.core:test hook'));
+    }
+
+    public function testFormatHookNameNonWordCharReplacement()
+    {
+        // Test non-word characters get replaced with underscore
+        $this->assertEquals('my_hook_test', Dj_App_Hooks::formatHookName('my@hook#test'));
+        $this->assertEquals('my_hook_test', Dj_App_Hooks::formatHookName('my!hook$test'));
+        $this->assertEquals('my_hook_test', Dj_App_Hooks::formatHookName('my%hook^test'));
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my&hook'));
+    }
+
+    public function testFormatHookNameDuplicateSeparatorCollapsing()
+    {
+        // Test duplicate underscores collapse
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my___hook'));
+        $this->assertEquals('my_hook_test', Dj_App_Hooks::formatHookName('my____hook____test'));
+
+        // Test duplicate slashes collapse
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app///core///hook'));
+
+        // Test mixed duplicate separators
+        $this->assertEquals('app/core_hook', Dj_App_Hooks::formatHookName('app///core___hook'));
+    }
+
+    public function testFormatHookNamePluralization()
+    {
+        // Pluralization now works: /plugins/ -> /plugin/, /themes/ -> /theme/, etc.
+        // It runs after dots/dashes are converted to /
+
+        // With dots (converted to slashes) - pluralization works
+        $this->assertEquals('app/plugin/my_plugin/action', Dj_App_Hooks::formatHookName('app.plugins.my-plugin.action'));
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app.plugins.test'));
+        $this->assertEquals('app/theme/my_theme/action', Dj_App_Hooks::formatHookName('app.themes.my-theme.action'));
+        $this->assertEquals('app/theme/setup', Dj_App_Hooks::formatHookName('app.themes.setup'));
+
+        // Test all plural forms
+        $this->assertEquals('app/page/render', Dj_App_Hooks::formatHookName('app.pages.render'));
+        $this->assertEquals('app/app/init', Dj_App_Hooks::formatHookName('app.apps.init'));
+
+        // With dashes - converted to underscores, so no slashes for pluralization to match
+        $this->assertEquals('app_plugins_my_plugin_action', Dj_App_Hooks::formatHookName('app-plugins-my-plugin-action'));
+        $this->assertEquals('app_themes_test', Dj_App_Hooks::formatHookName('app-themes-test'));
+
+        // Test that 's' is preserved when NOT in /word/ pattern
+        $this->assertEquals('apps_test', Dj_App_Hooks::formatHookName('apps_test'));
+        $this->assertEquals('test/apps', Dj_App_Hooks::formatHookName('test.apps'));
+        $this->assertEquals('status_check', Dj_App_Hooks::formatHookName('status_check'));
+    }
+
+    public function testFormatHookNameEdgeCases()
+    {
+        // Test empty string
+        $this->assertEquals('', Dj_App_Hooks::formatHookName(''));
+
+        // Test only special characters
+        $this->assertEquals('', Dj_App_Hooks::formatHookName('!!!@@@###'));
+        $this->assertEquals('', Dj_App_Hooks::formatHookName('...:::///'));
+
+        // Test only numbers
+        $this->assertEquals('', Dj_App_Hooks::formatHookName('123456'));
+
+        // Test single character
+        $this->assertEquals('a', Dj_App_Hooks::formatHookName('a'));
+        $this->assertEquals('z', Dj_App_Hooks::formatHookName('Z'));
+
+        // Test very long hook name (100 char limit)
+        $long_hook = str_repeat('test_hook_', 20); // 200 chars
+        $result = Dj_App_Hooks::formatHookName($long_hook);
+        $this->assertLessThanOrEqual(100, strlen($result));
+    }
+
+    public function testFormatHookNameRealWorldExamples()
+    {
+        // Test typical WordPress-style hooks with pluralization
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('app.core.init'));
+        $this->assertEquals('app/plugin/loaded', Dj_App_Hooks::formatHookName('app.plugins.loaded'));
+        $this->assertEquals('app/theme/setup', Dj_App_Hooks::formatHookName('app.themes.setup'));
+
+        // Test hooks with dashes (common in theme/plugin names)
+        $this->assertEquals('app/plugin/my_plugin/action', Dj_App_Hooks::formatHookName('app.plugins.my-plugin.action'));
+        $this->assertEquals('app/theme/my_theme/hook', Dj_App_Hooks::formatHookName('app.themes.my-theme.hook'));
+
+        // Test mixed formats
+        $this->assertEquals('app/page/content/render', Dj_App_Hooks::formatHookName('APP.PAGE.CONTENT.RENDER'));
+        $this->assertEquals('app/core/theme/loaded', Dj_App_Hooks::formatHookName('app:core:theme:loaded'));
+    }
+
+    public function testFormatHookNamePreservesStructure()
+    {
+        // Test that valid hook names are properly formatted
+        $this->assertEquals('app/plugin/test_action', Dj_App_Hooks::formatHookName('app.plugin.test_action'));
+        $this->assertEquals('app/core/my_hook', Dj_App_Hooks::formatHookName('app.core.my_hook'));
+
+        // Test underscores in hook names are preserved (not converted to slash)
+        $this->assertEquals('my_custom_hook', Dj_App_Hooks::formatHookName('my_custom_hook'));
+        $this->assertEquals('test_hook_name', Dj_App_Hooks::formatHookName('test_hook_name'));
+    }
+
+    public function testFormatHookNameComplexCases()
+    {
+        // Test complex real-world scenarios with pluralization
+        $this->assertEquals('app/plugin/my_plugin/filter/pre_set_property',
+            Dj_App_Hooks::formatHookName('app.plugins.my-plugin.filter.pre_set_property'));
+
+        $this->assertEquals('app/page/full_content',
+            Dj_App_Hooks::formatHookName('  123app.page.full_content___  '));
+
+        $this->assertEquals('app/theme/current_theme_dir',
+            Dj_App_Hooks::formatHookName('APP.THEMES.CURRENT-THEME-DIR'));
+
+        // Test with multiple consecutive special chars
+        $this->assertEquals('my_hook_test',
+            Dj_App_Hooks::formatHookName('my@@@hook###test'));
+    }
+
     public function sampleAction()
     {
 
