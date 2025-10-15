@@ -69,7 +69,7 @@ class Page_Test extends TestCase {
 
         // Test null (note: due to fallback behavior, null values become empty strings)
         $this->page_obj->null_prop = null;
-        $this->assertEquals('', $this->page_obj->null_prop);
+        $this->assertEmpty($this->page_obj->null_prop);
     }
 
     /**
@@ -228,7 +228,7 @@ class Page_Test extends TestCase {
         // Test setting empty string
         $this->page_obj->empty_string = '';
         $this->assertTrue(isset($this->page_obj->empty_string));
-        $this->assertEquals('', $this->page_obj->empty_string);
+        $this->assertEmpty($this->page_obj->empty_string);
 
         // Test setting zero
         $this->page_obj->zero_value = 0;

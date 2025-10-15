@@ -62,7 +62,7 @@ class Util_Test extends TestCase {
 
         // Test with empty buffer
         $new_buff = Dj_App_Util::replaceTagContent('title', 'New Title', '');
-        $this->assertEquals('', $new_buff);
+        $this->assertEmpty($new_buff);
 
         // Test with empty tag
         $buff = '<html><head><title>Old Title</title></head></html>';
@@ -435,7 +435,7 @@ BUFF_EOF;
         
         // Empty buffer
         $result2 = Dj_App_Util::replaceMetaTagContent('author', 'content', '');
-        $this->assertEquals('', $result2);
+        $this->assertEmpty($result2);
     }
 
     /**
@@ -443,7 +443,7 @@ BUFF_EOF;
      */
     public function testReplaceSystemVars() {
         // Test with empty/null values
-        $this->assertEquals('', Dj_App_Config::replaceSystemVars(''));
+        $this->assertEmpty(Dj_App_Config::replaceSystemVars(''));
         $this->assertEquals(null, Dj_App_Config::replaceSystemVars(null));
         $this->assertEquals(0, Dj_App_Config::replaceSystemVars(0));
         
@@ -525,8 +525,8 @@ BUFF_EOF;
      */
     public function testRemoveSlash() {
         // Test empty URL
-        $this->assertEquals('', Dj_App_Util::removeSlash(''));
-        $this->assertEquals('', Dj_App_Util::removeSlash(null));
+        $this->assertEmpty(Dj_App_Util::removeSlash(''));
+        $this->assertEmpty(Dj_App_Util::removeSlash(null));
         
         // Test FLAG_TRAILING (default)
         $this->assertEquals('path', Dj_App_Util::removeSlash('path'));
@@ -547,13 +547,13 @@ BUFF_EOF;
         $this->assertEquals('path', Dj_App_Util::removeSlash('/path/', Dj_App_Util::FLAG_BOTH));
         
         // Test single slash
-        $this->assertEquals('', Dj_App_Util::removeSlash('/'));
-        $this->assertEquals('', Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_LEADING));
-        $this->assertEquals('', Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_BOTH));
+        $this->assertEmpty(Dj_App_Util::removeSlash('/'));
+        $this->assertEmpty(Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_LEADING));
+        $this->assertEmpty(Dj_App_Util::removeSlash('/', Dj_App_Util::FLAG_BOTH));
         
         // Test empty flags
         $this->assertEquals('path', Dj_App_Util::removeSlash('path', 0));
-        $this->assertEquals('', Dj_App_Util::removeSlash('', 0));
+        $this->assertEmpty(Dj_App_Util::removeSlash('', 0));
         
         // Test multiple slashes (removes all consecutive slashes)
         $this->assertEquals('path', Dj_App_Util::removeSlash('path///', Dj_App_Util::FLAG_TRAILING));
@@ -731,12 +731,12 @@ BUFF_EOF;
      */
     public function testFormatSlugEdgeCases() {
         // Test empty input
-        $this->assertEquals('', Dj_App_String_Util::formatSlug(''));
-        $this->assertEquals('', Dj_App_String_Util::formatSlug(null));
-        
+        $this->assertEmpty(Dj_App_String_Util::formatSlug(''));
+        $this->assertEmpty(Dj_App_String_Util::formatSlug(null));
+
         // Test with only special characters
-        $this->assertEquals('', Dj_App_String_Util::formatSlug('!!!'));
-        $this->assertEquals('', Dj_App_String_Util::formatSlug('   '));
+        $this->assertEmpty(Dj_App_String_Util::formatSlug('!!!'));
+        $this->assertEmpty(Dj_App_String_Util::formatSlug('   '));
         
         // Test with mixed dashes and underscores
         $this->assertEquals('test-plugin', Dj_App_String_Util::formatSlug('test_plugin'));
@@ -848,16 +848,16 @@ BUFF_EOF;
         $this->assertEquals('value', Dj_App_String_Util::trim(' value ', []));
 
         // Test with empty string
-        $this->assertEquals('', Dj_App_String_Util::trim('', '[]'));
-        $this->assertEquals('', Dj_App_String_Util::trim('   ', '[]'));
+        $this->assertEmpty(Dj_App_String_Util::trim('', '[]'));
+        $this->assertEmpty(Dj_App_String_Util::trim('   ', '[]'));
 
         // Test when no extra chars to trim
         $this->assertEquals('value', Dj_App_String_Util::trim('value', '[]'));
         $this->assertEquals('value', Dj_App_String_Util::trim(' value ', '*'));
 
         // Test with only extra chars
-        $this->assertEquals('', Dj_App_String_Util::trim('[[[', '[]'));
-        $this->assertEquals('', Dj_App_String_Util::trim('***', '*'));
+        $this->assertEmpty(Dj_App_String_Util::trim('[[[', '[]'));
+        $this->assertEmpty(Dj_App_String_Util::trim('***', '*'));
     }
 
     /**

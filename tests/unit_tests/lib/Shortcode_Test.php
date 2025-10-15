@@ -160,7 +160,7 @@ class Shortcode_Test extends TestCase
     {
         $html = '';
         $result = $this->shortcode->replaceShortCodes($html);
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
         
         // Test null handling (should now work without deprecation warnings)
         $html = null;

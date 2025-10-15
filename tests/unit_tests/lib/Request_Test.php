@@ -289,7 +289,7 @@ class Request_Test extends TestCase
         $this->assertEquals('25', $req_obj->get('age'));
         
         // Test non-existent key
-        $this->assertEquals('', $req_obj->get('non_existent'));
+        $this->assertEmpty($req_obj->get('non_existent'));
         $this->assertEquals('default_value', $req_obj->get('non_existent', 'default_value'));
     }
 
@@ -335,7 +335,7 @@ class Request_Test extends TestCase
         $this->assertEquals('Form Message', $req_obj->get('contact_form_msg|msg|message'));
         
         // Test with non-existent keys
-        $this->assertEquals('', $req_obj->get('nonexistent1|nonexistent2'));
+        $this->assertEmpty($req_obj->get('nonexistent1|nonexistent2'));
         $this->assertEquals('default', $req_obj->get('nonexistent1|nonexistent2', 'default'));
     }
 

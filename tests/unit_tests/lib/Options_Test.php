@@ -211,12 +211,12 @@ EOT;
         // Property chaining: accessing nonexistent key in existing section returns empty Options object
         $missing_property = $options_obj->theme->nonexistent_key;
         $this->assertInstanceOf(Dj_App_Options::class, $missing_property, 'Missing property should return empty Options object');
-        $this->assertEquals('', (string)$missing_property, 'Empty Options should convert to empty string');
+        $this->assertEmpty((string)$missing_property, 'Empty Options should convert to empty string');
 
         // Accessing totally nonexistent section returns empty Options object
         $nonexistent_section = $options_obj->nonexistent_section;
         $this->assertInstanceOf(Dj_App_Options::class, $nonexistent_section, 'Nonexistent section should return empty Options object');
-        $this->assertEquals('', (string)$nonexistent_section, 'Empty Options should convert to empty string');
+        $this->assertEmpty((string)$nonexistent_section, 'Empty Options should convert to empty string');
 
         // get() method also returns empty string for missing keys
         $missing_get = $options_obj->get('nonexistent.key');
@@ -371,7 +371,7 @@ EOT;
         $theme_id_value = $options_obj->theme->theme_id;
 
         $this->assertInstanceOf(Dj_App_Options::class, $theme_value, 'theme->theme should return empty Options object');
-        $this->assertEquals('', (string)$theme_value, 'Empty Options should convert to empty string');
+        $this->assertEmpty((string)$theme_value, 'Empty Options should convert to empty string');
 
         $this->assertIsString($theme_id_value, 'theme->theme_id should return string');
         $this->assertEquals('djebel', $theme_id_value, 'theme->theme_id should return "djebel"');

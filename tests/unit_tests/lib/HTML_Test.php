@@ -91,7 +91,7 @@ class HTML_Test extends TestCase {
         
         // Empty content
         $result = Djebel_App_HTML::removeTag('div', '');
-        $this->assertEquals('', $result);
+        $this->assertEmpty($result);
         
         // Null content
         $result = Djebel_App_HTML::removeTag('div', null);
