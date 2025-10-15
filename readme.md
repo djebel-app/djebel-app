@@ -249,6 +249,23 @@ Djebel is perfect for building:
 
 Check out the official plugin repository for real-world implementations and examples.
 
+## 🧪 Running Tests
+
+Djebel includes a comprehensive PHPUnit test suite to ensure code quality and performance.
+
+### Running the Test Suite
+
+```bash
+cd tests
+./vendor/bin/phpunit
+```
+
+The test suite includes 266+ tests covering core functionality, string utilities, hooks system, and more.
+
+### Test Configuration
+
+Tests are configured via `tests/phpunit.xml` and use PHPUnit 12.0.8. Djebel is compatible with PHP 7.4+.
+
 ## 🤝 Getting Involved
 
 Ready to build something amazing with Djebel?
