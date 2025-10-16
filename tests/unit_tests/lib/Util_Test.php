@@ -1107,4 +1107,300 @@ META;
         $this->assertTrue($result);
     }
 
+    /**
+     * Test data() method - basic set and get functionality
+     */
+    public function testDataBasicSetAndGet()
+    {
+        // Set and get a simple value
+        Dj_App_Util::data('test_key', 'test_value');
+        $this->assertEquals('test_value', Dj_App_Util::data('test_key'));
+
+        // Set and get numeric value
+        Dj_App_Util::data('number', 42);
+        $this->assertEquals(42, Dj_App_Util::data('number'));
+
+        // Set and get array
+        $array_data = ['a' => 1, 'b' => 2];
+        Dj_App_Util::data('array_key', $array_data);
+        $this->assertEquals($array_data, Dj_App_Util::data('array_key'));
+
+        // Get non-existent key
+        $this->assertEquals('', Dj_App_Util::data('non_existent_key'));
+
+        // Clean up
+        Dj_App_Util::data('test_key', null);
+        Dj_App_Util::data('number', null);
+        Dj_App_Util::data('array_key', null);
+    }
+
+    /**
+     * Test data() method - delete functionality
+     */
+    public function testDataDelete()
+    {
+        // Set a value
+        Dj_App_Util::data('delete_test', 'value');
+        $this->assertEquals('value', Dj_App_Util::data('delete_test'));
+
+        // Delete the value by passing null
+        Dj_App_Util::data('delete_test', null);
+        $this->assertEquals('', Dj_App_Util::data('delete_test'));
+    }
+
+    /**
+     * Test data() method - array merge behavior (NEW FUNCTIONALITY)
+     */
+    public function testDataArrayMerge()
+    {
+        // Set initial array
+        Dj_App_Util::data('page_data', ['title' => 'Test Page', 'author' => 'John']);
+        $result = Dj_App_Util::data('page_data');
+        $this->assertEquals(['title' => 'Test Page', 'author' => 'John'], $result);
+
+        // Add more data - should merge
+        Dj_App_Util::data('page_data', ['meta_keywords' => 'seo, php']);
+        $result = Dj_App_Util::data('page_data');
+        $this->assertEquals([
+            'title' => 'Test Page',
+            'author' => 'John',
+            'meta_keywords' => 'seo, php'
+        ], $result);
+
+        // Add even more data - should merge again
+        Dj_App_Util::data('page_data', ['meta_description' => 'A test page']);
+        $result = Dj_App_Util::data('page_data');
+        $this->assertEquals([
+            'title' => 'Test Page',
+            'author' => 'John',
+            'meta_keywords' => 'seo, php',
+            'meta_description' => 'A test page'
+        ], $result);
+
+        // Clean up
+        Dj_App_Util::data('page_data', null);
+    }
+
+    /**
+     * Test data() method - array merge with overlapping keys
+     */
+    public function testDataArrayMergeOverlapping()
+    {
+        // Set initial array
+        Dj_App_Util::data('config', ['db' => 'mysql', 'port' => 3306]);
+        $result = Dj_App_Util::data('config');
+        $this->assertEquals(['db' => 'mysql', 'port' => 3306], $result);
+
+        // Update with overlapping key - should merge and override
+        Dj_App_Util::data('config', ['port' => 5432, 'host' => 'localhost']);
+        $result = Dj_App_Util::data('config');
+        $this->assertEquals([
+            'db' => 'mysql',
+            'port' => 5432,       // Updated from 3306
+            'host' => 'localhost'  // New key
+        ], $result);
+
+        // Clean up
+        Dj_App_Util::data('config', null);
+    }
+
+    /**
+     * Test data() method - non-array values don't merge, they replace
+     */
+    public function testDataNonArrayNoMerge()
+    {
+        // Set a string value
+        Dj_App_Util::data('simple', 'first value');
+        $this->assertEquals('first value', Dj_App_Util::data('simple'));
+
+        // Set another string value - should replace, not merge
+        Dj_App_Util::data('simple', 'second value');
+        $this->assertEquals('second value', Dj_App_Util::data('simple'));
+
+        // Set a number - should replace
+        Dj_App_Util::data('simple', 123);
+        $this->assertEquals(123, Dj_App_Util::data('simple'));
+
+        // Clean up
+        Dj_App_Util::data('simple', null);
+    }
+
+    /**
+     * Test data() method - array value replacing non-array value
+     */
+    public function testDataArrayReplacingNonArray()
+    {
+        // Set a string value
+        Dj_App_Util::data('mixed', 'string value');
+        $this->assertEquals('string value', Dj_App_Util::data('mixed'));
+
+        // Set an array - should replace the string
+        Dj_App_Util::data('mixed', ['key' => 'value']);
+        $this->assertEquals(['key' => 'value'], Dj_App_Util::data('mixed'));
+
+        // Clean up
+        Dj_App_Util::data('mixed', null);
+    }
+
+    /**
+     * Test data() method - non-array value replacing array value
+     */
+    public function testDataNonArrayReplacingArray()
+    {
+        // Set an array
+        Dj_App_Util::data('mixed', ['a' => 1, 'b' => 2]);
+        $this->assertEquals(['a' => 1, 'b' => 2], Dj_App_Util::data('mixed'));
+
+        // Set a string - should replace the array
+        Dj_App_Util::data('mixed', 'simple string');
+        $this->assertEquals('simple string', Dj_App_Util::data('mixed'));
+
+        // Clean up
+        Dj_App_Util::data('mixed', null);
+    }
+
+    /**
+     * Test setData() method - basic set and get functionality
+     */
+    public function testSetDataBasic()
+    {
+        // Set and get a simple value
+        Dj_App_Util::setData('test_key', 'test_value');
+        $this->assertEquals('test_value', Dj_App_Util::data('test_key'));
+
+        // Set and get array
+        $array_data = ['x' => 10, 'y' => 20];
+        Dj_App_Util::setData('coords', $array_data);
+        $this->assertEquals($array_data, Dj_App_Util::data('coords'));
+
+        // Clean up
+        Dj_App_Util::data('test_key', null);
+        Dj_App_Util::data('coords', null);
+    }
+
+    /**
+     * Test setData() method - always replaces, never merges
+     */
+    public function testSetDataAlwaysReplaces()
+    {
+        // Set initial array
+        Dj_App_Util::setData('data', ['title' => 'First', 'author' => 'John']);
+        $this->assertEquals(['title' => 'First', 'author' => 'John'], Dj_App_Util::data('data'));
+
+        // Use setData again - should REPLACE, not merge
+        Dj_App_Util::setData('data', ['title' => 'Second']);
+        $result = Dj_App_Util::data('data');
+        $this->assertEquals(['title' => 'Second'], $result);
+        $this->assertArrayNotHasKey('author', $result); // Previous key should be gone
+
+        // Clean up
+        Dj_App_Util::data('data', null);
+    }
+
+    /**
+     * Test setData() method - contrast with data() merge behavior
+     */
+    public function testSetDataVsDataMerge()
+    {
+        // Start with data() - should merge
+        Dj_App_Util::data('comparison', ['a' => 1, 'b' => 2]);
+        Dj_App_Util::data('comparison', ['c' => 3]);
+        $result = Dj_App_Util::data('comparison');
+        $this->assertEquals(['a' => 1, 'b' => 2, 'c' => 3], $result);
+
+        // Now use setData() - should replace everything
+        Dj_App_Util::setData('comparison', ['x' => 100]);
+        $result = Dj_App_Util::data('comparison');
+        $this->assertEquals(['x' => 100], $result);
+        $this->assertArrayNotHasKey('a', $result);
+        $this->assertArrayNotHasKey('b', $result);
+        $this->assertArrayNotHasKey('c', $result);
+
+        // Clean up
+        Dj_App_Util::data('comparison', null);
+    }
+
+    /**
+     * Test data() and setData() - real world plugin scenario
+     */
+    public function testDataRealWorldPluginScenario()
+    {
+        // Plugin 1: djebel-static-content sets initial page data
+        Dj_App_Util::data('djebel_page_data', [
+            'meta_title' => 'My Page',
+            'meta_description' => 'Page description',
+            'meta_keywords' => 'php, web'
+        ]);
+
+        // Plugin 2: another plugin adds more metadata (should merge)
+        Dj_App_Util::data('djebel_page_data', [
+            'author' => 'John Doe',
+            'publish_date' => '2025-01-01'
+        ]);
+
+        // Plugin 3: SEO plugin reads all merged data
+        $page_data = Dj_App_Util::data('djebel_page_data');
+        $this->assertEquals([
+            'meta_title' => 'My Page',
+            'meta_description' => 'Page description',
+            'meta_keywords' => 'php, web',
+            'author' => 'John Doe',
+            'publish_date' => '2025-01-01'
+        ], $page_data);
+
+        // Clean up for next request using setData
+        Dj_App_Util::setData('djebel_page_data', []);
+        $this->assertEquals([], Dj_App_Util::data('djebel_page_data'));
+
+        // Final clean up
+        Dj_App_Util::data('djebel_page_data', null);
+    }
+
+    /**
+     * Test data() method - empty array merge
+     */
+    public function testDataEmptyArrayMerge()
+    {
+        // Set initial array
+        Dj_App_Util::data('test_empty', ['a' => 1]);
+
+        // Merge with empty array
+        Dj_App_Util::data('test_empty', []);
+        $result = Dj_App_Util::data('test_empty');
+        $this->assertEquals(['a' => 1], $result); // Should remain unchanged
+
+        // Clean up
+        Dj_App_Util::data('test_empty', null);
+    }
+
+    /**
+     * Test setData() method - returns the value that was set
+     */
+    public function testSetDataReturnValue()
+    {
+        $data = ['key' => 'value'];
+        $return_value = Dj_App_Util::setData('return_test', $data);
+        $this->assertEquals($data, $return_value);
+        $this->assertEquals($data, Dj_App_Util::data('return_test'));
+
+        // Clean up
+        Dj_App_Util::data('return_test', null);
+    }
+
+    /**
+     * Test data() method - returns merged value when setting
+     */
+    public function testDataReturnsMergedValue()
+    {
+        // Set initial data
+        Dj_App_Util::data('merge_return', ['a' => 1]);
+
+        // Merge and check return value
+        $return_value = Dj_App_Util::data('merge_return', ['b' => 2]);
+        $this->assertEquals(['a' => 1, 'b' => 2], $return_value);
+
+        // Clean up
+        Dj_App_Util::data('merge_return', null);
+    }
+
 }

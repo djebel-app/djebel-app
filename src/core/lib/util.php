@@ -1087,22 +1087,25 @@ MSG_EOF;
 
     /**
      * Get/Set/Delete data in the registry
-     * 
+     * MERGES arrays by default when setting data with an existing key
+     *
      * Usage:
-     * // Set data
+     * // Set data (merges if key exists and both values are arrays)
      * Dj_App_Util::data('key', 'value');
-     * 
+     * Dj_App_Util::data('page_data', ['title' => 'Test']);
+     * Dj_App_Util::data('page_data', ['author' => 'John']); // Merges with existing
+     *
      * // Get data
      * $value = Dj_App_Util::data('key');
-     * 
+     *
      * // Delete data
      * Dj_App_Util::data('key', null);
-     * 
+     *
      * @param string $key The key to get/set/delete
      * @param mixed $val The value to set (null to delete)
      * @return mixed The value if getting, empty string if not found, or the value that was set
      */
-    public static function data($key, $val = null) 
+    public static function data($key, $val = null)
     {
         // Delete mode
         if (func_num_args() === 2 && $val === null) {
@@ -1110,14 +1113,40 @@ MSG_EOF;
             return null;
         }
 
-        // Set mode
+        // Set mode (with merge support for arrays)
         if (func_num_args() === 2) {
+            // If both existing and new values are arrays, merge them
+            if (is_array($val) && isset(self::$registry[$key]) && is_array(self::$registry[$key])) {
+                self::$registry[$key] = array_merge(self::$registry[$key], $val);
+                return self::$registry[$key];
+            }
+
+            // Otherwise, just set the value
             self::$registry[$key] = $val;
             return $val;
         }
 
         // Get mode
         return isset(self::$registry[$key]) ? self::$registry[$key] : '';
+    }
+
+    /**
+     * Set data in the registry (OVERRIDES existing value, does not merge)
+     * Use this when you want to replace data completely instead of merging
+     *
+     * Usage:
+     * // Set data (replaces any existing value)
+     * Dj_App_Util::setData('key', 'value');
+     * Dj_App_Util::setData('page_data', ['title' => 'New']); // Replaces all existing data
+     *
+     * @param string $key The key to set
+     * @param mixed $val The value to set
+     * @return mixed The value that was set
+     */
+    public static function setData($key, $val)
+    {
+        self::$registry[$key] = $val;
+        return $val;
     }
 
     /**
