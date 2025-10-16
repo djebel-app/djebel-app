@@ -202,14 +202,8 @@ class Dj_App_String_Util
         // so all chars that are not allowed get replaced by - or _ (default).
         $tag = preg_replace('/[^[a-z\d' . $extra_allowed_chars_q_str . ']/si', $replace_char, $tag);
 
-        // singlefy allowed chars?
-        foreach ($extra_allowed_chars as $char) {
-            $search = $char . $char;
-
-            while (strpos($tag, $search) !== false) {
-                $tag = str_replace($search, $char, $tag);
-            }
-        }
+        // Collapse consecutive duplicate characters
+        $tag = Dj_App_String_Util::singlefy($tag, $extra_allowed_chars);
 
         // fix the replacement char around the dot
         if ($flags & Dj_App_String_Util::ALLOW_DOT) {
