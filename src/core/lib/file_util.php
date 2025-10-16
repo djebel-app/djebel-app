@@ -186,10 +186,8 @@ class Dj_App_File_Util {
         // convert backslashes first
         $path = str_replace('\\', '/', $path);
 
-        // collapse duplicate slashes, but do it in a loop to be safe
-        while (strpos($path, '//') !== false) {
-            $path = str_replace('//', '/', $path);
-        }
+        // Collapse duplicate slashes
+        $path = Dj_App_String_Util::singlefy($path, '/');
 
         if (strlen($path) > 1) {
             $path = Dj_App_Util::removeSlash($path);
