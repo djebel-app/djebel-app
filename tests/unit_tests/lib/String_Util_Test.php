@@ -519,4 +519,95 @@ class String_Util_Test extends TestCase {
         $expected = "---\ntitle: Test\nauthor: John\n---\n# Heading\n\nContent here.";
         $this->assertEquals($expected, $result);
     }
+
+    public function testSinglefyWithSingleCharString()
+    {
+        $result = Dj_App_String_Util::singlefy('app///core', '/');
+        $this->assertEquals('app/core', $result);
+    }
+
+    public function testSinglefyWithSingleCharUnderscore()
+    {
+        $result = Dj_App_String_Util::singlefy('my___hook', '_');
+        $this->assertEquals('my_hook', $result);
+    }
+
+    public function testSinglefyWithArrayOfChars()
+    {
+        $result = Dj_App_String_Util::singlefy('app///core___hook', ['/', '_']);
+        $this->assertEquals('app/core_hook', $result);
+    }
+
+    public function testSinglefyWithNoDuplicates()
+    {
+        $result = Dj_App_String_Util::singlefy('test', '/');
+        $this->assertEquals('test', $result);
+    }
+
+    public function testSinglefyWithEmptyString()
+    {
+        $result = Dj_App_String_Util::singlefy('', '/');
+        $this->assertEquals('', $result);
+    }
+
+    public function testSinglefyWithEmptyChars()
+    {
+        $result = Dj_App_String_Util::singlefy('test//string', '');
+        $this->assertEquals('test//string', $result);
+    }
+
+    public function testSinglefyWithMultipleConsecutiveDuplicates()
+    {
+        $result = Dj_App_String_Util::singlefy('test////value', '/');
+        $this->assertEquals('test/value', $result);
+    }
+
+    public function testSinglefyWithMixedDuplicates()
+    {
+        $result = Dj_App_String_Util::singlefy('a//b___c--d', ['/', '_', '-']);
+        $this->assertEquals('a/b_c-d', $result);
+    }
+
+    public function testSinglefyWithOnlyDuplicates()
+    {
+        $result = Dj_App_String_Util::singlefy('//////', '/');
+        $this->assertEquals('/', $result);
+    }
+
+    public function testSinglefyWithDuplicatesAtStart()
+    {
+        $result = Dj_App_String_Util::singlefy('___test', '_');
+        $this->assertEquals('_test', $result);
+    }
+
+    public function testSinglefyWithDuplicatesAtEnd()
+    {
+        $result = Dj_App_String_Util::singlefy('test___', '_');
+        $this->assertEquals('test_', $result);
+    }
+
+    public function testSinglefyWithDash()
+    {
+        $result = Dj_App_String_Util::singlefy('test---value', '-');
+        $this->assertEquals('test-value', $result);
+    }
+
+    public function testSinglefyWithDot()
+    {
+        $result = Dj_App_String_Util::singlefy('test...value', '.');
+        $this->assertEquals('test.value', $result);
+    }
+
+    public function testSinglefyRealWorldHookExample()
+    {
+        $hook_name = 'app///plugin___test//hook';
+        $result = Dj_App_String_Util::singlefy($hook_name, ['/', '_']);
+        $this->assertEquals('app/plugin_test/hook', $result);
+    }
+
+    public function testSinglefyPreservesNonDuplicates()
+    {
+        $result = Dj_App_String_Util::singlefy('a/b_c/d_e', ['/', '_']);
+        $this->assertEquals('a/b_c/d_e', $result);
+    }
 }
