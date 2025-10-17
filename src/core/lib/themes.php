@@ -303,7 +303,17 @@ class Dj_App_Themes {
             }
 
             if (!file_exists($file)) {
-                Dj_App_Util::die( "The requested page can not be found", "Page not found", [ 'code' => 404, ] );
+                // Allow plugins to intercept and provide content for missing pages
+                $not_found_ctx = $ctx;
+                $not_found_ctx['page'] = $page;
+                $not_found_ctx['page_fmt'] = $page_fmt;
+                $not_found_ctx['candidates_tried'] = $page_file_candiates;
+
+                $file = Dj_App_Hooks::applyFilter('app.core.theme.page_file_not_found', '', $not_found_ctx);
+
+                if (empty($file) || !file_exists($file)) {
+                    Dj_App_Util::die( "The requested page can not be found", "Page not found", [ 'code' => 404, ] );
+                }
             }
         }
 
