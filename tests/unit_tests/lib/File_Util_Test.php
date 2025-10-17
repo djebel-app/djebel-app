@@ -324,4 +324,69 @@ class File_Util_Test extends TestCase {
         $result = Dj_App_File_Util::normalizePath($path);
         $this->assertEquals('C:/path/to/file.txt', $result);
     }
+
+    public function testRemoveExtSimpleFilename()
+    {
+        $path = 'file.md';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEquals('file', $result);
+    }
+
+    public function testRemoveExtFullPath()
+    {
+        $path = '/path/to/file.php';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEquals('/path/to/file', $result);
+    }
+
+    public function testRemoveExtMultipleDots()
+    {
+        $path = 'file.tar.gz';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEquals('file.tar', $result);
+    }
+
+    public function testRemoveExtNoExtension()
+    {
+        $path = 'file';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEquals('file', $result);
+    }
+
+    public function testRemoveExtEmptyString()
+    {
+        $path = '';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testRemoveExtDotFile()
+    {
+        $path = '.htaccess';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testRemoveExtPathWithDotFile()
+    {
+        $path = '/etc/.htaccess';
+        $result = Dj_App_File_Util::removeExt($path);
+        $this->assertEquals('/etc/', $result);
+    }
+
+    public function testRemoveExtDifferentExtensions()
+    {
+        $test_cases = [
+            'script.js' => 'script',
+            'style.css' => 'style',
+            'image.png' => 'image',
+            'doc.pdf' => 'doc',
+            'archive.zip' => 'archive',
+        ];
+
+        foreach ($test_cases as $input => $expected) {
+            $result = Dj_App_File_Util::removeExt($input);
+            $this->assertEquals($expected, $result, "Failed for: {$input}");
+        }
+    }
 }
