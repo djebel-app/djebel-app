@@ -29,6 +29,19 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 - Run specific test suite: `cd tests && ./vendor/bin/phpunit --testsuite unit`
 - Test configuration: `tests/phpunit.xml`
 
+### Testing Best Practices
+
+**Use semantic assertions** - Choose the most expressive assertion for what you're testing:
+- ❌ WRONG: `$this->assertEquals('', $result)` - comparing to empty string
+- ❌ WRONG: `$this->assertEquals(true, $status)` - comparing to boolean
+- ❌ WRONG: `$this->assertEquals(false, $result)` - comparing to boolean
+- ✅ CORRECT: `$this->assertEmpty($result)` - checking if empty
+- ✅ CORRECT: `$this->assertTrue($status)` - checking if true
+- ✅ CORRECT: `$this->assertFalse($result)` - checking if false
+- ✅ CORRECT: `$this->assertNull($value)` - checking if null
+- ✅ CORRECT: `$this->assertCount(5, $array)` - checking array size
+- Semantic assertions make test intent clear and provide better error messages
+
 ### Dependencies
 - Test dependencies are managed in `tests/composer.json`
 - Install test dependencies: `cd tests && composer install`
@@ -62,6 +75,29 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
    - When shown an example, use EXACTLY that variable name
 
 5. **Consistent naming**: Follow existing codebase patterns religiously
+
+5a. **Type casting at assignment, not at use**: Cast types when assigning the value so it's clear what type you're working with:
+   - ❌ WRONG: `$val = microtime(true); $parts = explode('.', (string) $val);` (cast at use)
+   - ✅ CORRECT: `$val = (string) microtime(true); $parts = explode('.', $val);` (cast at assignment)
+   - Always add a space after the cast operator: `(string) $value`, `(int) $result`, `(array) $data`
+   - This makes it immediately clear what data type the variable holds
+
+5b. **Arrays MUST have trailing comma and spaces**: Always add a trailing comma after the last element and spaces inside brackets:
+   - ❌ WRONG: `$items = ['.', '..']` (no trailing comma, no spaces)
+   - ❌ WRONG: `$data = ['key' => 'value']` (no trailing comma, no spaces)
+   - ✅ CORRECT: `$items = [ '.', '..', ]` (trailing comma + spaces)
+   - ✅ CORRECT: `$data = [ 'key' => 'value', ]` (trailing comma + spaces)
+   - ✅ CORRECT: Multi-line arrays:
+   ```php
+   $config = [
+       'host' => 'localhost',
+       'port' => 3306,
+       'user' => 'root',
+   ];
+   ```
+   - Space after opening bracket `[` and before closing bracket `]`
+   - Makes diffs cleaner when adding new elements
+   - Prevents syntax errors when reordering elements
 
 ### Code Quality Rules
 
@@ -150,6 +186,44 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
     }
     ```
 
+11a. **Use local variables for function parameters** - NEVER pass function results or arrays inline to functions:
+    - ❌ WRONG: `$files = array_diff(scandir($dir), ['.', '..']);` (inline function call + inline array)
+    - ❌ WRONG: `Dj_App_File_Util::write($file, json_encode($data), ['flags' => FILE_APPEND]);` (inline function + inline array)
+    - ✅ CORRECT: Define parameters as local variables first:
+    ```php
+    // Example 1: array_diff
+    $scan_result = scandir($dir);
+    $exclude_items = ['.', '..'];
+    $files = array_diff($scan_result, $exclude_items);
+
+    // Example 2: write with params
+    $json_data = json_encode($data);
+    $write_params = ['flags' => FILE_APPEND];
+    Dj_App_File_Util::write($file, $json_data, $write_params);
+    ```
+
+11b. **More than 1 parameter → use array**: If a method requires more than 1 parameter, use an array parameter instead:
+    - ❌ WRONG: `logDownload($file, $size, $manifest, $type);` (multiple parameters)
+    - ✅ CORRECT: Use array parameter for multiple params:
+    ```php
+    // Multiple parameters
+    $log_params = [
+        'file' => $file,
+        'file_size' => $size,
+        'manifest' => $manifest,
+        'type' => $type,
+    ];
+    $this->logDownload($log_params);
+    ```
+
+    **Exception**: Standard accepted patterns like `write($file, $data, $params = [])` are allowed:
+    - ✅ CORRECT: `Dj_App_File_Util::write($file, $data, $params)` - standard file write pattern (file → buffer → flags/params)
+    - ✅ CORRECT: `read($file)` - accepts ONE param only
+    - ✅ CORRECT: `readPartially($file, $len_bytes, $seek_bytes)` - accepts 2 additional params for specific behavior
+    - This applies when the pattern is logical, widely accepted, and the order is intuitive
+    - File operations follow natural flow: file → data → options
+    - The last parameter should be an optional array for flexibility
+
 12. **Prefer str_replace over regex** - Use `str_replace()` instead of `preg_replace()` for simple character replacements:
     - ❌ WRONG: `preg_replace('#[\s:\.]+#si', '/', $str)` (regex overhead)
     - ✅ CORRECT: `str_replace([' ', "\t", "\n", "\r", ':', '.'], '/', $str)` (faster)
@@ -162,6 +236,30 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
     ```php
     if (preg_match('/pattern/', $key, $matches)) {
         // Use $matches here
+    }
+    ```
+
+13a. **Functions MUST return values** - All functions must return at least a boolean to indicate success/failure:
+    - ❌ WRONG: `function removeDirectory($dir) { ... }` (no return value)
+    - ✅ CORRECT: Always return bool, result object, or data:
+    ```php
+    // Return bool for success/failure
+    function removeDirectory($dir) {
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        // ... operations ...
+        $rmdir_res = rmdir($dir);
+
+        return $rmdir_res;
+    }
+
+    // Check return values
+    $remove_res = $this->removeDirectory($path);
+
+    if (!$remove_res) {
+        return false;
     }
     ```
 
