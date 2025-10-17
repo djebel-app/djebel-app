@@ -119,10 +119,10 @@ class Dj_App_File_Util {
                 $perms = fileperms($file);
 
                 // Format microtime with 4-digit fractional part
-                $microtime_val = microtime(true);
-                $microtime_parts = explode('.', (string) $microtime_val);
+                $microtime_val = (string) microtime(true);
+                $microtime_parts = explode('.', $microtime_val);
                 $microtime_sec = $microtime_parts[0];
-                $microtime_frac_raw = empty($microtime_parts[1]) ? 0 : (int)substr($microtime_parts[1], 0, 4);
+                $microtime_frac_raw = empty($microtime_parts[1]) ? 0 : (int) substr($microtime_parts[1], 0, 4);
                 $microtime_frac = sprintf('%04d', $microtime_frac_raw);
                 $microtime_fmt = $microtime_sec . '.' . $microtime_frac;
 
