@@ -232,7 +232,7 @@ class Dj_App_File_Util {
             return '';
         }
 
-        $path = (string)$path;
+        $path = (string) $path;
         $path = trim($path);
 
         // convert backslashes first
@@ -246,6 +246,36 @@ class Dj_App_File_Util {
         }
 
         return $path;
+    }
+
+    /**
+     * Remove file extension from a filename or path
+     * Examples:
+     *   removeExt('file.md') => 'file'
+     *   removeExt('/path/to/file.php') => '/path/to/file'
+     *   removeExt('file.tar.gz') => 'file.tar'
+     *   removeExt('file') => 'file'
+     * @param string $path
+     * @return string
+     */
+    public static function removeExt($path)
+    {
+        if (empty($path)) {
+            return '';
+        }
+
+        $path = (string) $path;
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+
+        if (empty($ext)) {
+            return $path;
+        }
+
+        $ext_len = strlen($ext);
+        $dot_and_ext_len = $ext_len + 1;
+        $result = substr($path, 0, -$dot_and_ext_len);
+
+        return $result;
     }
 }
 
