@@ -117,6 +117,19 @@ If you can't answer "yes" to all three, reconsider your approach.
   if ($condition){
   ```
 
+- **Type casting**: Always include space after cast operators
+  ```php
+  // CORRECT
+  $path = (string) $path;
+  $count = (int) $count;
+  $items = (array) $items;
+
+  // WRONG
+  $path = (string)$path;
+  $count = (int)$count;
+  $items = (array)$items;
+  ```
+
 - **Blank lines between blocks**: Always add blank line between variable assignments and control structures (if/foreach/while)
   ```php
   // CORRECT - Blank line before control structure
