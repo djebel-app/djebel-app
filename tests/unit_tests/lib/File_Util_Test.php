@@ -23,7 +23,7 @@ class File_Util_Test extends TestCase {
         }
 
         $scan_result = scandir($dir);
-        $exclude_items = ['.', '..', ];
+        $exclude_items = [ '.', '..', ];
         $files = array_diff($scan_result, $exclude_items);
 
         foreach ($files as $file) {
