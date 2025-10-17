@@ -86,6 +86,7 @@ class Dj_App_File_Util {
 
     /**
      * Writes to a file and creates the dir if it doesn't exist.
+     * Uses temp file + rename for atomic writes and permission preservation.
      * Dj_App_File_Util::write();
      * @param string $file
      * @param string|mixed $data
@@ -95,6 +96,7 @@ class Dj_App_File_Util {
     static public function write($file, $data, $params = [])
     {
         $res_obj = new Dj_App_Result();
+        $tmp_file = '';
 
         try {
             $dir = dirname($file);
@@ -106,20 +108,70 @@ class Dj_App_File_Util {
 
             $buff = is_scalar($data) ? $data : json_encode($data, JSON_PRETTY_PRINT);
             $flags = LOCK_EX;
+            $input_flags = empty($params['flags']) ? 0 : $params['flags'];
 
-            if (!empty($params['flags'])) {
-                $flags |= $params['flags'];
+            if (!empty($input_flags)) {
+                $flags |= $input_flags;
             }
 
-            $res = file_put_contents($file, $buff, $flags);
+            // Use temp file approach for existing files
+            if (file_exists($file)) {
+                $perms = fileperms($file);
 
-            if (empty($res)) {
-                throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
+                // Format microtime with 4-digit fractional part
+                $microtime_val = microtime(true);
+                $microtime_parts = explode('.', (string) $microtime_val);
+                $microtime_sec = $microtime_parts[0];
+                $microtime_frac_raw = empty($microtime_parts[1]) ? 0 : (int)substr($microtime_parts[1], 0, 4);
+                $microtime_frac = sprintf('%04d', $microtime_frac_raw);
+                $microtime_fmt = $microtime_sec . '.' . $microtime_frac;
+
+                $tmp_file = $file . '.dj_tmp.' . $microtime_fmt;
+
+                // For append mode, copy existing file to temp first
+                if ($input_flags & FILE_APPEND) {
+                    $copy_res = copy($file, $tmp_file);
+
+                    if (!$copy_res) {
+                        throw new Dj_App_File_Util_Exception("Couldn't copy file to temp", ['file' => $file, 'tmp_file' => $tmp_file]);
+                    }
+                }
+
+                // Write to temp file
+                $res = file_put_contents($tmp_file, $buff, $flags);
+
+                if (empty($res)) {
+                    throw new Dj_App_File_Util_Exception("Couldn't write to temp file", ['tmp_file' => $tmp_file]);
+                }
+
+                // Rename temp to target
+                $rename_res = rename($tmp_file, $file);
+
+                if (!$rename_res) {
+                    throw new Dj_App_File_Util_Exception("Couldn't rename temp file", ['tmp_file' => $tmp_file, 'file' => $file]);
+                }
+
+                // Restore permissions
+                if (!empty($perms)) {
+                    $chmod_res = chmod($file, $perms);
+                }
+            } else {
+                // File doesn't exist, write directly
+                $res = file_put_contents($file, $buff, $flags);
+
+                if (empty($res)) {
+                    throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
+                }
             }
 
             $res_obj->status = true;
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
+
+            // Clean up temp file on error
+            if (!empty($tmp_file) && file_exists($tmp_file)) {
+                @unlink($tmp_file);
+            }
         } finally {
 
         }
