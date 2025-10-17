@@ -13,16 +13,40 @@ class File_Util_Test extends TestCase {
 
     public function tearDown() : void {
         if (is_dir($this->test_dir)) {
-            $files = glob($this->test_dir . '/*');
+            $this->removeDirectory($this->test_dir);
+        }
+    }
 
-            foreach ($files as $file) {
-                if (is_file($file)) {
-                    unlink($file);
+    private function removeDirectory($dir) {
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        $scan_result = scandir($dir);
+        $exclude_items = ['.', '..', ];
+        $files = array_diff($scan_result, $exclude_items);
+
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+
+            if (is_dir($path)) {
+                $remove_res = $this->removeDirectory($path);
+
+                if (!$remove_res) {
+                    return false;
+                }
+            } else {
+                $unlink_res = unlink($path);
+
+                if (!$unlink_res) {
+                    return false;
                 }
             }
-
-            rmdir($this->test_dir);
         }
+
+        $rmdir_res = rmdir($dir);
+
+        return $rmdir_res;
     }
 
     public function testReadPartiallySmallFile()
@@ -114,5 +138,190 @@ class File_Util_Test extends TestCase {
 
         $this->assertEquals($content, $result);
         $this->assertEquals(100000, strlen($result));
+    }
+
+    public function testWriteNewFile()
+    {
+        $test_file = $this->test_dir . '/write_new.txt';
+        $content = 'New file content';
+
+        $res_obj = Dj_App_File_Util::write($test_file, $content);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertFileExists($test_file);
+        $this->assertEquals($content, file_get_contents($test_file));
+    }
+
+    public function testWriteExistingFile()
+    {
+        $test_file = $this->test_dir . '/write_existing.txt';
+        file_put_contents($test_file, 'Original content');
+        chmod($test_file, 0644);
+
+        $new_content = 'Updated content';
+        $res_obj = Dj_App_File_Util::write($test_file, $new_content);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertEquals($new_content, file_get_contents($test_file));
+
+        // Verify permissions preserved
+        $perms = fileperms($test_file) & 0777;
+        $this->assertEquals(0644, $perms);
+    }
+
+    public function testWriteAppendMode()
+    {
+        $test_file = $this->test_dir . '/write_append.txt';
+        file_put_contents($test_file, 'Line 1' . "\n");
+
+        $append_content = 'Line 2' . "\n";
+        $write_params = ['flags' => FILE_APPEND];
+        $res_obj = Dj_App_File_Util::write($test_file, $append_content, $write_params);
+
+        $this->assertTrue($res_obj->status);
+        $expected = 'Line 1' . "\n" . 'Line 2' . "\n";
+        $this->assertEquals($expected, file_get_contents($test_file));
+    }
+
+    public function testWriteArrayData()
+    {
+        $test_file = $this->test_dir . '/write_array.json';
+        $data = ['key1' => 'value1', 'key2' => 'value2'];
+
+        $res_obj = Dj_App_File_Util::write($test_file, $data);
+
+        $this->assertTrue($res_obj->status);
+        $content = file_get_contents($test_file);
+        $decoded = json_decode($content, true);
+        $this->assertEquals($data, $decoded);
+    }
+
+    public function testWriteCreatesDirectory()
+    {
+        $test_subdir = $this->test_dir . '/subdir/nested';
+        $test_file = $test_subdir . '/file.txt';
+        $content = 'Content in nested dir';
+
+        $res_obj = Dj_App_File_Util::write($test_file, $content);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryExists($test_subdir);
+        $this->assertFileExists($test_file);
+        $this->assertEquals($content, file_get_contents($test_file));
+    }
+
+    public function testWriteTempFileCleanup()
+    {
+        $test_file = $this->test_dir . '/temp_cleanup.txt';
+        file_put_contents($test_file, 'Original');
+
+        $content = 'Updated';
+        $res_obj = Dj_App_File_Util::write($test_file, $content);
+
+        $this->assertTrue($res_obj->status);
+
+        // Verify no temp files left behind
+        $temp_files = glob($this->test_dir . '/*.dj_tmp.*');
+        $this->assertEmpty($temp_files, 'Temp files should be cleaned up');
+    }
+
+    public function testMkdirNewDirectory()
+    {
+        $test_subdir = $this->test_dir . '/new_dir';
+
+        $res_obj = Dj_App_File_Util::mkdir($test_subdir);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryExists($test_subdir);
+    }
+
+    public function testMkdirExistingDirectory()
+    {
+        $test_subdir = $this->test_dir . '/existing_dir';
+        mkdir($test_subdir, 0755);
+
+        $res_obj = Dj_App_File_Util::mkdir($test_subdir);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryExists($test_subdir);
+    }
+
+    public function testMkdirNestedDirectories()
+    {
+        $test_nested = $this->test_dir . '/level1/level2/level3';
+
+        $res_obj = Dj_App_File_Util::mkdir($test_nested);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryExists($test_nested);
+    }
+
+    public function testMkdirWithPermissions()
+    {
+        $test_subdir = $this->test_dir . '/perm_dir';
+
+        $res_obj = Dj_App_File_Util::mkdir($test_subdir, 0755);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryExists($test_subdir);
+
+        $perms = fileperms($test_subdir) & 0777;
+        $this->assertEquals(0755, $perms);
+    }
+
+    public function testNormalizePathBackslashes()
+    {
+        $path = 'C:\\Users\\test\\file.txt';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('C:/Users/test/file.txt', $result);
+    }
+
+    public function testNormalizePathMultipleSlashes()
+    {
+        $path = '/path//to///file.txt';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/file.txt', $result);
+    }
+
+    public function testNormalizePathEmptyString()
+    {
+        $path = '';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizePathNull()
+    {
+        $path = null;
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizePathTrimSpaces()
+    {
+        $path = '  /path/to/file.txt  ';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/file.txt', $result);
+    }
+
+    public function testNormalizePathRemoveTrailingSlash()
+    {
+        $path = '/path/to/directory/';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/directory', $result);
+    }
+
+    public function testNormalizePathRootSlash()
+    {
+        $path = '/';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/', $result);
+    }
+
+    public function testNormalizePathMixedSlashes()
+    {
+        $path = 'C:\\path/to\\file.txt';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('C:/path/to/file.txt', $result);
     }
 }
