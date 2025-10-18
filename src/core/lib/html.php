@@ -50,12 +50,12 @@ class Djebel_App_HTML {
 
 		// Add support for icons in select if icons are provided
 		if (!empty($extra_options['icons'])) {
-			$local_attr[] = 'class="Djebel_App_HTML_dropdown_with_icons"';
+			$local_attr[] = 'class="djebel_app_html_dropdown_with_icons"';
 			
 			// Add CSS for icon support only once
 			if (!$icons_css_added) {
 				$html .= "<style>
-					.Djebel_App_HTML_dropdown_with_icons option {
+					.djebel_app_html_dropdown_with_icons option {
 						padding-left: 25px;
 						background-repeat: no-repeat;
 						background-position: 5px center;
