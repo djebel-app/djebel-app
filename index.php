@@ -57,8 +57,9 @@ if ($app_load_options) {
 
 // should we run?
 $run_app = Dj_App_Config::cfg('app.core.run', true);
+$headless = Dj_App_Config::cfg('app.core.headless', false);
 
-if (empty($run_app)) {
+if (empty($run_app) || $headless) {
     return;
 }
 
