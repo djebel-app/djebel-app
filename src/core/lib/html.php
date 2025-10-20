@@ -21,7 +21,7 @@ class Djebel_App_HTML {
 			$attr_pairs = [];
 
 			foreach ($attr as $key => $value) {
-				$attr_pairs[] = sprintf( "$key='%s'", esc_attr($value));
+				$attr_pairs[] = sprintf( "$key='%s'", dj_esc_attr($value));
 			}
 
 			$attr_str = join( ' ', $attr_pairs );
@@ -33,16 +33,16 @@ class Djebel_App_HTML {
 
 		// if id is not supplied add it.
 		if (stripos($attr_str, 'id=') === false) {
-			$id = sanitize_title($name); // ID can't
+			$id = Dj_App_String_Util::formatSlug($name); // ID can't
 			$attr_str .= " id='$id' ";
 		}
 
         if (stripos($attr_str, 'class=') === false) {
-			$id = sanitize_title($name); // ID can't
+			$id = Dj_App_String_Util::formatSlug($name); // ID can't
 			$attr_str .= " class='$id' ";
 		}
 
-		$name = esc_attr($name); // can contain []
+		$name = dj_esc_attr($name); // can contain []
 		$html = "\n<select name='$name' $attr_str>\n";
 
 		// Move inactive IDs check outside loop for better performance
@@ -67,8 +67,8 @@ class Djebel_App_HTML {
 		}
 
 		foreach ($options as $key => $label) {
-            $key = esc_attr($key);
-            $label = esc_html($label);
+            $key = dj_esc_attr($key);
+            $label = dj_esc_html($label);
             
             // Collect option-specific attributes
             $local_attr = [];
@@ -83,14 +83,14 @@ class Djebel_App_HTML {
 
             // Add icon if provided in the options
             if (!empty($extra_options['icons'][$key])) {
-                $icon_url = esc_url($extra_options['icons'][$key]);
+                $icon_url = dj_esc_url($extra_options['icons'][$key]);
                 $local_attr[] = sprintf('style="background-image: url(\'%s\')"', $icon_url);
             }
 
             $local_attr_str = !empty($local_attr) ? ' ' . implode(' ', $local_attr) : '';
 
             if (!empty($label) && !empty($key) && !empty($extra_options['append_id'])) {
-                $label .= sprintf(' (id:%s)', esc_html($key));
+                $label .= sprintf(' (id:%s)', dj_esc_html($key));
             }
 
             $html .= "\t<option value='{$key}'{$local_attr_str}>{$label}</option>\n";
@@ -117,7 +117,7 @@ class Djebel_App_HTML {
 
 		foreach ($options as $val => $label) {
 			$single_radio_args = [
-				'id' => sanitize_title($name . '_' . $val),
+				'id' => Dj_App_String_Util::formatSlug($name . '_' . $val),
 				'msg' => $label,
 				'value' => $val,
 				'_type' => 'radio',
@@ -140,14 +140,14 @@ class Djebel_App_HTML {
 	 * You can append or prepend text by passing the last param '$extra'.
 	 */
 	public static function checkbox( $name, $cur_val = null, $extra = array() ) {
-		$cur_val_esc = esc_attr($cur_val);
-		$name    = esc_attr($name);
+		$cur_val_esc = dj_esc_attr($cur_val);
+		$name    = dj_esc_attr($name);
 		$html    = '';
 		$id     = empty($extra['id']) ? '' : $extra['id'];
 		$msg     = empty($extra['msg']) ? '' : $extra['msg'];
 		$attr    = empty($extra['attr']) ? '' : $extra['attr'];
 		$value   = isset($extra['value']) ? $extra['value'] : 1;
-		$value_esc = esc_attr($value);
+		$value_esc = dj_esc_attr($value);
 
 		if (!empty($id)) {
 			// ok
@@ -165,11 +165,11 @@ class Djebel_App_HTML {
 			$attr .= " checked='checked' ";
 		}
 
-		$type = empty($extra['_type']) ? 'checkbox' : esc_attr($extra['_type']);
+		$type = empty($extra['_type']) ? 'checkbox' : dj_esc_attr($extra['_type']);
 
 		// Let's make things bold (if any)
 		$msg = preg_replace( '#\*(.*?)\*#si', '<strong>${1}</strong>', $msg );
-		$msg_esc = esc_html($msg);
+		$msg_esc = dj_esc_html($msg);
 		$html .= "\n<label for='$id'><input id='$id' type='$type' name='$name' value='$value_esc' $attr /> $msg_esc</label>\n";
 
 		// We have a hidden element that corresponds to the checkbox so we always have a value
@@ -191,12 +191,12 @@ class Djebel_App_HTML {
 	 * Djebel_App_HTML::text();
 	 */
 	public static function text( $name, $value = '', $extra = array() ) {
-		$name    = esc_attr($name);
+		$name    = dj_esc_attr($name);
 		$html    = '';
 		$id     = empty($extra['id']) ? '' : $extra['id'];
 		$msg     = empty($extra['msg']) ? '' : $extra['msg'];
 		$attr    = empty($extra['attr']) ? '' : $extra['attr'];
-		$value_esc = esc_attr($value);
+		$value_esc = dj_esc_attr($value);
 
 		if (!empty($id)) {
 			// ok
@@ -210,11 +210,11 @@ class Djebel_App_HTML {
 			$id = $matches[1];
 		}
 
-		$type = empty($extra['_type']) ? 'text' : esc_attr($extra['_type']);
+		$type = empty($extra['_type']) ? 'text' : dj_esc_attr($extra['_type']);
 
 		// Let's make things bold (if any)
 		$msg = preg_replace( '#\*(.*?)\*#si', '<strong>${1}</strong>', $msg );
-		$msg_esc = esc_html($msg);
+		$msg_esc = dj_esc_html($msg);
 		$html .= "\n<label for='$id'><input type='$type' id='$id' name='$name' value='$value_esc' $attr /> $msg_esc</label>\n";
 
 		// We have a hidden element that corresponds to the checkbox so we always have a value
@@ -244,112 +244,10 @@ class Djebel_App_HTML {
                 continue;
             }
 
-            $dropdown_arr[$id] = esc_html($label);
+            $dropdown_arr[$id] = dj_esc_html($label);
         }
 
         return $dropdown_arr;
-    }
-
-    /**
-     * Djebel_App_HTML::generateAssetUrl();
-     * Enqueues a plugin or css file that is within the plugin.
-     * @todo switch to .min version if available and live.
-     * @todo allow external urls
-     * @param string $file_rel
-     * @param string $plugin_file
-     * @return string
-     */
-    public static function generateAssetUrl($file_rel, $plugin_file) {
-        if (!function_exists('plugin_dir_path')) {
-            return '';
-        }
-
-        $file = plugin_dir_path($plugin_file) . $file_rel;
-
-        if (!file_exists($file)) {
-            return '';
-        }
-
-        $file_last_mod = filemtime($file);
-        $src_url = plugins_url($file_rel, $plugin_file);
-
-        if (!empty($file_last_mod)) {
-	        $src_url = add_query_arg('v', $file_last_mod, $src_url);
-        }
-
-        return $src_url;
-    }
-
-    /**
-     * Djebel_App_HTML::enqueueAsset();
-     * Enqueues a plugin or css file that is within the plugin.
-     * @todo switch to .min version if available and live.
-     * @todo allow external urls
-     * @param string $file_rel
-     * @param string $plugin_file
-     * @return bool
-     */
-    public static function enqueueAsset($file_rel, $plugin_file = '') {
-        if (!function_exists('wp_enqueue_style')) {
-            return false;
-        }
-
-        $file = plugin_dir_path($plugin_file) . $file_rel;
-
-        if (!file_exists($file)) {
-            trigger_error("Plugin asset not found. File: [$file_rel]", E_USER_ERROR);
-        }
-
-        $suffix = QS_SITE_LIVE_ENV ? '.min' : '';
-        $load_url = plugins_url( $file_rel, $plugin_file );
-
-        // check for this modify to min if running on live
-        if (!empty($suffix)) {
-            $ext_now = strpos($file_rel, '.css') !== false ? 'css' : 'js';
-
-            $file_rel_min = QS_Site_App_File_Util::replaceExt($file_rel, $suffix . '.' . $ext_now);
-            $local_file_full = plugin_dir_path( $plugin_file ) . $file_rel_min;
-
-            if (is_file($local_file_full)) {
-                $file = $local_file_full;
-                $load_url = plugins_url( $file_rel_min, $plugin_file );
-            }
-        }
-
-        $plugin_file = empty($plugin_file) ? QS_SITE_CORE_BASE_PLUGIN : $plugin_file;
-
-        $file_last_mod = filemtime($file);
-
-        $handle = basename($plugin_file) . '-' . basename($file_rel);
-        $handle_fmt = $handle;
-        $handle_fmt = str_ireplace([ '.php', '.js', '.css', ], '', $handle_fmt);
-        $handle_fmt = sanitize_title($handle_fmt);
-        $handle_fmt = str_replace([ '--', '_', ], '-', $handle_fmt);
-
-        if (stripos($file_rel, '.css') !== false) {
-            wp_register_style(
-                $handle_fmt,
-                $load_url,
-                array(),
-                $file_last_mod,
-                'all'
-            );
-
-            wp_enqueue_style( $handle_fmt );
-            return true;
-        } elseif (stripos($file_rel, '.js') !== false) {
-            wp_enqueue_script(
-                $handle_fmt,
-                $load_url,
-                array('jquery'),
-                $file_last_mod,
-                true
-            );
-
-            return true;
-        }
-
-        return false;
     }
 
 	/**
@@ -542,28 +440,43 @@ class Djebel_App_HTML {
 
     /**
      * Djebel_App_HTML::encodeEntities();
+     *
+     * @deprecated Use escHtml() or dj_esc_html() instead
      * @param string $str
      * @return string
      */
     static public function encodeEntities($str) {
-        if (empty($str) || !is_scalar($str)) {
-            return '';
-        }
+        return self::escHtml($str);
+    }
 
-        $str = htmlentities($str, ENT_QUOTES, 'UTF-8');
-
+    /**
+     * Decode HTML entities back to characters
+     * Djebel_App_HTML::decHtml()
+     *
+     * Converts HTML entities like &lt; &gt; &amp; back to < > &
+     *
+     * @param string $str The string with HTML entities
+     * @return string The decoded string
+     *
+     * @example
+     * $encoded = '&lt;div&gt;Content&lt;/div&gt;';
+     * $decoded = Djebel_App_HTML::decHtml($encoded);
+     * // Returns: <div>Content</div>
+     */
+    static public function decHtml($str) {
+        $str = html_entity_decode($str, ENT_COMPAT, 'UTF-8');
         return $str;
     }
 
     /**
-     *
      * Djebel_App_HTML::decodeEntities();
+     *
+     * @deprecated Use decHtml() or dj_dec_html() instead
      * @param string $str
      * @return string
      */
     static public function decodeEntities($str) {
-        $str = html_entity_decode( $str, ENT_COMPAT, 'UTF-8' );
-        return $str;
+        return self::decHtml($str);
     }
 
     /**
@@ -788,5 +701,223 @@ class Djebel_App_HTML {
         }
         
         return true;
+    }
+
+    /**
+     * Escape HTML attribute value for safe output
+     * Djebel_App_HTML::escAttr()
+     *
+     * Converts special characters to HTML entities to prevent XSS attacks in attributes.
+     * Use this for any user-supplied data inserted into HTML attributes.
+     *
+     * @param mixed $value The value to escape
+     * @return string The escaped string safe for use in HTML attributes
+     *
+     * @example
+     * $name = dj_esc_attr($_GET['name']);
+     * echo "<input name='$name' />";
+     *
+     * @example
+     * $class = Djebel_App_HTML::escAttr($user_class);
+     * echo "<div class='$class'>Content</div>";
+     */
+    public static function escAttr($value) {
+        if (empty($value) && !is_numeric($value)) {
+            return '';
+        }
+
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        $value = (string) $value;
+        $escaped = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+        return $escaped;
+    }
+
+    /**
+     * Escape HTML content for safe output
+     * Djebel_App_HTML::escHtml()
+     *
+     * Converts special characters to HTML entities to prevent XSS attacks.
+     * Use this for any user-supplied data inserted into HTML content.
+     *
+     * @param mixed $value The value to escape
+     * @return string The escaped string safe for use in HTML content
+     *
+     * @example
+     * $title = dj_esc_html($_GET['title']);
+     * echo "<h1>$title</h1>";
+     *
+     * @example
+     * $comment = Djebel_App_HTML::escHtml($user_comment);
+     * echo "<p>$comment</p>";
+     */
+    public static function escHtml($value) {
+        if (empty($value) && !is_numeric($value)) {
+            return '';
+        }
+
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        $value = (string) $value;
+        $escaped = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+        return $escaped;
+    }
+
+    /**
+     * Escape URL for safe output
+     * Djebel_App_HTML::escUrl()
+     *
+     * Validates and sanitizes URLs to prevent XSS attacks.
+     * Only allows http://, https://, and relative URLs.
+     *
+     * @param string $url The URL to escape
+     * @return string The sanitized URL safe for use in href/src attributes
+     *
+     * @example
+     * $redirect = dj_esc_url($_GET['next']);
+     * echo "<a href='$redirect'>Next</a>";
+     *
+     * @example
+     * $image = Djebel_App_HTML::escUrl($user_avatar);
+     * echo "<img src='$image' />";
+     */
+    public static function escUrl($url) {
+        if (empty($url)) {
+            return '';
+        }
+
+        if (!is_string($url)) {
+            return '';
+        }
+
+        $url = Dj_App_String_Util::trim($url);
+
+        if (empty($url)) {
+            return '';
+        }
+
+        $url_lower = strtolower($url);
+        $first_char = substr($url, 0, 1);
+
+        if ($first_char == '/') {
+            $escaped = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            return $escaped;
+        }
+
+        $is_http = strpos($url_lower, 'http://') === 0;
+        $is_https = strpos($url_lower, 'https://') === 0;
+
+        if (!$is_http && !$is_https) {
+            return '';
+        }
+
+        $escaped = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+
+        return $escaped;
+    }
+}
+
+// Standalone convenience functions for common escaping operations
+// These are thin wrappers around the class methods for brevity
+
+if (!function_exists('dj_esc_attr')) {
+    /**
+     * Escape HTML attribute value
+     * Convenience wrapper for Djebel_App_HTML::escAttr()
+     *
+     * @param mixed $value The value to escape
+     * @return string The escaped string
+     *
+     * @example
+     * echo "<input name='" . dj_esc_attr($name) . "' />";
+     */
+    function dj_esc_attr($value) {
+        return Djebel_App_HTML::escAttr($value);
+    }
+}
+
+if (!function_exists('dj_esc_html')) {
+    /**
+     * Escape HTML content
+     * Convenience wrapper for Djebel_App_HTML::escHtml()
+     *
+     * @param mixed $value The value to escape
+     * @return string The escaped string
+     *
+     * @example
+     * echo "<h1>" . dj_esc_html($title) . "</h1>";
+     */
+    function dj_esc_html($value) {
+        return Djebel_App_HTML::escHtml($value);
+    }
+}
+
+if (!function_exists('dj_esc_url')) {
+    /**
+     * Escape URL
+     * Convenience wrapper for Djebel_App_HTML::escUrl()
+     *
+     * @param string $url The URL to escape
+     * @return string The sanitized URL
+     *
+     * @example
+     * echo "<a href='" . dj_esc_url($redirect) . "'>Next</a>";
+     */
+    function dj_esc_url($url) {
+        return Djebel_App_HTML::escUrl($url);
+    }
+}
+
+if (!function_exists('dj_esc')) {
+    /**
+     * Escape HTML (default escaping function)
+     * Convenience wrapper that defaults to HTML content escaping
+     *
+     * @param mixed $value The value to escape
+     * @return string The escaped string
+     *
+     * @example
+     * echo dj_esc($user_input);
+     */
+    function dj_esc($value) {
+        return dj_esc_html($value);
+    }
+}
+
+if (!function_exists('dj_dec_html')) {
+    /**
+     * Decode HTML entities
+     * Convenience wrapper for Djebel_App_HTML::decHtml()
+     *
+     * @param string $str The string with HTML entities
+     * @return string The decoded string
+     *
+     * @example
+     * echo dj_dec_html('&lt;div&gt;Content&lt;/div&gt;');
+     */
+    function dj_dec_html($str) {
+        return Djebel_App_HTML::decHtml($str);
+    }
+}
+
+if (!function_exists('dj_dec')) {
+    /**
+     * Decode HTML (default decoding function)
+     * Convenience wrapper that defaults to HTML entity decoding
+     *
+     * @param string $str The string with HTML entities
+     * @return string The decoded string
+     *
+     * @example
+     * echo dj_dec('&lt;div&gt;');
+     */
+    function dj_dec($str) {
+        return dj_dec_html($str);
     }
 }
