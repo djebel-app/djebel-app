@@ -6,10 +6,17 @@ class Shortcode_Test extends TestCase
 {
     private $shortcode;
     
-    public function setUp(): void 
+    public function setUp(): void
     {
-        $this->shortcode = new Dj_App_Shortcode();
-        
+        $app_lib_dir = Dj_App_Config::cfg('app.sys.app_lib_dir');
+
+        // we load this because run=0 and shortcode is not loaded.
+        if (!class_exists('Dj_App_Shortcode')) {
+            require_once $app_lib_dir . '/shortcode.php';
+        }
+
+        $this->shortcode = Dj_App_Shortcode::getInstance();
+
         // Add test shortcodes for testing
         $this->shortcode->addShortcode('test_simple', [$this, 'renderTestSimple']);
         $this->shortcode->addShortcode('test_with_params', [$this, 'renderTestWithParams']);
