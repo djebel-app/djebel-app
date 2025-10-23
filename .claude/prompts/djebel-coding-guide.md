@@ -1,6 +1,108 @@
-# Djebel PHP Framework Coding Guide
+# Djebel PHP Framework - Complete Guide
 
 You are an expert PHP developer working with the Djebel framework, a custom PHP framework with a plugin architecture, hooks system, and multi-site support.
+
+---
+
+## Project Overview
+
+This is the **Djebel PHP Framework** project - a custom PHP framework with:
+- Multi-site architecture (shared core, site-specific content)
+- Plugin system with hooks and filters
+- Custom utility classes for common operations
+- Markdown-based content management
+- Static content plugin for blog/documentation
+
+### Directory Structure
+
+```
+djebel/
+├── github/djebel-app/          # Core framework (shared, minimal)
+│   └── src/core/lib/           # Core utilities (Dj_App_*)
+├── app/sites/djebel-live/      # Site-specific content
+│   ├── dj-content/             # Public content
+│   │   ├── plugins/            # Site plugins (MOST functionality)
+│   │   ├── themes/             # Site themes
+│   │   └── data/               # Public markdown files
+│   └── .ht_djebel/             # Private site data
+└── tests/                      # PHPUnit tests
+    └── unit_tests/lib/         # Unit tests for core lib
+```
+
+### Architecture Philosophy
+
+**Almost Everything is a Plugin**
+
+Djebel follows a minimal-core, maximum-plugin architecture:
+
+- **Core**: Only essential infrastructure (hooks, utilities, request handling, cache)
+- **Plugins**: Everything else (markdown, blog, language, SEO, forms, etc.)
+
+**Key Decision**: Core vs Plugin?
+
+Ask these questions:
+1. **Does every site need this?** → If no, make it a plugin
+2. **Can it be disabled without breaking core?** → If yes, make it a plugin
+3. **Is it feature-specific?** → If yes, make it a plugin
+4. **Would removing this make the framework lighter?** → If yes, consider moving to plugin
+
+**Brainstorm and Iterate**: These decisions aren't permanent. We regularly:
+- Move core → plugin if rarely used
+- Move plugin → core if universally needed
+- Split large plugins into focused ones
+- Merge small related plugins
+
+Don't be afraid to refactor. The architecture should adapt to actual usage, not assumptions.
+
+### Common Framework Classes
+
+- `Dj_App_Util` - General utilities (isEnabled, isDisabled, removeSlash, time, strtotime)
+- `Dj_App_String_Util` - String operations (trim, formatSlug, getFirstChar)
+- `Dj_App_File_Util` - File operations (normalizePath, readPartially)
+- `Dj_App_Hooks` - Hook system (addFilter, addAction, applyFilter)
+- `Dj_App_Options` - Configuration (get, isEnabled)
+- `Dj_App_Request` - HTTP requests (getWebPath, getCleanRequestUrl, get, set)
+- `Dj_App_Result` - Result objects (status, isError, data)
+- `Dj_App_Cache` - Caching (get, set, remove, removeAll)
+- `Djebel_App_HTML` - HTML utilities (escAttr, escHtml, escUrl, encodeEntities)
+
+### Quick Reference
+
+```php
+// Boolean checks
+$enabled = Dj_App_Util::isEnabled($param);
+$disabled = Dj_App_Util::isDisabled($param);
+
+// Slash removal
+$clean = Dj_App_Util::removeSlash($path, Dj_App_Util::FLAG_BOTH);
+
+// String trimming
+$trimmed = Dj_App_String_Util::trim($str);
+
+// Path normalization
+$normalized = Dj_App_File_Util::normalizePath($path);
+
+// HTML escaping (NEW - use these!)
+echo dj_esc($user_input);                    // Quick HTML escape
+echo dj_esc_attr($attribute);                // For HTML attributes
+echo dj_esc_url($url);                       // For URLs
+echo Djebel_App_HTML::encodeEntities($str);  // Alternative (both valid)
+
+// String search (prefer over regex)
+if (strpos($content, '---') !== false) {
+    // found
+}
+
+// Multiple strpos (bracket each one)
+if ((strpos($url, 'http://') === 0) || (strpos($url, 'https://') === 0)) {
+    // is http/https URL
+}
+
+// Hooks
+$value = Dj_App_Hooks::applyFilter('hook.name', $value, $ctx);
+```
+
+---
 
 ## Core Principles
 
@@ -102,6 +204,69 @@ if (strpos($n, $s) === 0) {
 3. **Clarity** - Will someone understand this in 6 months?
 
 If you can't answer "yes" to all three, reconsider your approach.
+
+---
+
+## Development Workflow
+
+### When Implementing Features
+
+1. **Consider architecture first** - Should this be in core or a plugin? (Almost always plugin)
+2. **Read existing code** - understand patterns before changing
+3. **Follow copy-extend-filter** - copy params, extend, filter before use
+4. **Add filter hooks** - before returning values
+5. **Optimize loops** - normalize/calculate outside loops
+6. **Document with examples** - show input/output in comments
+7. **Test cache behavior** - respect TTL and per-collection settings
+8. **Write tests** - for new methods AND when updating existing methods (add missing test cases)
+9. **Be proactive** - suggest optimizations and security improvements, even if it means reducing scope or breaking features into smaller blocks
+10. **Brainstorm refactoring** - question whether code should move between core/plugin based on usage
+
+### Be Proactive
+
+When reviewing or implementing code, actively suggest:
+- **Performance optimizations** - caching, loop optimization, buffer size reduction
+- **Security improvements** - input sanitization, validation, safe defaults
+- **Feature breakdown** - split complex features into smaller, manageable blocks
+- **Scope reduction** - propose MVP approach for overly complex features
+- **Better architecture** - suggest cleaner patterns if implementation is convoluted
+
+Don't hesitate to question implementation decisions that impact performance or security.
+
+### Don't Assume
+
+- Language codes (`en/`) are added by another plugin - never hardcode
+- Directory structure in URLs is **optional** (hash IDs ensure uniqueness)
+- Cache may be disabled - check settings
+- Users may override via hooks - provide context arrays
+
+---
+
+## ⚠️ CRITICAL RULE: Backward Compatibility is Sacred
+
+### NEVER Deprecate Without Permission
+
+**NEVER mark existing functions, methods, or APIs as deprecated without explicit user approval.**
+
+This is a **production framework** running on live sites. Breaking changes break production.
+
+- ❌ **DO NOT** add `@deprecated` tags without permission
+- ❌ **DO NOT** change existing function behavior without permission
+- ❌ **DO NOT** remove functionality without permission
+- ❌ **DO NOT** break backward compatibility without permission
+
+**If you think something should be deprecated:**
+1. **ASK the user first**
+2. Explain why you think it should be deprecated
+3. Wait for explicit approval
+4. Only then proceed with deprecation process
+
+**Why this matters:**
+- Existing code in plugins, themes, and sites depends on these functions
+- Breaking backward compatibility causes bugs in production
+- Users choose which function to use based on their needs
+- Both old and new functions should coexist
+- Example: `encodeEntities()` and `dj_esc()` are BOTH valid - users choose
 
 ---
 
@@ -805,28 +970,9 @@ if (!$user->hasPermission('edit')) {
 
 ## Backward Compatibility & Deprecation
 
-### ⚠️ CRITICAL RULE: NEVER Deprecate Without Permission
-
-**NEVER mark existing functions, methods, or APIs as deprecated without explicit user approval.**
-
-- ❌ DO NOT add `@deprecated` tags without permission
-- ❌ DO NOT change existing function behavior without permission
-- ❌ DO NOT remove functionality without permission
-- ✅ DO suggest deprecation and ask user first
-- ✅ DO maintain backward compatibility
-- ✅ DO keep all existing functions working
-
-**Why:** Existing code in plugins, themes, and sites depends on these functions. Breaking backward compatibility causes bugs in production.
-
-**If you think something should be deprecated:**
-1. Ask the user first
-2. Explain why you think it should be deprecated
-3. Wait for explicit approval
-4. Only then proceed with deprecation process
-
 ### Deprecation Process (Only After User Approval)
 
-When removing or changing functionality (AFTER user approves):
+When removing or changing functionality (AFTER user explicitly approves):
 
 ```php
 // Step 1: Mark as deprecated (version X.X)
