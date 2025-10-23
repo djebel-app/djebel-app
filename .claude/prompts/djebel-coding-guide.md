@@ -805,9 +805,28 @@ if (!$user->hasPermission('edit')) {
 
 ## Backward Compatibility & Deprecation
 
-### Deprecation Process
+### ⚠️ CRITICAL RULE: NEVER Deprecate Without Permission
 
-When removing or changing functionality:
+**NEVER mark existing functions, methods, or APIs as deprecated without explicit user approval.**
+
+- ❌ DO NOT add `@deprecated` tags without permission
+- ❌ DO NOT change existing function behavior without permission
+- ❌ DO NOT remove functionality without permission
+- ✅ DO suggest deprecation and ask user first
+- ✅ DO maintain backward compatibility
+- ✅ DO keep all existing functions working
+
+**Why:** Existing code in plugins, themes, and sites depends on these functions. Breaking backward compatibility causes bugs in production.
+
+**If you think something should be deprecated:**
+1. Ask the user first
+2. Explain why you think it should be deprecated
+3. Wait for explicit approval
+4. Only then proceed with deprecation process
+
+### Deprecation Process (Only After User Approval)
+
+When removing or changing functionality (AFTER user approves):
 
 ```php
 // Step 1: Mark as deprecated (version X.X)
