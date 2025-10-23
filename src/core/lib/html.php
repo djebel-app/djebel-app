@@ -439,9 +439,11 @@ class Djebel_App_HTML {
 
 
     /**
-     * Djebel_App_HTML::encodeEntities();
+     * Encode all applicable characters to HTML entities
+     * Djebel_App_HTML::encodeEntities()
      *
-     * @deprecated Use escHtml() or dj_esc_html() instead
+     * Convenience wrapper for escHtml() - both are valid, use whichever you prefer.
+     *
      * @param string $str
      * @return string
      */
@@ -469,9 +471,11 @@ class Djebel_App_HTML {
     }
 
     /**
-     * Djebel_App_HTML::decodeEntities();
+     * Decode HTML entities back to characters
+     * Djebel_App_HTML::decodeEntities()
      *
-     * @deprecated Use decHtml() or dj_dec_html() instead
+     * Convenience wrapper for decHtml() - both are valid, use whichever you prefer.
+     *
      * @param string $str
      * @return string
      */
