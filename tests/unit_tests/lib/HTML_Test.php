@@ -407,13 +407,32 @@ class HTML_Test extends TestCase {
         $this->assertStringContainsString('&quot;', $result);
     }
 
-    // Tests for encodeEntities() backward compatibility
+    // Tests for encodeEntities() - wrapper for escHtml()
 
-    public function testEncodeEntitiesDelegatesToEscHtml()
+    public function testEncodeEntitiesBasic()
     {
         $input = '<div>Test & Content</div>';
         $result = Djebel_App_HTML::encodeEntities($input);
+
+        $this->assertStringContainsString('&lt;', $result);
+        $this->assertStringContainsString('&gt;', $result);
+        $this->assertStringContainsString('&amp;', $result);
+    }
+
+    public function testEncodeEntitiesDelegatesToEscHtml()
+    {
+        $input = '<script>alert("test")</script>';
+        $result = Djebel_App_HTML::encodeEntities($input);
         $expected = Djebel_App_HTML::escHtml($input);
+
+        $this->assertEquals($expected, $result);
+    }
+
+    public function testDecodeEntitiesDelegatesToDecHtml()
+    {
+        $input = '&lt;div&gt;Test &amp; Content&lt;/div&gt;';
+        $result = Djebel_App_HTML::decodeEntities($input);
+        $expected = Djebel_App_HTML::decHtml($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -522,15 +541,6 @@ class HTML_Test extends TestCase {
         $result = Djebel_App_HTML::decHtml($input);
 
         $this->assertEquals('plain text', $result);
-    }
-
-    public function testDecodeEntitiesDelegatesToDecHtml()
-    {
-        $input = '&lt;div&gt;Test &amp; Content&lt;/div&gt;';
-        $result = Djebel_App_HTML::decodeEntities($input);
-        $expected = Djebel_App_HTML::decHtml($input);
-
-        $this->assertEquals($expected, $result);
     }
 
     // Tests for decode wrapper functions
