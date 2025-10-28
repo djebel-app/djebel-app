@@ -137,12 +137,39 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
    $keys[] = $key2;
    ```
 
-9. **Proper spacing**: Add blank line after variable assignments before if blocks
-   ```php
-   $bracket_pos = strpos($key, '[');
+9. **Breathing room - vertical spacing for readability**: Add blank lines to separate logical chunks within code blocks. Code should "breathe" and not be cramped:
 
-   if ($bracket_pos !== false) {
+   ✅ CORRECT - Good breathing room:
+   ```php
+   if (!empty($config['smtp_secure'])) {
+       $secure = strtolower($config['smtp_secure']);
+
+       // Only accept valid values (tls or ssl)
+       if (!in_array($secure, ['tls', 'ssl'])) {
+           throw new Exception('Invalid smtp_secure value. Must be "tls" or "ssl"');
+       }
+
+       $this->mailer->SMTPSecure = $secure;
+   }
    ```
+
+   ❌ WRONG - Too cramped:
+   ```php
+   if (!empty($config['smtp_secure'])) {
+       $secure = strtolower($config['smtp_secure']);
+       // Only accept valid values (tls or ssl)
+       if (!in_array($secure, ['tls', 'ssl'])) {
+           throw new Exception('Invalid smtp_secure value. Must be "tls" or "ssl"');
+       }
+       $this->mailer->SMTPSecure = $secure;
+   }
+   ```
+
+   **Spacing Guidelines:**
+   - Blank line after variable assignments/setup before logic
+   - Blank line before inline comments that describe the following code
+   - Blank line after validation/checks before the actual operation
+   - Blank line between distinct logical operations within a block
 
 10. **Use local variables for array operations** - NEVER do inline array operations with str_replace:
     - ❌ WRONG: `str_replace(['/plugins/', '/themes/'], ['/plugin/', '/theme/'], $str)` (inline arrays)
