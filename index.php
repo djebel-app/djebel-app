@@ -285,7 +285,8 @@ class Dj_App_Config {
             return $data;
         }
 
-        $env_vars = parse_ini_file($file, false, INI_SCANNER_TYPED);
+        // using INI_SCANNER_RAW because so we have any special chars like | preserved in the values.
+        $env_vars = parse_ini_file($file, false, INI_SCANNER_RAW);
         $env_vars = array_change_key_case($env_vars, CASE_UPPER);
 
         if ($flags & self::INI_LOAD_SET_ENV) {
