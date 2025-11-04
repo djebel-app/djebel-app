@@ -834,4 +834,59 @@ EOT;
         $this->assertEquals('Test Site', $site_section['site_title']);
         $this->assertEquals('Test Site', $site_section->site_title);
     }
+
+    public function testCommaSeparatedFallbackKeys()
+    {
+        $ini_content = <<<EOT
+[theme]
+theme_id = my-theme
+
+[site]
+theme_id = site-theme
+title = Test Site
+
+[meta]
+default.title = Default Meta Title
+EOT;
+
+        $options_obj = Dj_App_Options::getInstance();
+        $parsed_data = $options_obj->parseBuffer($ini_content);
+        $options_obj->setData($parsed_data);
+
+        // Test single key first to ensure basic get() works
+        $single_result = $options_obj->get('theme.theme_id');
+        $this->assertEquals('my-theme', $single_result, 'Single key get should work');
+
+        // Test fallback: first key exists
+        $result = $options_obj->get('theme.theme_id, site.theme_id', 'default');
+        $this->assertEquals('my-theme', $result, 'Should return first key value when it exists');
+
+        // Test fallback: first key empty, second exists
+        $result = $options_obj->get('theme.nonexistent, site.theme_id', 'default');
+        $this->assertEquals('site-theme', $result, 'Should fallback to second key when first is empty');
+
+        // Test fallback: all keys empty, use default
+        $result = $options_obj->get('theme.missing1,theme.missing2,site.missing3', 'fallback-value');
+        $this->assertEquals('fallback-value', $result, 'Should return default when all keys are empty');
+
+        // Test fallback with whitespace (should trim)
+        $result = $options_obj->get('theme.theme_id, site.theme_id , meta.nonexistent', 'default');
+        $this->assertEquals('my-theme', $result, 'Should handle whitespace in comma-separated keys');
+
+        // Test realistic theme detection scenario
+        $result = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme', 'default');
+        $this->assertEquals('my-theme', $result, 'Should find theme_id when theme is not set');
+
+        // Test nested key in fallback chain
+        $result = $options_obj->get('theme.missing,meta.default.title', 'default');
+        $this->assertEquals('Default Meta Title', $result, 'Should work with nested keys in fallback');
+
+        // Test single key (no comma) still works
+        $result = $options_obj->get('site.title', 'default');
+        $this->assertEquals('Test Site', $result, 'Single key without comma should still work');
+
+        // Test empty default
+        $result = $options_obj->get('missing1,missing2,missing3');
+        $this->assertEquals('', $result, 'Should return empty string when no default provided');
+    }
 }
