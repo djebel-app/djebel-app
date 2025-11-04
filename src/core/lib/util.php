@@ -1189,35 +1189,34 @@ MSG_EOF;
      * @return bool True if the value represents an enabled state, false otherwise
      */
     public static function isEnabled($val) {
+        // OPTIMIZATION: Handle most common cases first (true, 1, "1")
+        if ($val === true || $val === 1 || $val === '1') {
+            return true;
+        }
+
         if (empty($val) || !is_scalar($val)) {
             return false;
         }
 
-        if ($val === true) {
-            return true;
-        }
-
         if (is_numeric($val)) {
-            $val = (int) $val;
-            return !empty($val);
+            $val_int = (int) $val;
+            return $val_int !== 0;
         }
 
-        // Handle string values - trim only if it's a string
+        // OPTIMIZATION: Use hash map for O(1) lookup instead of O(n) loop
         if (is_string($val)) {
             $val = trim($val);
-        }
+            $val_lower = strtolower($val);
 
-        $true_vals = [
-            'yes',
-            'true',
-            'on',
-            'enabled',
-        ];
+            // Hash map for enabled values (O(1) lookup)
+            $enabled_map = [
+                'on' => true,
+                'yes' => true,
+                'true' => true,
+                'enabled' => true,
+            ];
 
-        foreach ($true_vals as $true_val) {
-            if (strcasecmp($val, $true_val) == 0) {
-                return true;
-            }
+            return isset($enabled_map[$val_lower]);
         }
 
         return false;
@@ -1251,8 +1250,8 @@ MSG_EOF;
      * @return bool True if the value represents a disabled state, false otherwise
      */
     public static function isDisabled($val) {
-        // Handle boolean false first
-        if ($val === false) {
+        // OPTIMIZATION: Handle most common cases first (false, 0, "0")
+        if ($val === false || $val === 0 || $val === '0') {
             return true;
         }
 
@@ -1266,24 +1265,24 @@ MSG_EOF;
 
         // Handle numeric values - zero should be disabled, positive numbers should not
         if (is_numeric($val)) {
-            $val = (int) $val;
-            return empty($val);
+            $val_int = (int) $val;
+            return $val_int === 0;
         }
 
-        // Handle string values - trim only if it's a string
-        $val = is_string($val) ? trim($val) : $val;
+        // OPTIMIZATION: Use hash map for O(1) lookup instead of O(n) loop
+        if (is_string($val)) {
+            $val = trim($val);
+            $val_lower = strtolower($val);
 
-        $disabled_vals = [
-            'false',
-            'no',
-            'off',
-            'disabled',
-        ];
+            // Hash map for disabled values (O(1) lookup)
+            $disabled_map = [
+                'no' => true,
+                'off' => true,
+                'false' => true,
+                'disabled' => true,
+            ];
 
-        foreach ($disabled_vals as $disabled_val) {
-            if (strcasecmp($val, $disabled_val) == 0) {
-                return true;
-            }
+            return isset($disabled_map[$val_lower]);
         }
 
         return false;
