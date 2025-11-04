@@ -428,6 +428,21 @@ This is a **production framework** running on live sites. Breaking changes break
 
 ### Framework-Specific Methods
 
+- **SMART Defaults**: Framework methods have intelligent defaults - don't pass redundant values
+  ```php
+  // CORRECT - Let framework handle defaults
+  $title = $req_obj->get('title');
+  $value = $options_obj->get('site.site_url');
+
+  // WRONG - Unnecessary empty string default
+  $title = $req_obj->get('title', '');
+  $value = $options_obj->get('site.site_url', '');
+
+  // ONLY pass custom defaults when you need a specific non-empty value
+  $page = $req_obj->get('page', 1);  // Default to page 1
+  $limit = $req_obj->get('limit', 10);  // Default to 10 items
+  ```
+
 - **String operations**: Use `Dj_App_String_Util::trim()` instead of PHP's `trim()`
 - **Boolean checks**: Use `Dj_App_Util::isDisabled()` and `Dj_App_Util::isEnabled()` for parameter validation
 - **Slash removal**: Use `Dj_App_Util::removeSlash()` with flags:
