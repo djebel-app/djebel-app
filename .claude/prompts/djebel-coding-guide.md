@@ -108,15 +108,17 @@ $value = Dj_App_Hooks::applyFilter('hook.name', $value, $ctx);
 
 ### CRITICAL: Security, Performance, and Code Clarity are the TOP priorities for this project.
 
-Every decision must be evaluated against these three pillars:
+Every decision must be evaluated against these three pillars. **You MUST push back on any code that violates these principles.**
 
-### 1. Security First
+### 1. Security First - ROCK SOLID and UNHACKABLE
 - **Always sanitize and validate user input** - never trust external data
 - **Escape output** - use `Djebel_App_HTML::encodeEntities()` for HTML output
 - **Prevent injection attacks** - no direct SQL, use prepared statements/ORM
 - **File operations security** - validate paths, prevent directory traversal
 - **Session and authentication** - follow framework security patterns
 - **Error messages** - never expose sensitive information in errors
+- **NO PHP references (`&`)** - explicit code only, no hidden mutations
+- **Challenge everything from outside** - If it comes from a user, file, API, or database, validate it
 
 ```php
 // CORRECT - Sanitized and escaped
@@ -124,9 +126,9 @@ $title = Dj_App_String_Util::trim($_REQUEST['title']);
 $title = Dj_App_String_Util::formatSlug($title);
 echo Djebel_App_HTML::encodeEntities($title);
 
-// BETTER - Use framework request object
+// BETTER - Use framework request object with SMART defaults (no need to pass '')
 $req_obj = Dj_App_Request::getInstance();
-$title = $req_obj->get('title', '');
+$title = $req_obj->get('title');  // Framework has smart defaults!
 $title = Dj_App_String_Util::trim($title);
 echo Djebel_App_HTML::encodeEntities($title);
 
@@ -134,14 +136,19 @@ echo Djebel_App_HTML::encodeEntities($title);
 echo $_REQUEST['title']; // XSS vulnerability!
 ```
 
-### 2. Performance Matters
-- **Optimize from the start** - don't "fix it later"
+### 2. Performance Matters - FASTER THAN ELON'S ROCKETS! 🚀
+- **Optimize from the start** - don't "fix it later", fix it NOW
 - **Profile before optimizing** - but anticipate bottlenecks
 - **Expensive operations OFF by default** - >20ms? Needs explicit enable
 - **Use smallest buffer sizes** - read only what you need
 - **Cache intelligently** - respect TTL, make cache optional
-- **Avoid repeated calculations** - especially in loops
+- **Avoid repeated calculations** - especially in loops, compute once and store in local var
 - **Prefer strpos over regex** - faster for simple string operations
+- **NO references (`&`)** - they're slower and harder to optimize
+- **Local variables for loop conditions** - `$count = count($array)` before the loop
+- **For loops beat foreach+array_reverse()** - no memory allocation overhead
+- **Check before processing** - use `strpos()` to check if replacement needed before `str_replace()`
+- **Millions of sites** - every microsecond × 1,000,000 = real performance impact
 
 ```php
 // CORRECT - Small buffer, only read what's needed
@@ -198,12 +205,28 @@ if (strpos($n, $s) === 0) {
 }
 ```
 
-### When in Doubt
-1. **Security** - Is it safe?
-2. **Performance** - Is it fast?
-3. **Clarity** - Will someone understand this in 6 months?
+### When in Doubt - ASK THESE QUESTIONS
+1. **Security** - Is it UNHACKABLE?
+   - All inputs validated?
+   - All outputs escaped?
+   - No injection vulnerabilities?
+   - Attacker-proof?
 
-If you can't answer "yes" to all three, reconsider your approach.
+2. **Performance** - Does it FLY like a ROCKET?
+   - Optimized from the start?
+   - No repeated calculations?
+   - Smallest buffer sizes?
+   - Faster than alternatives?
+
+3. **Clarity** - Is it CRYSTAL CLEAR?
+   - Will someone understand this in 6 months?
+   - No magic, no hidden behavior?
+   - Explicit and traceable?
+   - Easy to audit and debug?
+
+**If you can't answer "YES" to all three, STOP and reconsider your approach.**
+
+**If you see a problem, PUSH BACK immediately. You are the guardian of quality.**
 
 ---
 
@@ -416,6 +439,111 @@ This is a **production framework** running on live sites. Breaking changes break
 
 ### Performance Optimization
 
+- **NO PHP References (`&`)**: NEVER use references anywhere in the code
+  ```php
+  // WRONG - References are forbidden
+  $current = &$normalized;
+  function processData(&$data) { }
+
+  // CORRECT - Explicit code without references
+  $result = $value;
+  function processData($data) {
+      // ... process and return
+      return $processed_data;
+  }
+  ```
+  **Why**: References make code harder to audit, debug, and understand. They introduce hidden side effects and potential security vulnerabilities. This code will run on millions of sites - it must be explicit, traceable, and secure.
+
+- **Use local variables for performance**: Store computed values in local variables to avoid repeated function calls
+  ```php
+  // CORRECT - Compute once, use many times
+  $count = count($parts);
+  for ($i = $count - 1; $i >= 0; $i--) {
+      // use $count
+  }
+
+  // WRONG - Repeated computation
+  for ($i = count($parts) - 1; $i >= 0; $i--) {
+      // count() called on every iteration
+  }
+  ```
+
+- **Choose loops based on performance**: For loops with reverse iteration beat foreach with array_reverse()
+  ```php
+  // CORRECT - No memory allocation, direct index access
+  $count = count($parts);
+  for ($i = $count - 1; $i >= 0; $i--) {
+      $part = $parts[$i];
+      // process
+  }
+
+  // WRONG - Creates temporary reversed array
+  $reversed = array_reverse($parts);
+  foreach ($reversed as $part) {
+      // process
+  }
+  ```
+  **When this matters**: For small arrays (2-3 elements), the difference is negligible. But for code running on millions of sites processing thousands of operations, every microsecond counts. Always choose the faster approach.
+
+- **ALWAYS Push Back on Performance AND Security Issues**: Speak up immediately when you see problems
+
+  **Performance Pushback** - This tool must FLY:
+  - Question any approach that adds unnecessary overhead
+  - Suggest optimizations even if not explicitly asked
+  - Challenge decisions that impact speed
+  - Call out repeated calculations, file reads, or regex when simpler alternatives exist
+  - Remember: millions of sites × thousands of operations = every microsecond counts
+
+  **Security Pushback** - This tool must be UNHACKABLE:
+  - Challenge any user input that isn't sanitized
+  - Call out missing output escaping immediately
+  - Question file operations that don't validate paths
+  - Flag any SQL queries without prepared statements
+  - Identify potential injection points (XSS, SQL, Command, Path Traversal)
+  - Demand input validation on ALL external data
+  - No exceptions: If it comes from outside the application, it MUST be validated
+
+  **The Standard**: ROCK SOLID CODE
+  - If you see a vulnerability, STOP and fix it
+  - If you see a performance issue, SPEAK UP
+  - Never assume "it's probably fine" - verify it IS fine
+  - Code review with attacker mindset: "How could I exploit this?"
+  - This code runs on MILLIONS of sites - one vulnerability affects them all
+
+  **Your Responsibility**: Be the guardian of quality. Push back. Question. Verify. Make this code bulletproof.
+
+- **Inside-out array building**: Build nested arrays from the deepest level outward (no references needed)
+  ```php
+  // CORRECT - Inside-out building (no references)
+  private function buildNestedArray($parts, $value) {
+      $result = $value;
+      $count = count($parts);
+
+      // Build from inside out: wrap value in progressively deeper arrays
+      for ($i = $count - 1; $i >= 0; $i--) {
+          $key = $parts[$i];
+          $result = [$key => $result];
+      }
+
+      return $result;
+  }
+
+  // WRONG - Using references to build nested structure
+  private function buildNestedArray($parts, $value) {
+      $result = [];
+      $current = &$result;  // Reference!
+
+      foreach ($parts as $part) {
+          $current[$part] = [];
+          $current = &$current[$part];  // Reference!
+      }
+
+      $current = $value;
+      return $result;
+  }
+  ```
+  **Why inside-out is better**: No references, no mutation, easy to understand. Start with the value and wrap it in arrays going outward.
+
 - **Prefer strpos functions**: Use `strpos()`, `stripos()`, `strrpos()` instead of regex when possible for better performance
   ```php
   // CORRECT - Fast
@@ -511,9 +639,9 @@ $content = file_get_contents('/var/www/uploads/' . $filename); // DANGEROUS!
 ### String Input Validation
 
 ```php
-// CORRECT - Sanitize and validate strings
+// CORRECT - Sanitize and validate strings (framework has SMART defaults)
 $req_obj = Dj_App_Request::getInstance();
-$title = $req_obj->get('title', '');
+$title = $req_obj->get('title');  // No need to pass ''
 $title = Dj_App_String_Util::trim($title);
 
 // Validate length
@@ -522,7 +650,7 @@ if (strlen($title) > 200) {
 }
 
 // For slugs, use formatSlug which removes dangerous characters
-$slug = $req_obj->get('slug', '');
+$slug = $req_obj->get('slug');  // Framework handles defaults
 $slug = Dj_App_String_Util::formatSlug($slug);
 
 // For display, always escape
@@ -555,9 +683,9 @@ if ($id <= 0) {
 ### URL Validation
 
 ```php
-// CORRECT - Validate URLs
+// CORRECT - Validate URLs (framework has SMART defaults)
 $req_obj = Dj_App_Request::getInstance();
-$url = $req_obj->get('url', '');
+$url = $req_obj->get('url');  // No need to pass ''
 $url = Dj_App_String_Util::trim($url);
 
 // Check if it starts with http:// or https://
@@ -835,9 +963,9 @@ throw new Dj_App_Exception('Configuration error', [
 echo $_REQUEST['title'];
 echo $user_input;
 
-// CORRECT - Use request object and escape
+// CORRECT - Use request object with SMART defaults and escape
 $req_obj = Dj_App_Request::getInstance();
-$title = $req_obj->get('title', '');
+$title = $req_obj->get('title');  // Framework has smart defaults
 echo Djebel_App_HTML::encodeEntities($title);
 
 // ACCEPTABLE - Direct $_REQUEST with escaping
