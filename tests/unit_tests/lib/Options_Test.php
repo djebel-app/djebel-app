@@ -548,6 +548,212 @@ EOT;
         $this->assertEquals($get_no_section, $chain_no_section, 'Both approaches should return same empty value for non-existent section');
     }
 
+    public function testThreeWaysToAccessPluginsSection()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Load actual app.ini with real plugins data
+        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $this->assertFileExists($app_ini_file);
+
+        $app_ini = file_get_contents($app_ini_file);
+        $cfg = $options_obj->parseBuffer($app_ini);
+        $options_obj->setData($cfg);
+
+        // Three ways to access the plugins section
+        $plugins_via_property = $options_obj->plugins;
+        $plugins_via_get = $options_obj->get('plugins');
+        $plugins_via_get_section = $options_obj->getSection('plugins');
+
+        // All three should return Options objects (or arrays)
+        $this->assertInstanceOf(Dj_App_Options::class, $plugins_via_property, 'Property access should return Options object');
+
+        // get() returns the underlying array
+        $this->assertIsArray($plugins_via_get, 'get() should return array for section');
+
+        $this->assertInstanceOf(Dj_App_Options::class, $plugins_via_get_section, 'getSection() should return Options object');
+
+        // Convert to arrays for comparison
+        $plugins_property_array = $plugins_via_property->toArray();
+        $plugins_get_array = $plugins_via_get;
+        $plugins_section_array = $plugins_via_get_section->toArray();
+
+        // All three should have the same keys
+        $this->assertArrayHasKey('djebel_static_content', $plugins_property_array);
+        $this->assertArrayHasKey('djebel_static_content', $plugins_get_array);
+        $this->assertArrayHasKey('djebel_static_content', $plugins_section_array);
+
+        $this->assertArrayHasKey('djebel_faq', $plugins_property_array);
+        $this->assertArrayHasKey('djebel_faq', $plugins_get_array);
+        $this->assertArrayHasKey('djebel_faq', $plugins_section_array);
+
+        // Test accessing nested values through each approach
+
+        // Via property chaining
+        $cache_via_property = $options_obj->plugins->djebel_static_content->cache;
+        $this->assertEquals('0', $cache_via_property);
+
+        // Via get() with dot notation
+        $cache_via_get = $options_obj->get('plugins.djebel-static-content.cache');
+        $this->assertEquals('0', $cache_via_get);
+
+        // Via getSection() then property access
+        $static_content_section = $options_obj->getSection('plugins.djebel-static-content');
+        $cache_via_section = $static_content_section->cache;
+        $this->assertEquals('0', $cache_via_section);
+
+        // All three should return identical values
+        $this->assertEquals($cache_via_property, $cache_via_get, 'Property and get() should return same value');
+        $this->assertEquals($cache_via_get, $cache_via_section, 'get() and getSection() should return same value');
+
+        // Test another plugin value
+        $faq_cache_property = $options_obj->plugins->djebel_faq->cache;
+        $faq_cache_get = $options_obj->get('plugins.djebel-faq.cache');
+        $faq_section = $options_obj->getSection('plugins.djebel-faq');
+        $faq_cache_section = $faq_section->cache;
+
+        $this->assertEquals('0', $faq_cache_property);
+        $this->assertEquals('0', $faq_cache_get);
+        $this->assertEquals('0', $faq_cache_section);
+        $this->assertEquals($faq_cache_property, $faq_cache_get);
+        $this->assertEquals($faq_cache_get, $faq_cache_section);
+    }
+
+    public function testIsEnabledAndIsDisabledMethods()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Test data with various enabled/disabled values
+        $test_data = [
+            'features' => [
+                'cache' => '1',              // enabled
+                'debug' => '0',              // disabled
+                'logging' => 'yes',          // enabled
+                'maintenance' => 'no',       // disabled
+                'api_enabled' => 'true',     // enabled
+                'api_disabled' => 'false',   // disabled
+                'notifications' => 'on',     // enabled
+                'tracking' => 'off',         // disabled
+                'empty_string' => '',        // NOT disabled (no explicit value)
+            ],
+        ];
+
+        $options_obj->setData($test_data);
+
+        // Test isEnabled() for enabled values
+        $this->assertTrue($options_obj->isEnabled('features.cache'), 'cache=1 should be enabled');
+        $this->assertTrue($options_obj->isEnabled('features.logging'), 'logging=yes should be enabled');
+        $this->assertTrue($options_obj->isEnabled('features.api_enabled'), 'api_enabled=true should be enabled');
+        $this->assertTrue($options_obj->isEnabled('features.notifications'), 'notifications=on should be enabled');
+
+        // Test isEnabled() for disabled values (should return false)
+        $this->assertFalse($options_obj->isEnabled('features.debug'), 'debug=0 should NOT be enabled');
+        $this->assertFalse($options_obj->isEnabled('features.maintenance'), 'maintenance=no should NOT be enabled');
+        $this->assertFalse($options_obj->isEnabled('features.api_disabled'), 'api_disabled=false should NOT be enabled');
+        $this->assertFalse($options_obj->isEnabled('features.tracking'), 'tracking=off should NOT be enabled');
+
+        // Test isDisabled() for disabled values
+        $this->assertTrue($options_obj->isDisabled('features.debug'), 'debug=0 should be disabled');
+        $this->assertTrue($options_obj->isDisabled('features.maintenance'), 'maintenance=no should be disabled');
+        $this->assertTrue($options_obj->isDisabled('features.api_disabled'), 'api_disabled=false should be disabled');
+        $this->assertTrue($options_obj->isDisabled('features.tracking'), 'tracking=off should be disabled');
+
+        // Test isDisabled() for enabled values (should return false)
+        $this->assertFalse($options_obj->isDisabled('features.cache'), 'cache=1 should NOT be disabled');
+        $this->assertFalse($options_obj->isDisabled('features.logging'), 'logging=yes should NOT be disabled');
+        $this->assertFalse($options_obj->isDisabled('features.api_enabled'), 'api_enabled=true should NOT be disabled');
+        $this->assertFalse($options_obj->isDisabled('features.notifications'), 'notifications=on should NOT be disabled');
+
+        // CRITICAL TEST: Empty string should NOT be considered disabled
+        $this->assertFalse($options_obj->isEnabled('features.empty_string'), 'empty string should NOT be enabled');
+        $this->assertFalse($options_obj->isDisabled('features.empty_string'), 'empty string should NOT be disabled - needs explicit value');
+
+        // Test non-existent keys (should use defaults)
+        $this->assertFalse($options_obj->isEnabled('features.non_existent'), 'non-existent key should default to disabled');
+        $this->assertFalse($options_obj->isDisabled('features.non_existent'), 'non-existent key should NOT be disabled - no explicit value');
+
+        // Test with property chaining
+        $this->assertTrue($options_obj->features->cache == '1');
+        $this->assertTrue($options_obj->isEnabled('features.cache'));
+    }
+
+    public function testKeyNormalization()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Load app.ini which has keys with dashes: "djebel-static-content"
+        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini = file_get_contents($app_ini_file);
+        $cfg = $options_obj->parseBuffer($app_ini);
+        $options_obj->setData($cfg);
+
+        // Test: Keys with dashes in INI become underscores in arrays
+        $this->assertArrayHasKey('djebel_static_content', $cfg['plugins'], 'INI key "djebel-static-content" normalizes to "djebel_static_content"');
+        $this->assertArrayHasKey('djebel_faq', $cfg['plugins'], 'INI key "djebel-faq" normalizes to "djebel_faq"');
+
+        // Test: get() accepts BOTH dashes and underscores (normalizes internally)
+        $cache_with_dash = $options_obj->get('plugins.djebel-static-content.cache');
+        $cache_with_underscore = $options_obj->get('plugins.djebel_static_content.cache');
+
+        $this->assertEquals('0', $cache_with_dash, 'get() works with dashes');
+        $this->assertEquals('0', $cache_with_underscore, 'get() works with underscores');
+        $this->assertEquals($cache_with_dash, $cache_with_underscore, 'Both formats return same value');
+
+        // Test: Property access REQUIRES underscores (PHP limitation)
+        $cache_property = $options_obj->plugins->djebel_static_content->cache;
+        $this->assertEquals('0', $cache_property, 'Property access requires underscores');
+
+        // Test: All three approaches return identical values
+        $this->assertEquals($cache_with_dash, $cache_property, 'get() with dashes === property access with underscores');
+
+        // Test: getSection() also normalizes - accepts both formats
+        $section_with_dash = $options_obj->getSection('plugins.djebel-static-content');
+        $section_with_underscore = $options_obj->getSection('plugins.djebel_static_content');
+
+        $this->assertEquals('0', $section_with_dash->cache, 'getSection() works with dashes');
+        $this->assertEquals('0', $section_with_underscore->cache, 'getSection() works with underscores');
+        $this->assertEquals($section_with_dash->cache, $section_with_underscore->cache, 'Both return same data');
+    }
+
+    public function testParseIniFileMethod()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Test with actual app.ini file
+        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $this->assertFileExists($app_ini_file);
+
+        // Use parseIniFile() directly
+        $data = $options_obj->parseIniFile($app_ini_file);
+
+        // Verify basic structure
+        $this->assertIsArray($data);
+        $this->assertArrayHasKey('site', $data);
+        $this->assertArrayHasKey('plugins', $data);
+        $this->assertArrayHasKey('theme', $data);
+
+        // Verify values are parsed correctly
+        $this->assertEquals('Djebel', $data['site']['site_title']);
+        $this->assertEquals('djebel', $data['theme']['theme_id']);
+
+        // Verify key normalization (dashes → underscores)
+        $this->assertArrayHasKey('djebel_static_content', $data['plugins'], 'parseIniFile() should normalize "djebel-static-content" to "djebel_static_content"');
+        $this->assertArrayHasKey('djebel_faq', $data['plugins'], 'parseIniFile() should normalize "djebel-faq" to "djebel_faq"');
+
+        // Verify values remain raw strings (INI_SCANNER_RAW)
+        $this->assertIsString($data['plugins']['djebel_static_content']['cache']);
+        $this->assertEquals('0', $data['plugins']['djebel_static_content']['cache'], 'Values should be raw strings, not converted to int');
+
+        // Test with non-existent file
+        $empty_data = $options_obj->parseIniFile('/nonexistent/file.ini');
+        $this->assertIsArray($empty_data);
+        $this->assertEmpty($empty_data, 'Non-existent file should return empty array');
+    }
+
     public function testGetSection()
     {
         $options_buff = <<<EOT
