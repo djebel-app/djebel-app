@@ -60,17 +60,7 @@ class Dj_App_Themes {
     public function getCurrentTheme()
     {
         $options_obj = Dj_App_Options::getInstance();
-        $current_theme = 'default';
-
-        if (!empty($options_obj->theme->theme)) {
-            $current_theme = $options_obj->theme->theme;
-        } else if (!empty($options_obj->theme->theme_id)) {
-            $current_theme = $options_obj->theme->theme_id;
-        } else if (!empty($options_obj->site->theme_id)) {
-            $current_theme = $options_obj->site->theme_id;
-        } else if (!empty($options_obj->site->theme)) {
-            $current_theme = $options_obj->site->theme;
-        }
+        $current_theme = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme', 'default');
 
         $current_theme = $this->formatId($current_theme);
         $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme );
@@ -107,7 +97,7 @@ class Dj_App_Themes {
             $default_theme_file = $current_theme_dir . '/index.php';
 
             // should we load theme's functions file?
-            $load_theme_func_file = Dj_App_Util::isEnabled($options_obj->site->theme_load_functions);
+            $load_theme_func_file = Dj_App_Util::isEnabled($options_obj->get('site.theme_load_functions'));
             $load_theme_func_file = Dj_App_Config::cfg('app.core.theme.load_theme_functions', $load_theme_func_file);
             $load_theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_functions', $load_theme_func_file, $ctx);
 
@@ -231,7 +221,7 @@ class Dj_App_Themes {
 
         $ctx['pages_dir'] = $pages_dir;
         $ctx['theme_dir'] = $current_theme_dir;
-        $single_page = !empty($options_obj->theme->single_page) || !is_dir($pages_dir);
+        $single_page = !empty($options_obj->get('theme.single_page')) || !is_dir($pages_dir);
         $single_page = Dj_App_Hooks::applyFilter('app.themes.single_page', $single_page, $ctx);
 
         // the main theme file handles the content
@@ -246,9 +236,9 @@ class Dj_App_Themes {
         $default_page = 'home';
 
         if (empty($page)) {
-            if (!empty($options_obj->site->front_page)) {
-                $page = $options_obj->site->front_page;
-            } else {
+            $page = $options_obj->get('site.front_page');
+
+            if (empty($page)) {
                 $page = $default_page;
             }
         }
