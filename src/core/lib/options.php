@@ -17,7 +17,77 @@ class Dj_App_Options implements ArrayAccess, Countable {
      * @return int
      */
     public function count(): int {
-        return is_array($this->data) ? count($this->data) : 0;
+        $data = is_array($this->data) ? $this->data : [];
+        return count($data);
+    }
+
+    /**
+     * Parse INI file directly using native PHP parser
+     * Uses INI_SCANNER_RAW to preserve raw values without type conversion
+     *
+     * @param string $file Path to INI file
+     * @return array Parsed configuration array
+     */
+    public function parseIniFile($file)
+    {
+        if (!file_exists($file)) {
+            return [];
+        }
+
+        // INI_SCANNER_RAW preserves values as strings (no type conversion)
+        $data = parse_ini_file($file, true, INI_SCANNER_RAW);
+
+        if (empty($data)) {
+            return [];
+        }
+
+        $normalized_data = $this->normalizeKeys($data);
+
+        return $normalized_data;
+    }
+
+    /**
+     * Normalize keys in parsed data
+     * - Expands dot notation: "key.subkey" → ['key' => ['subkey' => value]]
+     * - Normalizes keys: dashes to underscores
+     *
+     * @param array $data
+     * @return array
+     */
+    private function normalizeKeys($data)
+    {
+        if (!is_array($data)) {
+            return $data;
+        }
+
+        $normalized_data = [];
+
+        foreach ($data as $key => $value) {
+            // Expand dot notation: "SITE.SITE_URL" -> ['site' => ['site_url' => value]]
+            if (strpos($key, '.') !== false) {
+                $parts = explode('.', $key);
+                $nested_array = $value;
+                $parts_count = count($parts);
+
+                // Build nested structure from inside out (reverse iteration)
+                for ($i = $parts_count - 1; $i >= 0; $i--) {
+                    $part_fmt = Dj_App_String_Util::formatKey($parts[$i]);
+                    $nested_array = [$part_fmt => $nested_array];
+                }
+
+                $normalized_data = array_merge_recursive($normalized_data, $nested_array);
+            } else {
+                $key_fmt = Dj_App_String_Util::formatKey($key);
+
+                if (is_array($value)) {
+                    $normalized_data[$key_fmt] = $this->normalizeKeys($value);
+                } else {
+                    $normalized_data[$key_fmt] = $value;
+                }
+            }
+        }
+
+        return $normalized_data;
     }
 
     public function load()
@@ -44,9 +114,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         $data = []; // this means we've loaded the file or at least tried to load it.
 
         if (file_exists($file)) {
-            $buff = Dj_App_File_Util::read($file);
-            $data = $this->parseBuffer($buff);
-            $data = empty($data) ? [] : $data;
+            $data = $this->parseIniFile($file);
         }
 
         $data = Dj_App_Hooks::applyFilter( 'app.core.filter.options', $data );
@@ -60,10 +128,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
             $extra_opt_files = array_diff($extra_opt_files, [ $file ]); // rm the main options file
 
             foreach ($extra_opt_files as $extra_opt_file) {
-                $buff = Dj_App_File_Util::read($extra_opt_file);
-                $raw_data = $this->parseBuffer($buff);
-                $raw_data = empty($raw_data) ? [] : $raw_data;
-
+                $raw_data = $this->parseIniFile($extra_opt_file);
                 $key = basename($extra_opt_file, '.ini');
                 $key = strtolower($key);
                 $this->extra_opts_data[$key] = $raw_data;
@@ -197,13 +262,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function get($key, $default = '')
     {
-        // Use current data if available, otherwise load
         $data = $this->data;
-
-        if (is_null($data)) {
-            $data = $this->load();
-        }
-
         $ctx = [ 'key' => $key, 'default' => $default, ];
 
         // some plugins might want to override the value
@@ -241,26 +300,95 @@ class Dj_App_Options implements ArrayAccess, Countable {
             return $val;
         }
 
-        $val = '';
+        $val = null;
 
         if (!empty($sub_section) && isset($data[$section][$sub_section][$key])) {
             $val = $data[$section][$sub_section][$key];
         } elseif (!empty($section) && isset($data[$section][$key])) {
             $val = $data[$section][$key];
         } elseif (empty($section) && isset($data[$key])) {
-            // Only check top-level key if no section was specified
             $val = $data[$key];
         }
 
         $val = Dj_App_Hooks::applyFilter( 'app.core.filter.option', $val, $ctx );
         $val = Dj_App_Hooks::applyFilter( 'app.core.filter.option_' . $key, $val, $ctx );
 
-        // Return default if value is empty and default is provided
-        if (empty($val) && $default !== '') {
+        // Check if we have a value (from config OR from filter)
+        // Filters can provide values even when key doesn't exist in config
+        if (!is_null($val)) {
+            return $val;
+        }
+
+        // No value from config or filter - use default if provided
+        if ($default !== '') {
             return $default;
         }
 
-        return $val;
+        // No value, no default - return empty string
+        return '';
+    }
+
+    /**
+     * Get all options within a section as an Options object
+     * Example: getSection('plugins.djebel-mailer') returns Options object with all keys in that section
+     * Can be used as array or object: $section['key'] or $section->key
+     *
+     * @param string $section_key Section path with dot notation (e.g., 'plugins.djebel-mailer')
+     * @return Dj_App_Options Options object with section data, or empty Options object if section doesn't exist
+     */
+    public function getSection($section_key)
+    {
+        $data = $this->data;
+
+        if (empty($section_key)) {
+            // Return empty Options object for consistency
+            $empty_opt_obj = new static();
+            $empty_opt_obj->data = []; // Prevent load() from being triggered on property access
+            return $empty_opt_obj;
+        }
+
+        // Parse section path: 'plugins.djebel-mailer' → ['plugins', 'djebel-mailer']
+        $parts = explode('.', $section_key);
+
+        // Navigate through nested structure
+        $current_level = $data;
+
+        foreach ($parts as $part) {
+            $part = Dj_App_String_Util::formatKey($part);
+
+            if (!isset($current_level[$part])) {
+                // Return empty Options object for consistency
+                $empty_opt_obj = new static();
+                $empty_opt_obj->data = []; // Prevent load() from being triggered on property access
+                return $empty_opt_obj;
+            }
+
+            $current_level = $current_level[$part];
+
+            if (!is_array($current_level)) {
+                // Return empty Options object for consistency
+                $empty_opt_obj = new static();
+                $empty_opt_obj->data = []; // Prevent load() from being triggered on property access
+                return $empty_opt_obj;
+            }
+        }
+
+        // Return Options object with section data for chaining/array access
+        $section_opt_obj = new static();
+        $section_opt_obj->data = $current_level;
+        return $section_opt_obj;
+    }
+
+    /**
+     * Convert Options object to plain array
+     * Useful when you need an actual array (e.g., for array_merge)
+     *
+     * @return array The internal data as array
+     */
+    public function toArray()
+    {
+        $data = is_array($this->data) ? $this->data : [];
+        return $data;
     }
 
     /**
@@ -288,46 +416,37 @@ class Dj_App_Options implements ArrayAccess, Countable {
     }
 
     /**
-     * Returns member data or a key from data. It's easier e.g. $data_res->output
+     * Returns member data or a key from data.
      *
-     * Supports intuitive property chaining:
-     * - $obj->theme->theme returns scalar string (or '' if not exists)
-     * - $obj->theme->theme_id returns scalar string
-     * - Works naturally with !empty() checks
-     * - Fast and efficient for high-traffic sites
+     * Simple getter - follows 10x PHP patterns:
+     * - Arrays become Options objects for chaining
+     * - Scalars returned directly
+     * - Non-existent keys return empty string (works with empty()!)
      *
      * @param string $name
-     * @return mixed|Dj_App_Options
+     * @return mixed
      */
     public function __get($name) {
         $data = $this->data;
 
-        // If data is null, load it first
-        if (is_null($data)) {
-            $this->load();
-            $data = $this->data;
+        if (!isset($data[$name])) {
+            // Return empty Options for unlimited chaining depth
+            // Works at any level: $obj->a->b->c->d->e even if none exist
+            $empty_obj = new static();
+            $empty_obj->data = [];
+            return $empty_obj;
         }
 
-        // If key exists in data
-        if (isset($data[$name])) {
-            $val = $data[$name];
+        $val = $data[$name];
 
-            // Array values return nested Options object for chaining
-            if (is_array($val)) {
-                $nested_options = new static();
-                $nested_options->data = $val;
-                return $nested_options;
-            }
-
-            // Scalar values return the value directly
-            return $val;
+        // Wrap arrays in Options for chaining: $obj->site->site_url
+        if (is_array($val)) {
+            $nested_obj = new static();
+            $nested_obj->data = $val;
+            return $nested_obj;
         }
 
-        // Key doesn't exist: return empty Options object for safe chaining
-        // This allows $obj->nonexistent->key->more to work without warnings
-        $empty_options = new static();
-        $empty_options->data = [];
-        return $empty_options;
+        return $val;
     }
 
     public function __set($key, $val) {
@@ -343,12 +462,6 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function __isset($key) {
         $data = $this->data;
-
-        if (is_null($data)) {
-            $this->load();
-            $data = $this->data;
-        }
-
         return isset($data[$key]);
     }
 
@@ -549,6 +662,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // no need each sub class to define this method.
         if (is_null($instance)) {
             $instance = new static();
+            $instance->load();
         }
 
         return $instance;
