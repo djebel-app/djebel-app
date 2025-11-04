@@ -1437,8 +1437,10 @@ CLEAR_AND_REDIRECT_HTML;
         $server_ports = array_filter($server_ports); // rm empty
 
         // server may be behind a proxy but the user wants the port appended.
-        if (!empty($options_obj->site_port)) {
-            $detected_port = $options_obj->site_port;
+        $site_port = $options_obj->get('site.site_port');
+
+        if (!empty($site_port)) {
+            $detected_port = $site_port;
         }
 
         // If no colon found in host headers, check explicit port headers as fallback
