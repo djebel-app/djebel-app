@@ -822,7 +822,13 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $clean_url = empty($url) ? $this->getRequestUrl() : $url;
-        $clean_url = strip_tags($clean_url);
+
+        // OPTIMIZATION: Only strip_tags if URL contains '<' (99.9% of URLs don't have HTML)
+        // trim() already handles: \0, \n, \r (null bytes, newlines, carriage returns)
+        if (strpos($clean_url, '<') !== false) {
+            $clean_url = strip_tags($clean_url);
+        }
+
         $clean_url = Dj_App_String_Util::trim($clean_url);
 
         if (empty($clean_url)) {
