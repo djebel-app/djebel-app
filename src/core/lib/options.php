@@ -258,15 +258,27 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // Support array of fallback keys directly
         if (is_array($key)) {
             $keys = $key;
+            $keys_cnt = count($keys);
         } elseif (is_scalar($key)) {
-            // Normalize separators: replace ; and | with comma
+            // OPTIMIZATION: Check for comma first (after normalizing ; and |)
+            // str_replace is fast when nothing matches, so just normalize
             $key = str_replace([';', '|'], ',', $key);
-            $keys = explode(',', $key);
+
+            // Now check if we have multiple keys (contains comma)
+            $has_comma = strpos($key, ',');
+
+            if ($has_comma !== false) {
+                // Multiple keys - split them
+                $keys = explode(',', $key);
+                $keys_cnt = count($keys);
+            } else {
+                // Single key - fast path (array cast is faster than literal)
+                $keys = (array) $key;
+                $keys_cnt = 1;
+            }
         } else {
             return '';
         }
-
-        $keys_cnt = count($keys);
 
         // Handle multiple fallback keys
         // Example: get('theme.theme,theme.theme_id,site.theme', 'default')
@@ -285,7 +297,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         }
 
         // Single key - trim and continue with normal logic
-        $key = reset($keys);
+        $key = $keys[0];
         $key = Dj_App_String_Util::trim($key);
 
         $data = $this->data;
