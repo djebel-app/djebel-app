@@ -569,7 +569,7 @@ class Djebel_App_HTML {
             
             // Extract the complete opening tag for validation
             $tag_content = substr($result, $opening_pos, $opening_tag_end - $opening_pos);
-            
+
             // Verify this is a valid tag match (not a partial match within another tag)
             if (!self::isValidTagMatch($tag, $tag_content)) {
                 // Not a proper tag match, continue searching after this false positive
@@ -611,11 +611,11 @@ class Djebel_App_HTML {
                     // Found another opening tag first - this increases nesting level
                     // But we need to verify it's a valid tag, not a partial match
                     $check_end = strpos($result, '>', $next_opening_pos);
-                    
+
                     if ($check_end !== false) {
                         // Extract the potential tag for validation
                         $check_tag = substr($result, $next_opening_pos, $check_end - $next_opening_pos + 1);
-                        
+
                         if (self::isValidTagMatch($tag, $check_tag)) {
                             // Valid nested opening tag found
                             $nesting_level++;
@@ -697,7 +697,7 @@ class Djebel_App_HTML {
         // Extract content after the tag name and before the closing '>'
         $after_tag = substr($tag_content, strlen($expected_start));
         $after_tag = substr($after_tag, 0, -1); // Remove the trailing '>'
-        
+
         // If there's content after the tag name, it must start with whitespace
         // This ensures we match '<div>' and '<div class="test">' but not '<divider>'
         if (!empty($after_tag) && !ctype_space($after_tag[0])) {

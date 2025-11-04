@@ -806,7 +806,7 @@ MSG_EOF;
 
         // First try to find class attribute directly
         $class_start_pos = stripos($body_chunk, 'class=');
-        
+
         if ($class_start_pos !== false) {
             // Found class attribute, extract using string functions
             // Move position after 'class=' (6 chars: 5 for 'class' + 1 for '=')
@@ -1307,13 +1307,13 @@ MSG_EOF;
         // Clean tag name from any brackets
         $tag = trim($tag, '<>/ ');
         $tag_lower = strtolower($tag);
-        
+
         $start_tag = "<$tag";
         $end_tag = "</$tag>";
-        
+
         // Find start tag position
         $start_pos = stripos($buff, $start_tag);
-        
+
         if ($start_pos === false) {
             // Special handling for title tag - insert into head
             if ($tag_lower === 'title') {
@@ -1332,16 +1332,16 @@ MSG_EOF;
         
         // Find where the start tag ends
         $content_start = strpos($buff, '>', $start_pos);
-        
+
         if ($content_start === false) {
             return $buff;
         }
         
         $content_start++; // Move past '>'
-        
+
         // Find the end tag
         $content_end = stripos($buff, $end_tag, $content_start);
-        
+
         if ($content_end === false) {
             return $buff;
         }
@@ -1411,7 +1411,7 @@ MSG_EOF;
         if (strpos($head_content, $content) !== false) {
             $escaped_content = preg_quote($content, '#');
             $content_pattern = '#content\s*=\s*["\'\s]+' . $escaped_content . '["\'\s]#i';
-            
+
             // already added somehow?
             if (preg_match($content_pattern, $head_content)) {
                 return $buff;
@@ -1441,7 +1441,7 @@ MSG_EOF;
             $before_attrs = !empty($before_name) ? ' ' . trim($before_name) : '';
             $after_attrs = !empty($attributes) ? ' ' . $attributes : '';
             $encoded_content = Djebel_App_HTML::encodeEntities($content);
-            
+
             $new_tag = sprintf('<meta%s name="%s"%s content="%s">', 
                 $before_attrs, 
                 $tag_name, 
@@ -1465,6 +1465,7 @@ MSG_EOF;
 
         // Reconstruct buffer with modified head content
         $buff = substr($buff, 0, $head_tag_end) . $head_content . substr($buff, $head_end);
+
         return $buff;
     }
 

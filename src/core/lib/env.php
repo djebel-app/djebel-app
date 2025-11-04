@@ -95,7 +95,7 @@ class Dj_App_Env {
 
     public static function isLive() {
         $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV');
-        
+
         if (empty($dj_app_env)) {
             return true;
         }
@@ -136,6 +136,7 @@ class Dj_App_Env {
     static public function isStaging() {
         $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV');
         $s = stripos( $dj_app_env, 'staging' ) !== false;
+
         return $s;
     }
 
@@ -195,7 +196,7 @@ class Dj_App_Env {
         }
 
         $val = empty($val) ? $defalt : $val;
-        
+
         // Call replaceSystemVars from Dj_App_Config since it's available during bootstrap
         $val = Dj_App_Config::replaceSystemVars($val);
 

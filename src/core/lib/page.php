@@ -186,7 +186,7 @@ class Dj_App_Page {
 
             $is_current = $slug == $current_page;
             $item_class = 'dj-app-menu-item';
-            
+
             if ($is_current) {
                 $item_class .= ' dj-app-menu-item-current';
             }
@@ -216,7 +216,7 @@ class Dj_App_Page {
 
         foreach ($menu_items as $key => $item) {
             $submenu_html = '';
-            
+
             // Check if this item has submenus
             if (isset($submenus[$key])) {
                 $item['item_class'] .= ' dj-app-menu-item-has-submenu';

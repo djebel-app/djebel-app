@@ -55,7 +55,9 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
         foreach ($data as $key => $value) {
             // Expand dot notation: "SITE.SITE_URL" -> ['site' => ['site_url' => value]]
-            if (strpos($key, '.') !== false) {
+            $dot_pos = strpos($key, '.');
+
+            if ($dot_pos !== false) {
                 $parts = explode('.', $key);
                 $nested_array = $value;
                 $parts_count = count($parts);

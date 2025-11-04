@@ -186,9 +186,9 @@ class Dj_App_Plugins {
                 $load_ctx['current_plugin_meta'] = $plugin_meta_info;
                 $load_ctx['loaded_plugins'] = array_keys($plugin_load_times);
                 $load_ctx['remaining_plugins'] = array_keys(array_slice($plugins, array_search($plugin_file, array_keys($plugins)) + 1, null, true));
-                
+
                 $continue_loading = Dj_App_Hooks::applyFilter('app.core.plugins.continue_loading', true, $load_ctx);
-                
+
                 if (!$continue_loading) {
                     break;
                 }
