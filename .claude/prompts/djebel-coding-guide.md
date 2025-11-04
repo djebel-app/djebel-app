@@ -352,6 +352,21 @@ This is a **production framework** running on live sites. Breaking changes break
   $value = $params['key'] ?? '';
   ```
 
+- **No ternary in return statements**: Evaluate to local variable first, then return
+  ```php
+  // WRONG - Ternary directly in return (hard to debug)
+  public function toArray() {
+      return is_array($this->data) ? $this->data : [];
+  }
+
+  // CORRECT - Ternary to local var, then return
+  public function toArray() {
+      $data = is_array($this->data) ? $this->data : [];
+      return $data;
+  }
+  ```
+  **Why**: Local variable allows breakpoint inspection before return
+
 - **Local variable evaluation**: Always evaluate expressions into local variables before adding to arrays
   ```php
   // CORRECT
@@ -424,6 +439,54 @@ This is a **production framework** running on live sites. Breaking changes break
   if (empty($content_prefix)) {
       // duplicate check
   }
+  ```
+
+### Code Organization Rules
+
+- **If used ONCE, inline it**: Don't create separate methods for code that's only called once
+  ```php
+  // WRONG - Separate method called only once
+  private function buildNestedArray($parts, $value) {
+      // ... logic ...
+  }
+
+  $nested = $this->buildNestedArray($parts, $value);  // Only call site
+
+  // CORRECT - Inline the logic where it's used
+  $nested_array = $value;
+  for ($i = count($parts) - 1; $i >= 0; $i--) {
+      $part_fmt = formatKey($parts[$i]);
+      $nested_array = [$part_fmt => $nested_array];
+  }
+  ```
+  **Why**: Reduces function call overhead, makes code easier to follow, no jumping around
+
+- **Smart variable names**: Use descriptive names that explain purpose, not generic names
+  ```php
+  // WRONG - Generic, unclear
+  $result = $value;
+  $count = count($parts);
+  $data = someMethod();
+
+  // CORRECT - Descriptive, clear intent
+  $nested_array = $value;
+  $parts_count = count($parts);
+  $normalized_data = someMethod();
+
+  // Pattern: Use suffixes to indicate type/purpose
+  $key_fmt = formatKey($key);        // _fmt for formatted
+  $parts_count = count($parts);      // _count for counts
+  $nested_data = buildNested();      // _data for data structures
+  ```
+
+- **Remove redundant checks**: If a method guarantees a return type, don't check again
+  ```php
+  // WRONG - Redundant check
+  $data = $this->parseIniFile($file);  // Already returns [] if empty
+  $data = empty($data) ? [] : $data;   // Unnecessary!
+
+  // CORRECT - Trust the method
+  $data = $this->parseIniFile($file);
   ```
 
 ### Framework-Specific Methods
@@ -1348,6 +1411,41 @@ Always provide filter/action hooks at key points:
 $data = Dj_App_Hooks::applyFilter('app.plugin.static_content.generate_content_url_data', $data, $ctx);
 // ... processing ...
 $content_url = Dj_App_Hooks::applyFilter('app.plugin.static_content.content_url', $content_url, $ctx);
+```
+
+**Important**: Filters can provide or modify values - check the FINAL value, not just whether it was found in config:
+
+```php
+// WRONG - Ignores filter values
+$val = null;
+$found = false;
+
+if (isset($config[$key])) {
+    $val = $config[$key];
+    $found = true;
+}
+
+$val = applyFilter('filter', $val, $ctx);  // Filter can provide value!
+
+if (!$found) {  // But we ignore it!
+    return $default;
+}
+
+// CORRECT - Respect filter values
+$val = null;
+
+if (isset($config[$key])) {
+    $val = $config[$key];
+}
+
+$val = applyFilter('filter', $val, $ctx);
+
+// Check final value (from config OR filter)
+if ($val !== null) {
+    return $val;
+}
+
+return $default;
 ```
 
 ## Feature Implementation
