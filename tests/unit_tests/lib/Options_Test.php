@@ -208,15 +208,13 @@ EOT;
         $this->assertEquals('my-theme', $options_obj->get('theme.theme'));
         $this->assertEquals('site-theme', $options_obj->get('site.theme'));
 
-        // Property chaining: accessing nonexistent key in existing section returns empty Options object
+        // Property chaining: accessing nonexistent key returns empty string (works with empty()!)
         $missing_property = $options_obj->theme->nonexistent_key;
-        $this->assertInstanceOf(Dj_App_Options::class, $missing_property, 'Missing property should return empty Options object');
-        $this->assertEquals('', (string)$missing_property, 'Empty Options should convert to empty string');
+        $this->assertEmpty($missing_property, 'Missing property should be empty');
 
-        // Accessing totally nonexistent section returns empty Options object
+        // Accessing totally nonexistent section returns empty string
         $nonexistent_section = $options_obj->nonexistent_section;
-        $this->assertInstanceOf(Dj_App_Options::class, $nonexistent_section, 'Nonexistent section should return empty Options object');
-        $this->assertEquals('', (string)$nonexistent_section, 'Empty Options should convert to empty string');
+        $this->assertEmpty($nonexistent_section, 'Nonexistent section should be empty');
 
         // get() method also returns empty string for missing keys
         $missing_get = $options_obj->get('nonexistent.key');
@@ -366,14 +364,13 @@ EOT;
         $options_obj->setData($cfg);
 
         // Test scenario 1: app.ini has only theme_id (not theme)
-        // Verify property chaining returns proper scalars
+        // Verify property chaining returns proper values
         $theme_value = $options_obj->theme->theme;
         $theme_id_value = $options_obj->theme->theme_id;
 
-        $this->assertInstanceOf(Dj_App_Options::class, $theme_value, 'theme->theme should return empty Options object');
-        $this->assertEquals('', (string)$theme_value, 'Empty Options should convert to empty string');
+        $this->assertEmpty($theme_value, 'theme->theme should be empty when not set');
 
-        $this->assertIsString($theme_id_value, 'theme->theme_id should return string');
+        $this->assertNotEmpty($theme_id_value, 'theme->theme_id should not be empty');
         $this->assertEquals('djebel', $theme_id_value, 'theme->theme_id should return "djebel"');
 
         // Simulate getCurrentTheme() logic using property chaining
@@ -434,5 +431,201 @@ EOT;
         $options_obj->setData($cfg);
         $this->assertEquals('djebel', $options_obj->get('theme.theme_id'), 'get() method should also work');
         $this->assertEmpty($options_obj->get('theme.theme'), 'get() should return empty for non-existent key');
+    }
+
+    public function testEmptyCheckWithPropertyAccess()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        $test_data = [
+            'site' => [
+                'site_title' => 'Test Site',
+                'theme' => 'default',
+            ],
+        ];
+
+        $options_obj->setData($test_data);
+
+        // Test that property access returns empty string for non-existent keys
+        $site_url = $options_obj->site->site_url;
+        $this->assertEmpty($site_url, 'Non-existent key should be empty');
+
+        // Test that value exists
+        $site_title = $options_obj->site->site_title;
+        $this->assertNotEmpty($site_title, 'Existing value should not be empty');
+        $this->assertEquals('Test Site', $site_title);
+
+        // Test direct property access with empty() check (no cast needed!)
+        if (!empty($options_obj->site->site_url)) {
+            $this->fail('Should not enter this block when site_url does not exist');
+        }
+
+        // Now test when value exists
+        $options_obj->clear();
+        $test_data_with_url = [
+            'site' => [
+                'site_url' => 'https://example.com',
+            ],
+        ];
+        $options_obj->setData($test_data_with_url);
+
+        // Direct property access works with empty() now!
+        $site_url = $options_obj->site->site_url;
+        $this->assertNotEmpty($site_url, 'site_url should not be empty when it exists');
+        $this->assertEquals('https://example.com', $site_url);
+    }
+
+    public function testBothAccessPatternsReturnSameValues()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Load actual app.ini
+        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $this->assertFileExists($app_ini_file);
+
+        $app_ini = file_get_contents($app_ini_file);
+        $cfg = $options_obj->parseBuffer($app_ini);
+        $options_obj->setData($cfg);
+
+        // Test: Both approaches return identical values for existing keys
+
+        // Site section
+        $this->assertEquals(
+            $options_obj->get('site.site_title'),
+            $options_obj->site->site_title,
+            'get() and chaining should return same value for site.site_title'
+        );
+        $this->assertEquals('Djebel', $options_obj->site->site_title);
+
+        // Theme section
+        $this->assertEquals(
+            $options_obj->get('theme.theme_id'),
+            $options_obj->theme->theme_id,
+            'get() and chaining should return same value for theme.theme_id'
+        );
+        $this->assertEquals('djebel', $options_obj->theme->theme_id);
+
+        // Meta nested (3 levels deep)
+        $this->assertEquals(
+            $options_obj->get('meta.default.title'),
+            $options_obj->meta->default->title,
+            'get() and chaining should return same value for meta.default.title'
+        );
+        $this->assertEquals('Djebel', $options_obj->meta->default->title);
+
+        // Plugins nested (3 levels deep)
+        $this->assertEquals(
+            $options_obj->get('plugins.djebel-static-content.cache'),
+            $options_obj->plugins->djebel_static_content->cache,
+            'get() and chaining should return same value for plugins.djebel-static-content.cache'
+        );
+        $this->assertEquals('0', $options_obj->plugins->djebel_static_content->cache);
+
+        // Test: Both approaches return empty for non-existent keys
+
+        // Non-existent key via get()
+        $get_result = $options_obj->get('site.non_existent_key');
+        $this->assertEmpty($get_result, 'get() should return empty for non-existent key');
+
+        // Non-existent key via chaining
+        $chain_result = $options_obj->site->non_existent_key;
+        $this->assertEmpty($chain_result, 'Chaining should return empty for non-existent key');
+
+        // Both should be identical
+        $this->assertEquals($get_result, $chain_result, 'Both approaches should return same empty value');
+
+        // Non-existent section via get()
+        $get_no_section = $options_obj->get('non_existent_section.key');
+        $this->assertEmpty($get_no_section, 'get() should return empty for non-existent section');
+
+        // Non-existent section via chaining
+        $chain_no_section = $options_obj->non_existent_section->key;
+        $this->assertEmpty($chain_no_section, 'Chaining should return empty for non-existent section');
+
+        // Both should be identical
+        $this->assertEquals($get_no_section, $chain_no_section, 'Both approaches should return same empty value for non-existent section');
+    }
+
+    public function testGetSection()
+    {
+        $options_buff = <<<EOT
+[plugins]
+djebel-mailer.smtp_host = smtp.gmail.com
+djebel-mailer.smtp_port = 587
+djebel-mailer.smtp_auth = 1
+djebel-mailer.smtp_username = test@example.com
+djebel-mailer.smtp_password = secret
+djebel-mailer.from_email = noreply@example.com
+djebel-mailer.from_name = My App
+
+djebel-seo.meta_title = SEO Title
+djebel-seo.meta_description = SEO Description
+
+[site]
+site_title = Test Site
+theme = default
+EOT;
+
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $cfg = $options_obj->parseBuffer($options_buff);
+        $options_obj->setData($cfg);
+
+        // Test getting a section - returns Options object
+        $mailer_section = $options_obj->getSection('plugins.djebel-mailer');
+
+        $this->assertInstanceOf(Dj_App_Options::class, $mailer_section);
+        $this->assertNotEmpty($mailer_section);
+
+        // Test array access (ArrayAccess interface)
+        $this->assertArrayHasKey('smtp_host', $mailer_section);
+        $this->assertEquals('smtp.gmail.com', $mailer_section['smtp_host']);
+        $this->assertArrayHasKey('smtp_port', $mailer_section);
+        $this->assertEquals('587', $mailer_section['smtp_port']);
+        $this->assertArrayHasKey('from_email', $mailer_section);
+        $this->assertEquals('noreply@example.com', $mailer_section['from_email']);
+
+        // Test object property access
+        $this->assertEquals('smtp.gmail.com', $mailer_section->smtp_host);
+        $this->assertEquals('My App', $mailer_section->from_name);
+
+        // Test toArray() method
+        $mailer_array = $mailer_section->toArray();
+        $this->assertIsArray($mailer_array);
+        $this->assertArrayHasKey('smtp_host', $mailer_array);
+        $this->assertEquals('smtp.gmail.com', $mailer_array['smtp_host']);
+
+        // Test another section
+        $seo_section = $options_obj->getSection('plugins.djebel-seo');
+
+        $this->assertInstanceOf(Dj_App_Options::class, $seo_section);
+        $this->assertArrayHasKey('meta_title', $seo_section);
+        $this->assertEquals('SEO Title', $seo_section['meta_title']);
+        $this->assertEquals('SEO Title', $seo_section->meta_title);
+
+        // Test getting parent section
+        $plugins_section = $options_obj->getSection('plugins');
+
+        $this->assertInstanceOf(Dj_App_Options::class, $plugins_section);
+        $this->assertArrayHasKey('djebel_mailer', $plugins_section);
+        $this->assertArrayHasKey('djebel_seo', $plugins_section);
+
+        // Test non-existent section - returns empty Options object
+        $empty_section = $options_obj->getSection('non.existent.section');
+        $this->assertEmpty($empty_section, 'Non-existent section should be empty');
+
+        // Test empty section key
+        $empty_key = $options_obj->getSection('');
+        $this->assertEmpty($empty_key, 'Empty section key should be empty');
+
+        // Test single level section
+        $site_section = $options_obj->getSection('site');
+
+        $this->assertInstanceOf(Dj_App_Options::class, $site_section);
+        $this->assertArrayHasKey('site_title', $site_section);
+        $this->assertEquals('Test Site', $site_section['site_title']);
+        $this->assertEquals('Test Site', $site_section->site_title);
     }
 }
