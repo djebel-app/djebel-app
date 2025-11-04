@@ -253,6 +253,39 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function get($key, $default = '')
     {
+        // Support array of fallback keys directly
+        if (is_array($key)) {
+            $keys = $key;
+        } elseif (is_scalar($key)) {
+            // Normalize separators: replace ; and | with comma
+            $key = str_replace([';', '|'], ',', $key);
+            $keys = explode(',', $key);
+        } else {
+            return '';
+        }
+
+        $keys_cnt = count($keys);
+
+        // Handle multiple fallback keys
+        // Example: get('theme.theme,theme.theme_id,site.theme', 'default')
+        // Or: get(['theme.theme', 'theme.theme_id', 'site.theme'], 'default')
+        if ($keys_cnt > 1) {
+            for ($i = 0; $i < $keys_cnt; $i++) {
+                $single_key = $keys[$i];
+                $val = $this->get($single_key);
+
+                if (!empty($val)) {
+                    return $val;
+                }
+            }
+
+            return $default;
+        }
+
+        // Single key - trim and continue with normal logic
+        $key = reset($keys);
+        $key = Dj_App_String_Util::trim($key);
+
         $data = $this->data;
         $ctx = [ 'key' => $key, 'default' => $default, ];
 
