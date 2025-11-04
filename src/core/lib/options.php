@@ -13,15 +13,6 @@ class Dj_App_Options implements ArrayAccess, Countable {
     private function __construct() {}
 
     /**
-     * Countable interface - allows count($options_obj)
-     * @return int
-     */
-    public function count(): int {
-        $data = is_array($this->data) ? $this->data : [];
-        return count($data);
-    }
-
-    /**
      * Parse INI file directly using native PHP parser
      * Uses INI_SCANNER_RAW to preserve raw values without type conversion
      *
@@ -387,8 +378,16 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function toArray()
     {
-        $data = is_array($this->data) ? $this->data : [];
+        $data = empty($this->data) ? [] : (array) $this->data;
         return $data;
+    }
+
+    /**
+     * Countable interface - allows count($options_obj)
+     * @return int
+     */
+    public function count(): int {
+        return count($this->toArray());
     }
 
     /**
