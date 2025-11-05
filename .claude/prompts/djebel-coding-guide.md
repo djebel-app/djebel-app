@@ -59,7 +59,7 @@ Don't be afraid to refactor. The architecture should adapt to actual usage, not 
 - `Dj_App_Util` - General utilities (isEnabled, isDisabled, removeSlash, time, strtotime)
 - `Dj_App_String_Util` - String operations (trim, formatSlug, getFirstChar)
 - `Dj_App_File_Util` - File operations (normalizePath, readPartially)
-- `Dj_App_Hooks` - Hook system (addFilter, addAction, applyFilter)
+- `Dj_App_Hooks` - Hook system (addFilter, addAction, applyFilter, currentAction, currentFilter)
 - `Dj_App_Options` - Configuration (get, isEnabled)
 - `Dj_App_Request` - HTTP requests (getWebPath, getCleanRequestUrl, get, set)
 - `Dj_App_Result` - Result objects (status, isError, data)
@@ -100,6 +100,11 @@ if ((strpos($url, 'http://') === 0) || (strpos($url, 'https://') === 0)) {
 
 // Hooks
 $value = Dj_App_Hooks::applyFilter('hook.name', $value, $ctx);
+
+// Check current hook context
+$current_action = Dj_App_Hooks::currentAction();              // Get current action name
+$current_filter = Dj_App_Hooks::currentFilter();              // Get current filter name
+$is_running = Dj_App_Hooks::currentAction('hook.name');       // Check if specific hook running
 ```
 
 ---
@@ -1446,6 +1451,138 @@ if ($val !== null) {
 }
 
 return $default;
+```
+
+### Hook Context: currentAction() and currentFilter()
+
+The hooks system provides methods to check which hook is currently executing. This is useful for shared callbacks that need to behave differently based on the calling hook.
+
+**API Methods**:
+- `Dj_App_Hooks::currentAction($hook_name = '')` - Get or check currently executing action
+- `Dj_App_Hooks::currentFilter($hook_name = '')` - Get or check currently executing filter
+
+**Two Modes of Operation**:
+
+1. **Without parameter** - Returns the current hook name as a string:
+```php
+// Get the name of the currently executing action
+$current_action = Dj_App_Hooks::currentAction();
+// Returns: 'app.plugin.static_content.post_loaded' (or empty string if no action running)
+
+// Get the name of the currently executing filter
+$current_filter = Dj_App_Hooks::currentFilter();
+// Returns: 'app.plugins.markdown.convert_markdown' (or empty string if no filter running)
+```
+
+2. **With parameter** - Checks if a specific hook is currently running (returns boolean):
+```php
+// Check if a specific action is currently running
+if (Dj_App_Hooks::currentAction('app.core.init')) {
+    // This code runs only during the app.core.init action
+}
+
+// Check if a specific filter is currently running
+if (Dj_App_Hooks::currentFilter('app.plugin.static_content.content_url')) {
+    // This code runs only during the content_url filter
+}
+```
+
+**Use Case: Shared Callbacks**
+
+When a single callback is registered for multiple hooks and needs to behave differently:
+
+```php
+class Djebel_Plugin_Example {
+    public function init() {
+        $obj = $this;
+
+        // Register the same callback for multiple hooks
+        Dj_App_Hooks::addAction('app.plugin.static_content.post_loaded', [ $obj, 'processContent', ]);
+        Dj_App_Hooks::addAction('app.plugin.static_content.page_loaded', [ $obj, 'processContent', ]);
+        Dj_App_Hooks::addFilter('app.plugins.markdown.convert_markdown', [ $obj, 'processContent', ]);
+    }
+
+    public function processContent($content, $params = [], $event = '') {
+        // Check which hook triggered this callback
+        if (Dj_App_Hooks::currentAction('app.plugin.static_content.post_loaded')) {
+            // Special processing for posts
+            $content = $this->addPostMetadata($content);
+        } elseif (Dj_App_Hooks::currentFilter('app.plugins.markdown.convert_markdown')) {
+            // Special processing for markdown filter
+            $content = $this->enhanceMarkdown($content);
+        }
+
+        return $content;
+    }
+}
+```
+
+**Use Case: Conditional Logging**
+
+Track which hooks are being executed:
+
+```php
+public function logHookExecution($data, $params = [], $event = '') {
+    // Get the current filter name
+    $current_filter = Dj_App_Hooks::currentFilter();
+
+    if (!empty($current_filter)) {
+        error_log("Filter executed: {$current_filter}");
+    }
+
+    return $data;
+}
+```
+
+**Use Case: Nested Hook Detection**
+
+Prevent recursive hook execution:
+
+```php
+public function processData($data, $params = [], $event = '') {
+    // Prevent infinite recursion
+    if (Dj_App_Hooks::currentFilter('app.plugin.example.process_data')) {
+        // Already processing this hook - return immediately
+        return $data;
+    }
+
+    // Safe to apply the filter
+    $data = Dj_App_Hooks::applyFilter('app.plugin.example.process_data', $data, $params);
+
+    return $data;
+}
+```
+
+**Hook Name Formatting**
+
+Both methods automatically format hook names for comparison (normalize separators, lowercase, etc.), so these are equivalent:
+
+```php
+// All of these check the same hook
+Dj_App_Hooks::currentAction('app.core.init')
+Dj_App_Hooks::currentAction('app/core/init')
+Dj_App_Hooks::currentAction('App.Core.Init')
+```
+
+**WordPress Compatibility**
+
+Similar to WordPress's `current_filter()` and `doing_filter()` functions:
+- `currentFilter()` without parameter = WordPress's `current_filter()`
+- `currentFilter('hook.name')` with parameter = WordPress's `doing_filter('hook.name')`
+- `currentAction()` works the same way for actions
+
+**Exception Safety**
+
+The current hook tracking uses try/finally blocks to ensure cleanup even if exceptions occur during hook execution:
+
+```php
+// Internal implementation (for reference)
+try {
+    self::$current_filter = $hook_name;
+    // Execute callbacks...
+} finally {
+    self::$current_filter = '';  // ALWAYS runs, even on exceptions
+}
 ```
 
 ## Feature Implementation
