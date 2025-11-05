@@ -303,11 +303,14 @@ class Dj_App_Hooks {
      * 
      * @param string $executed_hook The hook to execute
      * @param array $params Parameters to pass to the callbacks
-     * @throws Exception For invalid hook names
+     * @throws Dj_App_Exception For invalid hook names
      */
     public static function doAction($executed_hook, $params = []) {
         if (!is_scalar($executed_hook)) {
-            throw new Exception("Invalid hook name. We're expecting a scalar, something else was given.");
+            throw new Dj_App_Exception("Invalid hook name. We're expecting a scalar, something else was given.", [
+                'hook_name' => $executed_hook,
+                'type' => gettype($executed_hook),
+            ]);
         }
 
         try {
@@ -353,11 +356,14 @@ class Dj_App_Hooks {
     /**
      * This method is supposed to work but test it jic.
      * Dj_App_Hooks::applyFilter();
-     * @throws Exception
+     * @throws Dj_App_Exception
      */
     public static function applyFilter($executed_hook, $cur_val = null, $params = []) {
         if (!is_scalar($executed_hook)) {
-            throw new Exception("Invalid filter name. We're expecting a scalar, something else was given.");
+            throw new Dj_App_Exception("Invalid filter name. We're expecting a scalar, something else was given.", [
+                'hook_name' => $executed_hook,
+                'type' => gettype($executed_hook),
+            ]);
         }
 
         try {
@@ -503,10 +509,14 @@ class Dj_App_Hooks {
      * @param callable $callback The callback to remove
      * @param int $priority The priority level to remove (optional)
      * @return bool True if removed, false if not found
+     * @throws Dj_App_Exception For invalid hook names
      */
     public static function removeAction($hook_name, $callback, $priority = 10) {
         if (!is_scalar($hook_name) && !is_array($hook_name)) {
-            throw new Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.");
+            throw new Dj_App_Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
         }
 
         $hooks = (array)$hook_name;
@@ -549,10 +559,14 @@ class Dj_App_Hooks {
      * @param callable $callback The callback to remove
      * @param int $priority The priority level to remove (optional)
      * @return bool True if removed, false if not found
+     * @throws Dj_App_Exception For invalid filter names
      */
     public static function removeFilter($hook_name, $callback, $priority = 10) {
         if (!is_scalar($hook_name) && !is_array($hook_name)) {
-            throw new Exception("Invalid filter name. We're expecting a scalar or an array, something else was given.");
+            throw new Dj_App_Exception("Invalid filter name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
         }
 
         $hooks = (array)$hook_name;
