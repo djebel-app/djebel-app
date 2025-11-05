@@ -22,8 +22,36 @@ class Dj_App_Hooks {
     private static $executed_hooks = [];
 
     /**
+     * Currently executing action name
+     * @var string
+     */
+    private static $current_action = '';
+
+    /**
+     * Currently executing filter name
+     * @var string
+     */
+    private static $current_filter = '';
+
+    /**
+     * Get the name of the currently executing action
+     * @return string The formatted hook name, or empty string if none executing
+     */
+    public static function currentAction() {
+        return self::$current_action;
+    }
+
+    /**
+     * Get the name of the currently executing filter
+     * @return string The formatted hook name, or empty string if none executing
+     */
+    public static function currentFilter() {
+        return self::$current_filter;
+    }
+
+    /**
      * Check if a hook has been run.
-     * 
+     *
      * @param string $hook_name The hook name
      * @return bool True if the action/filter has been run or processed
      */
@@ -270,32 +298,39 @@ class Dj_App_Hooks {
             throw new Exception("Invalid hook name. We're expecting a scalar, something else was given.");
         }
 
-        $executed_hook_fmt = self::formatHookName($executed_hook);
-        
-        // Mark as processed even if no callbacks exist
-        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_PROCESSED;
+        try {
+            $executed_hook_fmt = self::formatHookName($executed_hook);
 
-        // If no callbacks registered for this hook, return early
-        if (empty(self::$actions[$executed_hook_fmt])) {
-            return;
-        }
+            // Set current action BEFORE executing
+            self::$current_action = $executed_hook_fmt;
 
-        // Sort priorities only when executing
-        ksort(self::$actions[$executed_hook_fmt]);
+            // Mark as processed even if no callbacks exist
+            self::$executed_hooks[$executed_hook_fmt] = self::HOOK_PROCESSED;
 
-        // Execute callbacks in priority order
-        foreach (self::$actions[$executed_hook_fmt] as $callbacks_by_priority) {
-            foreach ($callbacks_by_priority as $callback) {
-                if (is_callable($callback)) {
-                    call_user_func_array($callback, array(
-                        $params,
-                        $executed_hook, // comes as 2nd param -> $event
-                    ));
-                    
-                    // Mark as actually run only after successful execution
-                    self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+            // If no callbacks registered for this hook, return early
+            if (empty(self::$actions[$executed_hook_fmt])) {
+                return;
+            }
+
+            // Sort priorities only when executing
+            ksort(self::$actions[$executed_hook_fmt]);
+
+            // Execute callbacks in priority order
+            foreach (self::$actions[$executed_hook_fmt] as $callbacks_by_priority) {
+                foreach ($callbacks_by_priority as $callback) {
+                    if (is_callable($callback)) {
+                        call_user_func_array($callback, array(
+                            $params,
+                            $executed_hook, // comes as 2nd param -> $event
+                        ));
+
+                        // Mark as actually run only after successful execution
+                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+                    }
                 }
             }
+        } finally {
+            self::$current_action = '';
         }
     }
 
@@ -313,39 +348,46 @@ class Dj_App_Hooks {
             throw new Exception("Invalid filter name. We're expecting a scalar, something else was given.");
         }
 
-        $executed_hook_fmt = self::formatHookName($executed_hook);
-        
-        // Mark as processed even if no callbacks exist
-        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_PROCESSED;
+        try {
+            $executed_hook_fmt = self::formatHookName($executed_hook);
 
-        // If no callbacks registered for this hook, return current value
-        if (empty(self::$filters[$executed_hook_fmt])) {
-            return $cur_val;
-        }
+            // Set current filter BEFORE executing
+            self::$current_filter = $executed_hook_fmt;
 
-        // Sort priorities only when executing
-        ksort(self::$filters[$executed_hook_fmt]);
+            // Mark as processed even if no callbacks exist
+            self::$executed_hooks[$executed_hook_fmt] = self::HOOK_PROCESSED;
 
-        // Execute callbacks in priority order
-        foreach (self::$filters[$executed_hook_fmt] as $callbacks_by_priority) {
-            foreach ($callbacks_by_priority as $callback) {
-                if (is_callable($callback)) {
-                    $cur_val = call_user_func_array($callback, array(
-                        $cur_val,
-                        $params,
-                        $executed_hook, // comes as 3rd param -> $event
-                    ));
-                    
-                    // Mark as actually run only after successful execution
-                    self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
-                } elseif (is_scalar($callback) && isset(self::$allowed_predefined_quick_returns[$callback])) {
-                    $cur_val = self::$allowed_predefined_quick_returns[$callback];
-                    self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+            // If no callbacks registered for this hook, return current value
+            if (empty(self::$filters[$executed_hook_fmt])) {
+                return $cur_val;
+            }
+
+            // Sort priorities only when executing
+            ksort(self::$filters[$executed_hook_fmt]);
+
+            // Execute callbacks in priority order
+            foreach (self::$filters[$executed_hook_fmt] as $callbacks_by_priority) {
+                foreach ($callbacks_by_priority as $callback) {
+                    if (is_callable($callback)) {
+                        $cur_val = call_user_func_array($callback, array(
+                            $cur_val,
+                            $params,
+                            $executed_hook, // comes as 3rd param -> $event
+                        ));
+
+                        // Mark as actually run only after successful execution
+                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+                    } elseif (is_scalar($callback) && isset(self::$allowed_predefined_quick_returns[$callback])) {
+                        $cur_val = self::$allowed_predefined_quick_returns[$callback];
+                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+                    }
                 }
             }
-        }
 
-        return $cur_val;
+            return $cur_val;
+        } finally {
+            self::$current_filter = '';
+        }
     }
 
     const RETURN_ZERO = '__return_zero';
