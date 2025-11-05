@@ -672,27 +672,27 @@ class Dj_App_Util {
      * a simple status message, no formatting except color
      */
     public static function msg($msg, $status = self::MSG_ERROR, $use_inline_css = 0) {
-        $id = 'app';
+        $id = 'dj-app';
         $cls = $extra = $inline_css = $extra_attribs = '';
 
         $msg = is_scalar($msg) ? $msg : join("\n<br/>", $msg);
         $icon = 'exclamation-sign';
 
         if ( $status === 2 || $status == self::MSG_NOTICE) { // notice
-            $cls = 'app_info alert alert-info';
+            $cls = 'dj-app-info alert alert-info';
         } elseif ( $status === 6 ) { // dismissable notice
-            $cls = 'app_info alert alert-danger alert-dismissable';
+            $cls = 'dj-app-info alert alert-danger alert-dismissable';
             $extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false"><span aria-hidden="true">&times;</span><span class="__sr-only">Close</span></button>';
             //$extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false">X</button>';
         } elseif ( $status === 4 ) { // dismissable notice
-            $cls = 'app_info alert alert-info alert-dismissable';
+            $cls = 'dj-app-info alert alert-info alert-dismissable';
             $extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false"><span aria-hidden="true">&times;</span><span class="__sr-only">Close</span></button>';
             //$extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false">X</button>';
         } elseif ( $status == 0 || $status === false || $status === self::MSG_ERROR ) {
-            $cls = 'app_error alert alert-danger';
+            $cls = 'dj-app-error alert alert-danger';
             $icon = 'remove';
         } elseif ( $status == 1 || $status === true || $status === self::MSG_SUCCESS ) {
-            $cls = 'app_success alert alert-success';
+            $cls = 'dj-app-success alert alert-success';
             $icon = 'ok';
         }
 
