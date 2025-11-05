@@ -63,7 +63,10 @@ class Dj_App_Db {
             $db_driver = $this->get('db_driver');
 
             if (!in_array($db_driver, $this->supported_drivers)) {
-                throw new QS_App_WP5_Db_Exception("Unsupported database driver: $db_driver");
+                throw new Dj_App_Db_Exception("Unsupported database driver: $db_driver", [
+                    'db_driver' => $db_driver,
+                    'supported_drivers' => $this->supported_drivers,
+                ]);
             }
 
             $db_host = $this->get('db_host', '127.0.0.1');
@@ -97,4 +100,7 @@ class Dj_App_Db {
     }
 }
 
-class QS_App_WP5_Db_Exception extends Dj_App_Exception {}
+/**
+ * Exception class for Database-related errors
+ */
+class Dj_App_Db_Exception extends Dj_App_Exception {}
