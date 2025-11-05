@@ -697,7 +697,7 @@ class Dj_App_Util {
         }
 
         if (is_array($use_inline_css)) {
-            $extra_attribs = self::array2data_attr($use_inline_css);
+            $extra_attribs = self::convertArrayToDataAttr($use_inline_css);
         } elseif (!empty($use_inline_css)) {
             $inline_css = empty($status) ? 'background-color:red;' : 'background-color:green;';
             $inline_css .= 'text-align:center;margin-left: auto; margin-right:auto; padding-bottom:10px;color:white;';
@@ -710,6 +710,33 @@ class Dj_App_Util {
 <div id='$id-notice' class='$cls' style="$inline_css" $extra_attribs>$msg $extra</div>
 MSG_EOF;
         return $str;
+    }
+
+    /**
+     * Convert array to HTML5 data attributes
+     * Dj_App_Util::convertArrayToDataAttr(['user_id' => '123', 'action' => 'delete'])
+     * Returns: data-user-id="123" data-action="delete"
+     *
+     * @param array $data
+     * @return string
+     */
+    public static function convertArrayToDataAttr($data) {
+        if (empty($data) || !is_array($data)) {
+            return '';
+        }
+
+        $attributes = [];
+
+        foreach ($data as $key => $value) {
+            $key = Dj_App_String_Util::formatKey($key);
+            $key = str_replace('_', '-', $key);
+            $value_esc = dj_esc_attr($value);
+            $attributes[] = "data-{$key}=\"{$value_esc}\"";
+        }
+
+        $result = implode(' ', $attributes);
+
+        return $result;
     }
 
     /**

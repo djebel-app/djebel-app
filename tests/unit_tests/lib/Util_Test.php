@@ -1403,4 +1403,58 @@ META;
         Dj_App_Util::data('merge_return', null);
     }
 
+    public function testConvertArrayToDataAttrBasic() {
+        $input = [ 'id' => '123', 'action' => 'delete', ];
+        $result = Dj_App_Util::convertArrayToDataAttr($input);
+
+        $this->assertStringContainsString('data-id="123"', $result);
+        $this->assertStringContainsString('data-action="delete"', $result);
+    }
+
+    public function testConvertArrayToDataAttrWithUnderscores() {
+        $input = [ 'user_id' => '456', 'post_type' => 'article', ];
+        $result = Dj_App_Util::convertArrayToDataAttr($input);
+
+        $this->assertStringContainsString('data-user-id="456"', $result);
+        $this->assertStringContainsString('data-post-type="article"', $result);
+    }
+
+    public function testConvertArrayToDataAttrEmpty() {
+        $result = Dj_App_Util::convertArrayToDataAttr([]);
+        $this->assertEmpty($result);
+
+        $result = Dj_App_Util::convertArrayToDataAttr(null);
+        $this->assertEmpty($result);
+    }
+
+    public function testConvertArrayToDataAttrSpecialChars() {
+        $input = [ 'message' => 'Hello "World" & <script>', ];
+        $result = Dj_App_Util::convertArrayToDataAttr($input);
+
+        $this->assertStringContainsString('data-message=', $result);
+        $this->assertStringNotContainsString('<script>', $result);
+        $this->assertStringContainsString('&quot;', $result);
+    }
+
+    public function testConvertArrayToDataAttrMultiple() {
+        $input = [
+            'id' => '789',
+            'name' => 'test',
+            'enabled' => '1',
+        ];
+        $result = Dj_App_Util::convertArrayToDataAttr($input);
+
+        $this->assertStringContainsString('data-id="789"', $result);
+        $this->assertStringContainsString('data-name="test"', $result);
+        $this->assertStringContainsString('data-enabled="1"', $result);
+    }
+
+    public function testConvertArrayToDataAttrNonArray() {
+        $result = Dj_App_Util::convertArrayToDataAttr('not an array');
+        $this->assertEmpty($result);
+
+        $result = Dj_App_Util::convertArrayToDataAttr(123);
+        $this->assertEmpty($result);
+    }
+
 }
