@@ -308,7 +308,7 @@ class Dj_App_Request {
      * @param string $name
      * @param array $arguments
      * @return mixed
-     * @throws Dj_App_Exception
+     * @throws Dj_App_Request_Exception
      */
     public function __call($name, $arguments) {
         if ((strpos($name, 'segment') !== false)
@@ -325,7 +325,7 @@ class Dj_App_Request {
             return $val;
         }
 
-        throw new Dj_App_Exception("Method [$name] does not exist", [
+        throw new Dj_App_Request_Exception("Method [$name] does not exist", [
             'method' => $name,
             'arguments' => $arguments,
         ]);
@@ -566,7 +566,7 @@ class Dj_App_Request {
      *
      * @param string|array $data
      * @return string|array
-     * @throws Dj_App_Exception
+     * @throws Dj_App_Request_Exception
      */
     public function sanitizeData( $data = null ) {
         $use_wp_kees = function_exists('wp_kses');
@@ -603,7 +603,7 @@ class Dj_App_Request {
         } elseif (is_null($data)) { // maybe it's run from the command line
             $data = '';
         } else {
-            throw new Dj_App_Exception( "Invalid data type passed for sanitization", [
+            throw new Dj_App_Request_Exception( "Invalid data type passed for sanitization", [
                 'type' => gettype($data),
                 'data' => $data,
             ]);
@@ -1744,3 +1744,8 @@ CLEAR_AND_REDIRECT_HTML;
         $this->default_headers = $default_headers;
     }
 }
+
+/**
+ * Exception class for Request-related errors
+ */
+class Dj_App_Request_Exception extends Dj_App_Exception {}
