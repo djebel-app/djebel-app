@@ -713,7 +713,7 @@ class Dj_App_Request {
             return;
         }
 
-        $loading_text = __("Loading ...", 'qs_site_app');
+        $loading_text = "Loading ...";
         $loading_text_esc_as_attrib = Djebel_App_HTML::encodeEntities($loading_text);
         $url_esc = Djebel_App_HTML::encodeEntities($url); // esc_attr breaks stuff the wp_safe redir does this
 
