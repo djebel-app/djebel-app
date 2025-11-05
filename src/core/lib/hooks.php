@@ -34,19 +34,31 @@ class Dj_App_Hooks {
     private static $current_filter = '';
 
     /**
-     * Get the name of the currently executing action
-     * @return string The formatted hook name, or empty string if none executing
+     * Get the name of the currently executing action, or check if specific action is running
+     * @param string $hook_name Optional hook name to check
+     * @return string|bool Hook name if no param, true/false if hook name provided
      */
-    public static function currentAction() {
-        return self::$current_action;
+    public static function currentAction($hook_name = '') {
+        if (empty($hook_name)) {
+            return self::$current_action;
+        }
+
+        $hook_name_fmt = self::formatHookName($hook_name);
+        return self::$current_action === $hook_name_fmt;
     }
 
     /**
-     * Get the name of the currently executing filter
-     * @return string The formatted hook name, or empty string if none executing
+     * Get the name of the currently executing filter, or check if specific filter is running
+     * @param string $hook_name Optional hook name to check
+     * @return string|bool Hook name if no param, true/false if hook name provided
      */
-    public static function currentFilter() {
-        return self::$current_filter;
+    public static function currentFilter($hook_name = '') {
+        if (empty($hook_name)) {
+            return self::$current_filter;
+        }
+
+        $hook_name_fmt = self::formatHookName($hook_name);
+        return self::$current_filter === $hook_name_fmt;
     }
 
     /**
