@@ -672,8 +672,6 @@ class Dj_App_Util {
      * a simple status message, no formatting except color
      */
     public static function msg($msg, $status = self::MSG_ERROR, $use_inline_css = 0) {
-        $msg = __($msg, 'qs_site_app');
-
         $id = 'app';
         $cls = $extra = $inline_css = $extra_attribs = '';
 
@@ -1771,18 +1769,5 @@ class Dj_App_Exception extends \Exception
     public function getMsg(): string
     {
         return $this->_msg;
-    }
-}
-
-// If a plugin didn't define this. We'll define it here.
-if (!function_exists('__')) {
-    /**
-     * Translate a string.
-     * @param string $text
-     * @param string $domain
-     * @return string
-     */
-    function __($text, $domain = 'default') {
-        return $text;
     }
 }
