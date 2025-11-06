@@ -366,7 +366,7 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
 
     #[\ReturnTypeWillChange]
     public function offsetGet($offset) {
-        return $this->data[$offset] ?? null;
+        return isset($this->data[$offset]) ? $this->data[$offset] : null;
     }
 
     #[\ReturnTypeWillChange]
@@ -381,5 +381,24 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     #[\ReturnTypeWillChange]
     public function offsetUnset($offset) {
         unset($this->data[$offset]);
+    }
+
+    // Serialization methods (PHP 8.1+)
+    public function __serialize(): array {
+        $serialized = [
+            'status' => $this->status,
+            'msg' => $this->msg,
+            'code' => $this->code,
+            'data' => $this->data,
+        ];
+
+        return $serialized;
+    }
+
+    public function __unserialize(array $data): void {
+        $this->status = empty($data['status']) ? false : $data['status'];
+        $this->msg = empty($data['msg']) ? '' : $data['msg'];
+        $this->code = empty($data['code']) ? '' : $data['code'];
+        $this->data = empty($data['data']) ? [] : $data['data'];
     }
 }
