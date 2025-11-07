@@ -137,6 +137,14 @@ Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Ever
    $keys[] = $key2;
    ```
 
+8a. **Use empty() pattern for ternary operators** - Always use `empty()` (not `!empty()`) with default value first:
+   - ✅ CORRECT: `$val = empty($params['key']) ? '' : $params['key'];`
+   - ✅ CORRECT: `$status = empty($meta['status']) ? self::STATUS_PUBLISHED : $meta['status'];`
+   - ✅ CORRECT: `$hash_id = empty($data['hash_id']) ? '' : $data['hash_id'];`
+   - ❌ WRONG: `$val = !empty($params['key']) ? $params['key'] : '';` (reversed logic)
+   - ❌ WRONG: `$value = $params['key'] ?? '';` (null coalescing operator forbidden)
+   - **Why**: Default value first makes it immediately visible what the fallback is
+
 9. **Breathing room - vertical spacing for readability**: Add blank lines to separate logical chunks within code blocks. Code should "breathe" and not be cramped:
 
    ✅ CORRECT - Good breathing room:

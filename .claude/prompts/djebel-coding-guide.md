@@ -350,12 +350,18 @@ This is a **production framework** running on live sites. Breaking changes break
 
 - **No null coalescing operator**: Never use `??` - use empty() with ternary operator instead
   ```php
-  // CORRECT
+  // CORRECT - Use empty() pattern (default first, value second)
   $val = empty($params['key']) ? '' : $params['key'];
+  $status = empty($meta['status']) ? self::STATUS_PUBLISHED : $meta['status'];
+  $hash_id = empty($data['hash_id']) ? '' : $data['hash_id'];
 
-  // WRONG
+  // WRONG - Using ?? operator
   $value = $params['key'] ?? '';
+
+  // WRONG - Using !empty() pattern (reversed logic, harder to read)
+  $val = !empty($params['key']) ? $params['key'] : '';
   ```
+  **Why**: `empty()` pattern (not `!empty()`) keeps default value first, making it immediately visible what the fallback is
 
 - **No ternary in return statements**: Evaluate to local variable first, then return
   ```php
