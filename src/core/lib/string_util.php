@@ -30,12 +30,8 @@ class Dj_App_String_Util
 
             $data = trim( $data, $char_mask );
         } elseif (is_array($data)) {
-            if (!empty($extra_chars)) {
-                $data = array_map(function($item) use ($extra_chars) {
-                    return Dj_App_String_Util::trim($item, $extra_chars);
-                }, $data);
-            } else {
-                $data = array_map('Dj_App_String_Util::trim', $data);
+            foreach ($data as $key => $value) {
+                $data[$key] = Dj_App_String_Util::trim($value, $extra_chars);
             }
         }
 
