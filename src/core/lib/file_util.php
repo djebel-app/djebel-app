@@ -71,17 +71,12 @@ class Dj_App_File_Util {
      * @desc read function using flock
      * Dj_App_File_Util::read();
      * @param string $file
-     * @return false|string
+     * @return Dj_App_Result
      */
     static public function read($file) {
         $max_bytes = 1 * 1024 * 1024 * 1024; // 1GB
         $res_obj = self::readPartially($file, $max_bytes);
-
-        if ($res_obj->isError()) {
-            return false;
-        }
-
-        return $res_obj->output;
+        return $res_obj;
     }
 
     /**

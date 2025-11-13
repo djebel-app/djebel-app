@@ -116,7 +116,8 @@ class File_Util_Test extends TestCase {
 
         $result = Dj_App_File_Util::read($test_file);
 
-        $this->assertEquals($content, $result);
+        $this->assertTrue($result->isSuccess());
+        $this->assertEquals($content, $result->output);
     }
 
     public function testReadFileNotFound()
@@ -125,7 +126,7 @@ class File_Util_Test extends TestCase {
 
         $result = Dj_App_File_Util::read($test_file);
 
-        $this->assertFalse($result);
+        $this->assertTrue($result->isError());
     }
 
     public function testReadLargeFileWithChunking()
@@ -136,8 +137,9 @@ class File_Util_Test extends TestCase {
 
         $result = Dj_App_File_Util::read($test_file);
 
-        $this->assertEquals($content, $result);
-        $this->assertEquals(100000, strlen($result));
+        $this->assertTrue($result->isSuccess());
+        $this->assertEquals($content, $result->output);
+        $this->assertEquals(100000, strlen($result->output));
     }
 
     public function testWriteNewFile()

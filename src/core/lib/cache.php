@@ -151,11 +151,13 @@ class Dj_App_Cache
             return null;
         }
 
-        $cache_content = Dj_App_File_Util::read($cache_file);
+        $read_result = Dj_App_File_Util::read($cache_file);
 
-        if (empty($cache_content)) {
+        if ($read_result->isError() || empty($read_result->output)) {
             return null;
         }
+
+        $cache_content = $read_result->output;
 
         // Skip protection header
         $marker_pos = strpos($cache_content, self::$end_marker);
