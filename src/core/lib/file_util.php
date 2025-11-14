@@ -196,7 +196,7 @@ class Dj_App_File_Util {
             }
 
             $chmod_res = chmod($dir, $perm); // jic
-            $res_obj->chmod_res = $res_obj;
+            $res_obj->chmod_res = $chmod_res;
 
             $res_obj->status = true;
         } catch (Exception $e) {
