@@ -22,76 +22,92 @@ define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.p
 
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
-        echo "Usage: php opt.php [--help|-h] [--zip]\n";
+        echo "Usage: php opt.php [--help|-h] [--phar] [--zip]\n";
         echo "Options:\n";
         echo "  --help, -h         Show this help message\n";
-        echo "  --zip              Also create a ZIP file containing the PHAR\n";
+        echo "  --phar             Build PHAR archive only\n";
+        echo "  --zip              Create source distribution ZIP only (excludes tools/, .git/, tests/)\n";
         echo "\n";
         echo "Examples:\n";
-        echo "  php opt.php              # Build PHAR only\n";
-        echo "  php opt.php --zip        # Build PHAR and ZIP file\n";
+        echo "  php opt.php                   # Build both PHAR and source ZIP (default)\n";
+        echo "  php opt.php --phar            # Build PHAR only\n";
+        echo "  php opt.php --zip             # Build source ZIP only\n";
+        echo "  php opt.php --phar --zip      # Build both PHAR and source ZIP (explicit)\n";
         exit(0);
     }
 }
 
 $exit_code = 0;
+$create_phar = false;
 $create_zip = false;
+$has_flags = false;
 
-// Check for --zip flag
+// Parse command line flags
 foreach ($args as $arg) {
-    if ($arg === '--zip') {
+    if ($arg === '--phar') {
+        $create_phar = true;
+        $has_flags = true;
+    } elseif ($arg === '--zip') {
         $create_zip = true;
-        break;
+        $has_flags = true;
     }
 }
 
+// If no flags provided, build both by default
+if (!$has_flags) {
+    $create_phar = true;
+    $create_zip = true;
+}
+
 try {
-    // Check if phar.readonly is enabled and auto-restart if needed
-    $can_create_php_phar = ini_get('phar.readonly');
-    
-    // phar is readonly by default but we need to not be just for a moment so we can create phar
-    // to do that we'll restart the script with the proper php params -d phar.readonly=0
-    if (!empty($can_create_php_phar) && preg_match('#on|1|true#si', $can_create_php_phar)) {
-        // Check if we're already running with the parameter to avoid infinite loops
-        $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
-        $has_phar_param_and_still_ro = false; // can this ever happen?
+    // Check if phar.readonly is enabled and auto-restart if needed (only if building PHAR)
+    if ($create_phar) {
+        $can_create_php_phar = ini_get('phar.readonly');
 
-        foreach ($args as $arg) {
-            if (strpos($arg, 'phar.readonly=0') !== false) {
-                $has_phar_param_and_still_ro = true;
-                break;
+        // phar is readonly by default but we need to not be just for a moment so we can create phar
+        // to do that we'll restart the script with the proper php params -d phar.readonly=0
+        if (!empty($can_create_php_phar) && preg_match('#on|1|true#si', $can_create_php_phar)) {
+            // Check if we're already running with the parameter to avoid infinite loops
+            $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+            $has_phar_param_and_still_ro = false; // can this ever happen?
+
+            foreach ($args as $arg) {
+                if (strpos($arg, 'phar.readonly=0') !== false) {
+                    $has_phar_param_and_still_ro = true;
+                    break;
+                }
             }
-        }
 
-        if ($has_phar_param_and_still_ro) {
-            throw new Exception("Cannot create phar. phar.readonly is enabled and cannot be overridden for some reason.");
-        }
-    
-        $script_path = __FILE__;
-        $script_path_esc = escapeshellarg($script_path);
-        $command = sprintf('php -d phar.readonly=0 %s', $script_path_esc);
+            if ($has_phar_param_and_still_ro) {
+                throw new Exception("Cannot create phar. phar.readonly is enabled and cannot be overridden for some reason.");
+            }
 
-        // Pass through any additional arguments
-        if (count($args) > 1) {
-            $args_copy = $args;
-            array_shift($args_copy); // Remove script name
-            $escaped_args = array_map('escapeshellarg', $args_copy);
-            $command .= ' ' . join(' ', $escaped_args);
-        }
+            $script_path = __FILE__;
+            $script_path_esc = escapeshellarg($script_path);
+            $command = sprintf('php -d phar.readonly=0 %s', $script_path_esc);
 
-        if (function_exists('passthru')) {
-            $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
-            passthru($command, $exit_code);
-        } elseif (function_exists('exec')) {
-            $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
-            $output = [];
-            exec($command, $output, $exit_code);
-            echo join('', $output) . "\n"; // output already has new lines
-        } else {
-            throw new Exception("Cannot restart the app with -d phar.readonly=0 please do it manually or set phar.readonly=0 in php.ini");
-        }
+            // Pass through any additional arguments
+            if (count($args) > 1) {
+                $args_copy = $args;
+                array_shift($args_copy); // Remove script name
+                $escaped_args = array_map('escapeshellarg', $args_copy);
+                $command .= ' ' . join(' ', $escaped_args);
+            }
 
-        exit($exit_code); // this is the parent no need to continue
+            if (function_exists('passthru')) {
+                $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
+                passthru($command, $exit_code);
+            } elseif (function_exists('exec')) {
+                $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
+                $output = [];
+                exec($command, $output, $exit_code);
+                echo join('', $output) . "\n"; // output already has new lines
+            } else {
+                throw new Exception("Cannot restart the app with -d phar.readonly=0 please do it manually or set phar.readonly=0 in php.ini");
+            }
+
+            exit($exit_code); // this is the parent no need to continue
+        }
     }
 
     $dir = __DIR__;
@@ -99,7 +115,7 @@ try {
     $src_root = "$app_dir/src";
     $build_dir = "$app_dir/build";
     $phar_file = $build_dir . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
-    $zip_file = $phar_file . '.zip';
+    $source_zip_file = $build_dir . "/djebel-app-{$version}.zip";
     
     // Ensure build directory exists
     if (!is_dir($build_dir) && !mkdir($build_dir, 0750, true)) {
@@ -107,12 +123,14 @@ try {
     }
 
     // clean up
-    $clean_up_files = [
-        $phar_file,
-    ];
-    
+    $clean_up_files = [];
+
+    if ( $create_phar ) {
+        $clean_up_files[] = $phar_file;
+    }
+
     if ( $create_zip ) {
-        $clean_up_files[] = $zip_file;
+        $clean_up_files[] = $source_zip_file;
     }
 
     foreach ($clean_up_files as $clean_up_file) {
@@ -128,209 +146,229 @@ try {
     // Create the PHAR file with proper exception handling
     $phar = null;
 
-    // Validate source directory exists
-    if (!is_dir($src_root)) {
-        throw new InvalidArgumentException("Source directory does not exist: $src_root");
+    if ($create_phar) {
+        // Validate source directory exists
+        if (!is_dir($src_root)) {
+            throw new InvalidArgumentException("Source directory does not exist: $src_root");
+        }
+
+        echo "Source directory: [$src_root]\n";
+        echo "Building [$phar_file] ...\n";
+        echo "Build directory: [$build_dir]\n";
+
+        $phar = new Phar($phar_file,
+            FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::KEY_AS_FILENAME,
+            basename(DJEBEL_TOOL_OPT_PHAR_NAME)
+        );
+
+        // start buffering. Mandatory to modify stub to add shebang
+        $phar->startBuffering();
+
+        // pointing main file which requires all classes
+        //$phar->setDefaultStub('index.php', 'index.php');
+
+        // creating our library using whole directory with filtering
+        class FilteringIterator extends FilterIterator {
+            public function accept(): bool {
+                $file = $this->getInnerIterator()->current();
+                $path = $file->getPathname();
+                $basename = $file->getBasename();
+
+                // Exclude patterns - keep composer files but exclude others
+                $exclude_patterns = [
+                    // File extensions
+                    '#\.(tmp|log|bak|sql)$#i' => $basename,
+                    // Git/SVN directories
+                    '#/\.(git|svn)/#' => $path,
+                    // Environment files (only .env* files starting with dot)
+                    '#^\.env[\w\-\.]*$#i' => $basename,
+                    // Test directories
+                    '#/tests?/#i' => $path,
+                    // README files (with or without extension)
+                    '#^README(\.md|\.txt|\.docx)?$#i' => $basename,
+                    // System files
+                    '#^\.DS_Store$#' => $basename,
+                ];
+
+                foreach ($exclude_patterns as $pattern => $target) {
+                    if (preg_match($pattern, $target)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        $iterator = new FilteringIterator(
+            new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
+            )
+        );
+
+        // Build from iterator manually to preserve src/ directory structure
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                // Keep the full path relative to app_dir to preserve src/ folder
+                $relative_path = substr($file->getPathname(), strlen($app_dir) + 1);
+                $phar->addFile($file->getPathname(), $relative_path);
+            }
+        }
+
+        // Add the root index.php file as the main entry point
+        $root_index = $app_dir . '/index.php';
+
+        if (file_exists($root_index)) {
+            $phar->addFile($root_index, 'index.php');
+            echo "Added root index.php to PHAR\n";
+        } else {
+            throw new RuntimeException("Root index.php not found at: $root_index");
+        }
+
+        /*$build_res = $phar->buildFromDirectory($src_root);
+        $build_res = true; // buildFromIterator doesn't return a result
+
+        if (!$build_res) {
+            throw new RuntimeException("Failed to build PHAR from directory: [$src_root]");
+        }*/
+
+        $built_date = date('r');
+
+        // Customize the stub to add the shebang (only for CLI)
+        $stub = '';
+        // $stub .= "#!/usr/bin/env php\n"; // commented out for web usage
+
+        $php_header_rows = [];
+        $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');";
+
+        $git_output = function_exists('shell_exec') ? shell_exec("git rev-list -1 HEAD") : '';
+        $git_commit = empty($git_output) ? '' : trim($git_output);
+
+        if (!empty($git_commit)) {
+            $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
+        }
+
+        if (!empty($php_header_rows)) {
+            $stub .= "<?php\n";
+            $stub .= join("\n", $php_header_rows);
+            $stub .= "?>"; // don't add new line so we don't break headers
+        }
+
+        // Create the default stub from main.php entry point
+        $default_stub = $phar->createDefaultStub('index.php');
+        $stub .= $default_stub;
+        $phar->setStub($stub); // Add the stub
+
+        $phar->stopBuffering();
+
+        // Compress PHAR with gzip (always)
+        echo "Compressing PHAR with gzip...\n";
+        $phar->compressFiles(Phar::GZ);
+
+        // was it successful?
+        if (!file_exists($phar_file)) {
+            throw new RuntimeException("Failed to create as: $phar_file");
+        }
+
+        // Validate PHAR file creation and set permissions
+        // it's going to be loaded and not executed ... for now, so don't set the permissions.
+        /*if (!chmod($phar_file, 0755)) {
+            throw new RuntimeException("Failed to set permissions on PHAR file: $phar_file");
+        }*/
+
+        $size = filesize($phar_file);
+        $size_fmt = number_format($size, 0);
+        echo "PHAR created: [$phar_file]\n";
+        echo "Size: $size_fmt bytes\n";
     }
 
-    echo "Source directory: [$src_root]\n";
-    echo "Building [$phar_file] ...\n";
-    echo "Build directory: [$build_dir]\n";
+    // Create source distribution ZIP (only if --zip flag is provided)
+    if ( $create_zip ) {
+        if ( !class_exists('ZipArchive') ) {
+            throw new RuntimeException("ZipArchive class not available, cannot create source ZIP");
+        }
 
-    $phar = new Phar($phar_file,
-        FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::KEY_AS_FILENAME,
-        basename(DJEBEL_TOOL_OPT_PHAR_NAME)
-    );
+        echo "Creating source distribution ZIP: [$source_zip_file] ...\n";
 
-    // start buffering. Mandatory to modify stub to add shebang
-    $phar->startBuffering();
+        $zip = new ZipArchive();
+        $zip_result = $zip->open($source_zip_file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
-    // pointing main file which requires all classes
-    //$phar->setDefaultStub('index.php', 'index.php');
+        if ( $zip_result !== true ) {
+            throw new RuntimeException("Failed to create source ZIP file: $source_zip_file (Error: $zip_result)");
+        }
 
-    // creating our library using whole directory with filtering
-    class FilteringIterator extends FilterIterator {
-        public function accept(): bool {
-            $file = $this->getInnerIterator()->current();
-            $path = $file->getPathname();
-            $basename = $file->getBasename();
-            
-            // Exclude patterns - keep composer files but exclude others
-            $exclude_patterns = [
-                // File extensions
-                '#\.(tmp|log|bak|sql)$#i' => $basename,
-                // Git/SVN directories
-                '#/\.(git|svn)/#' => $path,
-                // Environment files (only .env* files starting with dot)
-                '#^\.env[\w\-\.]*$#i' => $basename,
-                // Test directories
-                '#/tests?/#i' => $path,
-                // README files (with or without extension)
-                '#^README(\.md|\.txt|\.docx)?$#i' => $basename,
-                // System files
-                '#^\.DS_Store$#' => $basename,
-            ];
-            
-            foreach ($exclude_patterns as $pattern => $target) {
-                if (preg_match($pattern, $target)) {
-                    return false;
+        // Define exclude patterns
+        $exclude_patterns = [
+            '#/\.(git|svn)/#',           // Version control
+            '#/\.DS_Store$#',            // Mac system files
+            '#/tests?/#i',               // Test directories
+            '#/tools/#',                 // Build tools
+            '#/build/#',                 // Build output
+            '#\.(tmp|log|bak)$#i',       // Temp files
+            '#^\.env[\w\-\.]*$#i',       // Environment files
+        ];
+
+        // Add src/ directory
+        $src_iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($src_iterator as $file) {
+            if ($file->isFile()) {
+                $file_path = $file->getPathname();
+                $relative_path = substr($file_path, strlen($app_dir) + 1);
+
+                $excluded = false;
+                foreach ($exclude_patterns as $pattern) {
+                    if (preg_match($pattern, $relative_path) || preg_match($pattern, $file->getBasename())) {
+                        $excluded = true;
+                        break;
+                    }
+                }
+
+                if (!$excluded) {
+                    $zip->addFile($file_path, $relative_path);
                 }
             }
-            
-            return true;
         }
-    }
 
-    $iterator = new FilteringIterator(
-        new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($src_root, FilesystemIterator::SKIP_DOTS)
-        )
-    );
+        // Add root index.php
+        $root_index = $app_dir . '/index.php';
 
-    // Build from iterator manually to preserve src/ directory structure
-    foreach ($iterator as $file) {
-        if ($file->isFile()) {
-            // Keep the full path relative to app_dir to preserve src/ folder
-            $relative_path = substr($file->getPathname(), strlen($app_dir) + 1);
-            $phar->addFile($file->getPathname(), $relative_path);
+        if (file_exists($root_index)) {
+            $zip->addFile($root_index, 'index.php');
         }
-    }
-    
-    // Add the root index.php file as the main entry point
-    $root_index = $app_dir . '/index.php';
 
-    if (file_exists($root_index)) {
-        $phar->addFile($root_index, 'index.php');
-        echo "Added root index.php to PHAR\n";
-    } else {
-        throw new RuntimeException("Root index.php not found at: $root_index");
-    }
-
-    /*$build_res = $phar->buildFromDirectory($src_root);
-    $build_res = true; // buildFromIterator doesn't return a result
-
-    if (!$build_res) {
-        throw new RuntimeException("Failed to build PHAR from directory: [$src_root]");
-    }*/
-
-    $built_date = date('r');
-
-    // Customize the stub to add the shebang (only for CLI)
-    $stub = '';
-    // $stub .= "#!/usr/bin/env php\n"; // commented out for web usage
-
-    $php_header_rows = [];
-    $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');";
-
-    $git_output = function_exists('shell_exec') ? shell_exec("git rev-list -1 HEAD") : '';
-    $git_commit = empty($git_output) ? '' : trim($git_output);
-
-    if (!empty($git_commit)) {
-        $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
-    }
-
-    if (!empty($php_header_rows)) {
-        $stub .= "<?php\n";
-        $stub .= join("\n", $php_header_rows);
-        $stub .= "?>"; // don't add new line so we don't break headers
-    }
-
-    // Create the default stub from main.php entry point
-    $default_stub = $phar->createDefaultStub('index.php');
-    $stub .= $default_stub;
-    $phar->setStub($stub); // Add the stub
-
-    $phar->stopBuffering();
-
-    // plus - compressing it into gzip
-    $phar->compressFiles(Phar::GZ);
-
-    // was it successful?
-    if (!file_exists($phar_file)) {
-        throw new RuntimeException("Failed to create as: $phar_file");
-    }
-
-    // Validate PHAR file creation and set permissions
-    // it's going to be loaded and not executed ... for now, so don't set the permissions.
-    /*if (!chmod($phar_file, 0755)) {
-        throw new RuntimeException("Failed to set permissions on PHAR file: $phar_file");
-    }*/
-
-    $size = filesize($phar_file);
-    $size_fmt = number_format($size, 0);
-    echo "PHAR created: [$phar_file]\n";
-    echo "Size: $size_fmt bytes\n";
-
-    // Create ZIP file of the PHAR (only if --zip flag is provided)
-    if ( $create_zip ) {
-        $zip_created = false;
-        $zip_comment = "Created: $built_date";
+        $zip_comment = "Djebel App v{$version} - Source Distribution\nCreated: $built_date";
 
         if ( !empty($git_commit) ) {
             $zip_comment .= "\nGit commit: $git_commit";
         }
 
-        if ( class_exists('ZipArchive') ) {
-            echo "Creating ZIP file: [$zip_file] ...\n";
+        $zip->setArchiveComment($zip_comment);
+        $zip->close();
 
-            $zip = new ZipArchive();
-            $zip_result = $zip->open($zip_file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
-            
-            if ( !empty($zip_result) ) {
-                throw new RuntimeException("Failed to create ZIP file: $zip_file (Error: $zip_result)");
-            }
-            
-            // Add the PHAR file to the ZIP with just the filename (not the full path)
-            $zip->addFile($phar_file, basename($phar_file));
-            $zip->setArchiveComment($zip_comment);
-            $zip->close();
-            
-            if ( !file_exists($zip_file) ) {
-                throw new RuntimeException("Failed to create ZIP file: $zip_file");
-            }
-
-            $zip_created = true;
-        } else if ( function_exists('exec') ) {
-            echo "Creating ZIP file: [$zip_file] ...\n";
-
-            // Escape shell arguments for security
-            $zip_file_esc = escapeshellarg($zip_file);
-            $phar_file_esc = escapeshellarg($phar_file);
-            
-            // Create zip: -j (junk paths), -9 (max compression)
-            $zip_command = "zip -j -9 $zip_file_esc $phar_file_esc";
-            exec($zip_command, $zip_output, $zip_exit_code);
-
-            // Check if zip command succeeded (exit code 0) and file was created
-            if ( empty($zip_exit_code) && file_exists($zip_file) ) {
-                $zip_created = true;
-            } else {
-                $tool->stderr("Warning: Failed to create ZIP file using zip command (exit code: $zip_exit_code)");
-            }
-        } else {
-            echo "Warning: ZipArchive class and exec function not available, skipping ZIP creation\n";
+        if ( !file_exists($source_zip_file) ) {
+            throw new RuntimeException("Failed to create source ZIP file: $source_zip_file");
         }
 
-        // Show ZIP creation success message and size (common for both methods)
-        if ( $zip_created ) {
-            $zip_size = filesize($zip_file);
-            $zip_size_fmt = number_format($zip_size, 0);
-            echo "ZIP created: [$zip_file]\n";
-            echo "ZIP Size: $zip_size_fmt bytes\n";
-        }
+        $zip_size = filesize($source_zip_file);
+        $zip_size_fmt = number_format($zip_size, 0);
+        echo "Source ZIP created: [$source_zip_file]\n";
+        echo "Source ZIP Size: $zip_size_fmt bytes\n";
     }
 } catch (Exception $e) {
     // Clean up partially created PHAR file on failure
-    if (!empty($phar) && file_exists($phar_file)) {
+    if ( $create_phar && !empty($phar) && file_exists($phar_file)) {
         if (!unlink($phar_file)) {
             $tool->stderr("Warning: Could not clean up partial PHAR file");
         }
     }
-    
-    // Clean up partially created ZIP file on failure
-    if ( $create_zip && !empty($zip_file) && file_exists($zip_file) ) {
-        if (!unlink($zip_file)) {
-            $tool->stderr("Warning: Could not clean up partial ZIP file");
+
+    // Clean up partially created source ZIP file on failure
+    if ( $create_zip && !empty($source_zip_file) && file_exists($source_zip_file) ) {
+        if (!unlink($source_zip_file)) {
+            $tool->stderr("Warning: Could not clean up partial source ZIP file");
         }
     }
 
