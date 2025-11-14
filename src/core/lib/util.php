@@ -3,6 +3,7 @@
 class Dj_App {
     const NAME = 'Djebel';
     const VERSION = '0.0.1';
+    const SITE_URL = 'https://djebel.com';
 }
 
 class Dj_App_Util {
