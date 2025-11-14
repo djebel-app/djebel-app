@@ -57,7 +57,7 @@ try {
     }
 
     // Allow override via environment variable (with validation)
-    $phar_name = getenv('DJEBEL_TOOL_OPT_PHAR_NAME');
+    $phar_name = getenv('DJEBEL_TOOL_PKG_PHAR_NAME');
 
     // Validate phar_name if provided (security: prevent path traversal)
     if (!empty($phar_name)) {
@@ -75,7 +75,11 @@ try {
     }
 
     // The file's extension must end in .phar
-    define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
+    define('DJEBEL_TOOL_PKG_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
+
+    // Allow build directory override via environment variable
+    $build_dir_env = getenv('DJEBEL_TOOL_PKG_BUILD_DIR');
+    $build_dir = empty($build_dir_env) ? "$app_dir/build" : $build_dir_env;
 
     $create_phar = false;
     $create_zip = false;
@@ -152,10 +156,8 @@ try {
     }
 
     $dir = __DIR__;
-    $app_dir = dirname(__DIR__); // one level up
     $src_root = "$app_dir/src";
-    $build_dir = "$app_dir/build";
-    $phar_file = $build_dir . '/' . DJEBEL_TOOL_OPT_PHAR_NAME;
+    $phar_file = $build_dir . '/' . DJEBEL_TOOL_PKG_PHAR_NAME;
     $source_zip_file = $build_dir . "/djebel-app-{$version}.zip";
     
     // Ensure build directory exists
@@ -199,7 +201,7 @@ try {
 
         $phar = new Phar($phar_file,
             FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::KEY_AS_FILENAME,
-            basename(DJEBEL_TOOL_OPT_PHAR_NAME)
+            basename(DJEBEL_TOOL_PKG_PHAR_NAME)
         );
 
         // start buffering. Mandatory to modify stub to add shebang
@@ -280,13 +282,13 @@ try {
         // $stub .= "#!/usr/bin/env php\n"; // commented out for web usage
 
         $php_header_rows = [];
-        $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_DATE', '$built_date');";
+        $php_header_rows[] = "define('DJEBEL_TOOL_PKG_PHAR_BUILD_DATE', '$built_date');";
 
         $git_output = function_exists('shell_exec') ? shell_exec("git rev-list -1 HEAD") : '';
         $git_commit = empty($git_output) ? '' : trim($git_output);
 
         if (!empty($git_commit)) {
-            $php_header_rows[] = "define('DJEBEL_TOOL_OPT_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
+            $php_header_rows[] = "define('DJEBEL_TOOL_PKG_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
         }
 
         if (!empty($php_header_rows)) {
