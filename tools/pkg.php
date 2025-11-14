@@ -220,7 +220,7 @@ try {
                 // Exclude patterns - keep composer files but exclude others
                 $exclude_patterns = [
                     // File extensions
-                    '#\.(tmp|log|bak|sql)$#i' => $basename,
+                    '#\.(tmp|log|bak|sql|zip|tar|gz|tgz)$#i' => $basename,
                     // Git/SVN directories
                     '#/\.(git|svn)/#' => $path,
                     // Environment files (only .env* files starting with dot)
@@ -342,13 +342,13 @@ try {
 
         // Define exclude patterns
         $exclude_patterns = [
-            '#/\.(git|svn)/#',           // Version control
-            '#/\.DS_Store$#',            // Mac system files
-            '#/tests?/#i',               // Test directories
-            '#/tools/#',                 // Build tools
-            '#/build/#',                 // Build output
-            '#\.(tmp|log|bak)$#i',       // Temp files
-            '#^\.env[\w\-\.]*$#i',       // Environment files
+            '#/\.(git|svn)/#',                    // Version control
+            '#/\.DS_Store$#',                     // Mac system files
+            '#/tests?/#i',                        // Test directories
+            '#/tools/#',                          // Build tools
+            '#/build/#',                          // Build output
+            '#\.(tmp|log|bak|zip|tar|gz|tgz)$#i', // Temp/archive files
+            '#^\.env[\w\-\.]*$#i',                // Environment files
         ];
 
         // Add src/ directory
@@ -357,21 +357,25 @@ try {
         );
 
         foreach ($src_iterator as $file) {
-            if ($file->isFile()) {
-                $file_path = $file->getPathname();
-                $relative_path = substr($file_path, strlen($app_dir) + 1);
+            if (!$file->isFile()) {
+                continue;
+            }
 
-                $excluded = false;
-                foreach ($exclude_patterns as $pattern) {
-                    if (preg_match($pattern, $relative_path) || preg_match($pattern, $file->getBasename())) {
-                        $excluded = true;
-                        break;
-                    }
-                }
+            $file_path = $file->getPathname();
+            $relative_path = substr($file_path, strlen($app_dir) + 1);
+            $base_name = $file->getBasename();
 
-                if (!$excluded) {
-                    $zip->addFile($file_path, $relative_path);
+            $excluded = false;
+            foreach ($exclude_patterns as $pattern) {
+                // Cheap check first: basename is smaller, faster regex
+                if (preg_match($pattern, $base_name) || preg_match($pattern, $relative_path)) {
+                    $excluded = true;
+                    break;
                 }
+            }
+
+            if (!$excluded) {
+                $zip->addFile($file_path, $relative_path);
             }
         }
 
@@ -426,7 +430,7 @@ try {
     }
     
     // Provide stack trace in verbose mode (can be enabled via environment variable)
-    if (!empty(getenv('VERBOSE'))) {
+    if (!empty(getenv('DJEBEL_TOOL_PKG_VERBOSE'))) {
         $tool->stderr("Stack trace:");
         $tool->stderr($e->getTraceAsString());
     }
