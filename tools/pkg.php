@@ -386,7 +386,7 @@ try {
             $zip->addFile($root_index, $zip_root_dir . '/index.php');
         }
 
-        $zip_comment = "Djebel App v{$version} - Source Distribution\nCreated: $built_date";
+        $zip_comment = "Djebel App v{$version}\nCreated: $built_date";
 
         $site_url = Dj_App::SITE_URL;
         $zip_comment .= "\nSite: $site_url";
