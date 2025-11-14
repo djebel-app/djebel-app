@@ -8,10 +8,17 @@
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
 
 $tool = new Djebel_Tool_Opt();
+
+// Load version from Dj_App class
+$app_dir = dirname(__DIR__);
+require_once $app_dir . '/src/core/lib/util.php';
+$version = Dj_App::VERSION;
+
+// Allow override via environment variable
 $phar_name = getenv('DJEBEL_TOOL_OPT_PHAR_NAME');
 
 // The file's extension must end in .phar
-define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? 'djebel-app.phar' : $phar_name);
+define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
 
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
