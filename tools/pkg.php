@@ -1,65 +1,106 @@
 #!/usr/bin/env php
 <?php
 // packages the djebel app into a phar archive that's one file.
-// Usage: php opt.php
 // Author: Svetoslav Marinov | https://orbisius.com
 // Copyright: All Rights Reserved
+
+// Security: Only allow CLI execution
+if (php_sapi_name() !== 'cli') {
+    http_response_code(403);
+    die('Cannot run');
+}
+
+// Get tool name for usage messages
+$tool_name = basename(__FILE__);
+
 // Check command line arguments first
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+array_shift($args); // Remove script name from arguments
 
 $tool = new Djebel_Tool_Opt();
 
-// Load version from Dj_App class
-$app_dir = dirname(__DIR__);
-require_once $app_dir . '/src/core/lib/util.php';
-$version = Dj_App::VERSION;
-
-// Allow override via environment variable
-$phar_name = getenv('DJEBEL_TOOL_OPT_PHAR_NAME');
-
-// The file's extension must end in .phar
-define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
-
+// Help check (exit early before any processing)
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
-        echo "Usage: php opt.php [--help|-h] [--phar] [--zip]\n";
+        echo "Usage: php $tool_name [--help|-h] [--phar] [--zip]\n";
         echo "Options:\n";
         echo "  --help, -h         Show this help message\n";
         echo "  --phar             Build PHAR archive only\n";
         echo "  --zip              Create source distribution ZIP only (excludes tools/, .git/, tests/)\n";
         echo "\n";
         echo "Examples:\n";
-        echo "  php opt.php                   # Build both PHAR and source ZIP (default)\n";
-        echo "  php opt.php --phar            # Build PHAR only\n";
-        echo "  php opt.php --zip             # Build source ZIP only\n";
-        echo "  php opt.php --phar --zip      # Build both PHAR and source ZIP (explicit)\n";
+        echo "  php $tool_name                   # Build both PHAR and source ZIP (default)\n";
+        echo "  php $tool_name --phar            # Build PHAR only\n";
+        echo "  php $tool_name --zip             # Build source ZIP only\n";
+        echo "  php $tool_name --phar --zip      # Build both PHAR and source ZIP (explicit)\n";
         exit(0);
     }
 }
 
 $exit_code = 0;
-$create_phar = false;
-$create_zip = false;
-$has_flags = false;
-
-// Parse command line flags
-foreach ($args as $arg) {
-    if ($arg === '--phar') {
-        $create_phar = true;
-        $has_flags = true;
-    } elseif ($arg === '--zip') {
-        $create_zip = true;
-        $has_flags = true;
-    }
-}
-
-// If no flags provided, build both by default
-if (!$has_flags) {
-    $create_phar = true;
-    $create_zip = true;
-}
 
 try {
+    // Load version from Dj_App class
+    $app_dir = dirname(__DIR__);
+    require_once $app_dir . '/src/core/lib/util.php';
+    $version = Dj_App::VERSION;
+
+    // Validate version format (security: ensure it's safe for filenames)
+    // Cheap check first: empty
+    if (empty($version)) {
+        throw new InvalidArgumentException("Version cannot be empty");
+    }
+
+    // Expensive check last: regex
+    if (!preg_match('/^\d+\.\d+\.\d+(-[\w\.\-]+)?$/si', $version)) {
+        throw new InvalidArgumentException("Invalid version format: $version");
+    }
+
+    // Allow override via environment variable (with validation)
+    $phar_name = getenv('DJEBEL_TOOL_OPT_PHAR_NAME');
+
+    // Validate phar_name if provided (security: prevent path traversal)
+    if (!empty($phar_name)) {
+        // Cheap checks first: strpos for path separators
+        $has_path_separators = (strpos($phar_name, '/') !== false) || (strpos($phar_name, '\\') !== false);
+
+        if ($has_path_separators) {
+            throw new InvalidArgumentException("PHAR name cannot contain path separators.");
+        }
+
+        // Expensive check last: regex
+        if (!preg_match('/^[\w\-\.]+\.phar$/si', $phar_name)) {
+            throw new InvalidArgumentException("Invalid PHAR name. Must be a filename ending in .phar");
+        }
+    }
+
+    // The file's extension must end in .phar
+    define('DJEBEL_TOOL_OPT_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
+
+    $create_phar = false;
+    $create_zip = false;
+    $has_flags = false;
+
+    // Parse command line flags (with validation)
+    foreach ($args as $arg) {
+        if ($arg === '--phar') {
+            $create_phar = true;
+            $has_flags = true;
+        } elseif ($arg === '--zip') {
+            $create_zip = true;
+            $has_flags = true;
+        } elseif (!in_array($arg, [ '--help', '-h', '-help', 'help', ], true)) {
+            // Security: Reject unknown arguments
+            throw new InvalidArgumentException("Unknown option: $arg");
+        }
+    }
+
+    // If no flags provided, build both by default
+    if (!$has_flags) {
+        $create_zip = true;
+        $create_phar = true;
+    }
+
     // Check if phar.readonly is enabled and auto-restart if needed (only if building PHAR)
     if ($create_phar) {
         $can_create_php_phar = ini_get('phar.readonly');
