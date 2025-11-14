@@ -388,6 +388,9 @@ try {
 
         $zip_comment = "Djebel App v{$version} - Source Distribution\nCreated: $built_date";
 
+        $site_url = Dj_App::SITE_URL;
+        $zip_comment .= "\nSite: $site_url";
+
         if ( !empty($git_commit) ) {
             $zip_comment .= "\nGit commit: $git_commit";
         }
