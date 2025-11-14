@@ -731,14 +731,14 @@ class Dj_App_Request {
             // for some reason the escaped url doesn't work. When the app redirects apache returns 404
             echo <<<CLEAR_AND_REDIRECT_HTML
 <script type='text/javascript'>
-	document.body.innerHTML = ''; // Clear the body
-	let loadingMessage = document.createElement('h3');
-	loadingMessage.innerText = '$loading_text_esc_as_attrib';
+    document.body.innerHTML = ''; // Clear the body
+    let loadingMessage = document.createElement('h3');
+    loadingMessage.innerText = '$loading_text_esc_as_attrib';
     loadingMessage.style.backgroundColor = '#FFFDD0'; // Set yellow background
     loadingMessage.style.paddingLeft = '10px'; // Set 10px left padding
-	loadingMessage.style.paddingRight = '10px'; // Set 10px right padding
-	document.body.appendChild(loadingMessage);
-	window.parent.location = '$url_esc';
+    loadingMessage.style.paddingRight = '10px'; // Set 10px right padding
+    document.body.appendChild(loadingMessage);
+    window.parent.location = '$url_esc';
 </script>
 
 <noscript>
