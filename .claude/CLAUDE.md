@@ -92,12 +92,24 @@ if ($condition){
    Examples:
    ```php
    // ✅ CORRECT - Using proper character classes
-   if (preg_match('/^\d+\.\d+\.\d+$/si', $version)) { }
-   if (preg_match('/^[\w\-\.]+\.phar$/si', $filename)) { }
+   if (preg_match('/^\d+\.\d+\.\d+$/si', $version)) {
+       // \d for digits
+   }
+
+   // ✅ CORRECT - Using proper character classes
+   if (preg_match('/^[\w\-\.]+\.phar$/si', $filename)) {
+       // \w for word chars
+   }
 
    // ❌ WRONG - Verbose character ranges
-   if (preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/si', $version)) { }
-   if (preg_match('/^[a-zA-Z0-9_\-\.]+\.phar$/si', $filename)) { }
+   if (preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/si', $version)) {
+       // verbose
+   }
+
+   // ❌ WRONG - Verbose character ranges
+   if (preg_match('/^[a-zA-Z0-9_\-\.]+\.phar$/si', $filename)) {
+       // verbose
+   }
    ```
 
 2. **No recursion for performance-critical code**: Explicit depth handling beats recursive calls
