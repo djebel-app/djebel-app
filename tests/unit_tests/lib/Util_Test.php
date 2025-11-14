@@ -684,6 +684,58 @@ BUFF_EOF;
     }
 
     /**
+     * Test getContentDirUrl method - basic functionality
+     */
+    public function testGetContentDirUrl() {
+        // Test basic content directory URL
+        $content_url = Dj_App_Util::getContentDirUrl();
+
+        $this->assertNotEmpty($content_url);
+        $this->assertStringContainsString('dj-content', $content_url);
+
+        // Should not have trailing slash
+        $this->assertStringEndsNotWith('/', $content_url);
+
+        // Should be a valid URL format (contains protocol or starts with /)
+        $this->assertTrue(
+            strpos($content_url, 'http') === 0 || strpos($content_url, '/') === 0,
+            'Content URL should be a valid URL format'
+        );
+    }
+
+    /**
+     * Test getContentDirUrl method - URL structure
+     */
+    public function testGetContentDirUrlStructure() {
+        $content_url = Dj_App_Util::getContentDirUrl();
+
+        // Should contain the content directory name
+        $content_dir_name = Dj_App_Util::getContentDirName();
+        $this->assertStringContainsString($content_dir_name, $content_url);
+
+        // Should end with content directory name (no trailing slash)
+        $this->assertStringEndsWith($content_dir_name, $content_url);
+
+        // Should not contain double slashes (except in protocol)
+        $url_without_protocol = preg_replace('#^https?://#', '', $content_url);
+        $this->assertStringNotContainsString('//', $url_without_protocol);
+    }
+
+    /**
+     * Test getContentDirUrl method - consistency across calls (caching)
+     */
+    public function testGetContentDirUrlCaching() {
+        // Multiple calls should return the same value (tests static caching)
+        $url1 = Dj_App_Util::getContentDirUrl();
+        $url2 = Dj_App_Util::getContentDirUrl();
+        $url3 = Dj_App_Util::getContentDirUrl();
+
+        $this->assertEquals($url1, $url2);
+        $this->assertEquals($url2, $url3);
+        $this->assertEquals($url1, $url3);
+    }
+
+    /**
      * Test formatSlug method - basic functionality
      */
     public function testFormatSlug() {
