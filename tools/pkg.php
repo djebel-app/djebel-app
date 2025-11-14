@@ -386,9 +386,16 @@ try {
             $zip->addFile($root_index, $zip_root_dir . '/index.php');
         }
 
-        $zip_comment = "Djebel App v{$version}\nCreated: $built_date";
-
+        // Add readme files with site URL
         $site_url = Dj_App::SITE_URL;
+
+        $readme_txt = "For more info go to {$site_url}";
+        $zip->addFromString($zip_root_dir . '/000_readme.txt', $readme_txt);
+
+        $readme_html = $tool->generateReadmeHtml($site_url);
+        $zip->addFromString($zip_root_dir . '/000_readme.html', $readme_html);
+
+        $zip_comment = "Djebel App v{$version}\nCreated: $built_date";
         $zip_comment .= "\nSite: $site_url";
 
         if ( !empty($git_commit) ) {
@@ -454,5 +461,23 @@ class Djebel_Tool_Opt {
         }
 
         fputs(STDERR, $msg . "\n");
+    }
+
+    function generateReadmeHtml($site_url) {
+        ob_start();
+        ?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Djebel App</title>
+</head>
+<body>
+    <p>For more info go to <a href='<?php echo $site_url; ?>' target='_blank' rel='noopener'><?php echo $site_url; ?></a></p>
+</body>
+</html>
+<?php
+        $html = ob_get_clean();
+        $html = trim($html);
+        return $html;
     }
 }
