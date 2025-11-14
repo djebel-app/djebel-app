@@ -301,14 +301,38 @@ This is a **production framework** running on live sites. Breaking changes break
 ## Code Style Rules
 
 ### Syntax & Formatting
-- **Spacing**: Always include space before opening braces in control structures
-  ```php
-  // CORRECT
-  if ($condition) {
 
-  // WRONG
+- **Opening braces on SAME line**: K&R brace style - opening brace on same line, NEVER on new line
+  ```php
+  // ✅ CORRECT - Brace on same line with space before it
+  if ($condition) {
+      // code
+  }
+
+  foreach ($items as $item) {
+      // code
+  }
+
+  function doSomething() {
+      // code
+  }
+
+  class MyClass {
+      // code
+  }
+
+  // ❌ WRONG - Brace on new line (Allman style forbidden!)
+  if ($condition)
+  {
+      // code
+  }
+
+  // ❌ WRONG - No space before brace
   if ($condition){
+      // code
+  }
   ```
+  **Why K&R style**: More compact, easier to read, standard PHP convention
 
 - **Type casting**: Always include space after cast operators
   ```php
@@ -645,6 +669,39 @@ This is a **production framework** running on live sites. Breaking changes break
       // found
   }
   ```
+
+- **Use proper regex character classes**: When regex is needed, always use shorthand character classes - they're faster and more readable
+  ```php
+  // ✅ CORRECT - Proper character classes
+  if (preg_match('/^\d+\.\d+\.\d+$/si', $version)) {
+      // \d for digits
+  }
+
+  if (preg_match('/^[\w\-\.]+\.phar$/si', $filename)) {
+      // \w for word chars
+  }
+
+  if (preg_match('/^\s*#/si', $line)) {
+      // \s for whitespace
+  }
+
+  // ❌ WRONG - Verbose character ranges
+  if (preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/si', $version)) {
+      // verbose
+  }
+
+  if (preg_match('/^[a-zA-Z0-9_\-\.]+\.phar$/si', $filename)) {
+      // verbose
+  }
+
+  if (preg_match('/^[ \t\n\r]*#/si', $line)) {
+      // verbose
+  }
+  ```
+  **Character class reference**:
+  - `\d` = `[0-9]` (digits)
+  - `\w` = `[A-Za-z0-9_]` (word characters - includes underscore!)
+  - `\s` = `[ \t\n\r\f\v]` (whitespace)
 
 - **Bracket multiple strpos calls**: When using multiple `strpos()` calls in a condition, wrap each in brackets `()` for proper evaluation
   ```php

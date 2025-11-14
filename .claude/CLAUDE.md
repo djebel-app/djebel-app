@@ -50,11 +50,55 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 
 Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Every line is optimized for performance, readability, and security.
 
+### Code Style Rules
+
+**Opening braces on SAME line** - K&R style, NEVER on new line:
+```php
+// ✅ CORRECT - Brace on same line with space before it
+if ($condition) {
+    // code
+}
+
+foreach ($items as $item) {
+    // code
+}
+
+function doSomething() {
+    // code
+}
+
+// ❌ WRONG - Brace on new line (Allman style forbidden!)
+if ($condition)
+{
+    // code
+}
+
+// ❌ WRONG - No space before brace
+if ($condition){
+    // code
+}
+```
+
 ### Performance & Optimization Rules
 
-1. **Know your regex**: `\w` already includes underscore `[A-Za-z0-9_]` - NEVER add `_` redundantly
-   - ✅ CORRECT: `/[^\w\[\]\.\-]/si`
-   - ❌ WRONG: `/[^\w\[\]\.\-_]/si` (redundant underscore!)
+1. **Use proper regex character classes**: Always use shorthand character classes - they're faster and more readable
+   - ✅ CORRECT: `\d` for digits - matches `[0-9]`
+   - ✅ CORRECT: `\w` for word chars - matches `[A-Za-z0-9_]`
+   - ✅ CORRECT: `\s` for whitespace - matches `[ \t\n\r\f\v]`
+   - ❌ WRONG: `[0-9]` instead of `\d`
+   - ❌ WRONG: `[a-zA-Z0-9]` instead of `\w`
+   - ❌ WRONG: `[a-zA-Z0-9_]` instead of `\w` (and NEVER add `_` redundantly!)
+
+   Examples:
+   ```php
+   // ✅ CORRECT - Using proper character classes
+   if (preg_match('/^\d+\.\d+\.\d+$/si', $version)) { }
+   if (preg_match('/^[\w\-\.]+\.phar$/si', $filename)) { }
+
+   // ❌ WRONG - Verbose character ranges
+   if (preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/si', $version)) { }
+   if (preg_match('/^[a-zA-Z0-9_\-\.]+\.phar$/si', $filename)) { }
+   ```
 
 2. **No recursion for performance-critical code**: Explicit depth handling beats recursive calls
    - For a framework targeting 1,000,000 sites, function call overhead matters
