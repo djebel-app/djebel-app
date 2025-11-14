@@ -277,6 +277,33 @@ class Dj_App_Util {
     }
 
     /**
+     * Gets the content directory URL (site URL + content dir name)
+     * Dj_App_Util::getContentDirUrl();
+     *
+     * Example: https://example.com/dj-content
+     *
+     * @return string Content directory URL
+     */
+    public static function getContentDirUrl()
+    {
+        static $content_dir_url = null;
+
+        if (!is_null($content_dir_url)) {
+            return $content_dir_url;
+        }
+
+        $req_obj = Dj_App_Request::getInstance();
+        $site_url = Dj_App_Util::removeSlash($req_obj->getSiteUrl());
+        $content_dir_name = Dj_App_Util::getContentDirName();
+
+        $url_parts = [$site_url];
+        $url_parts[] = $content_dir_name;
+        $content_dir_url = implode('/', $url_parts);
+
+        return $content_dir_url;
+    }
+
+    /**
      * Dj_App_Util::getDocRootDir();
      * @return string
      */
@@ -503,16 +530,6 @@ class Dj_App_Util {
         $dir = Dj_App_Env::getEnvConst('DJEBEL_APP_CORE_DIR') . '/admin';
         $dir = Dj_App_Env::getEnvConst('DJEBEL_APP_ADMIN_DIR', $dir);
         $dir = Dj_App_Hooks::applyFilter( 'app.admin.dir', $dir );
-        return $dir;
-    }
-
-    /**
-     * Dj_App_Util::getContentUri();
-     * @return string
-     */
-    public static function getContentUri()
-    {
-        $dir = 'http://domain/dj-content';
         return $dir;
     }
 
@@ -1517,7 +1534,7 @@ MSG_EOF;
         // Define magic variables and their values
         $search_magic_vars = [
             '__SITE_URL__' => $req_obj->getSiteUrl(),
-            '__SITE_CONTENT_DIR_URL__' => $req_obj->getContentDirUrl(),
+            '__SITE_CONTENT_DIR_URL__' => Dj_App_Util::getContentDirUrl(),
             '__SITE_WEB_PATH__' => $web_path,
             '__SITE_CONTENT_WEB_PATH__' => rtrim($web_path, '/') . '/' . Dj_App_Util::getContentDirName(),
         ];
