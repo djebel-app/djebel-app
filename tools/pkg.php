@@ -217,20 +217,18 @@ try {
                 $path = $file->getPathname();
                 $basename = $file->getBasename();
 
-                // Exclude patterns - keep composer files but exclude others
+                // Exclude patterns - cheap checks first, ordered by simplicity
                 $exclude_patterns = [
-                    // File extensions
+                    // Files starting with dot (simplest pattern)
+                    '#^\.#' => $basename,
+                    // File extensions (common, simple)
                     '#\.(tmp|log|bak|sql|zip|tar|gz|tgz)$#i' => $basename,
-                    // Git/SVN directories
-                    '#/\.(git|svn)/#' => $path,
-                    // Environment files (only .env* files starting with dot)
-                    '#^\.env[\w\-\.]*$#i' => $basename,
                     // Test directories
                     '#/tests?/#i' => $path,
-                    // README files (with or without extension)
+                    // Git/SVN directories
+                    '#/\.(git|svn)/#' => $path,
+                    // README files (less common, complex pattern)
                     '#^README(\.md|\.txt|\.docx)?$#i' => $basename,
-                    // System files
-                    '#^\.DS_Store$#' => $basename,
                 ];
 
                 foreach ($exclude_patterns as $pattern => $target) {
@@ -340,16 +338,18 @@ try {
             throw new RuntimeException("Failed to create source ZIP file: $source_zip_file (Error: $zip_result)");
         }
 
-        // Define exclude patterns
+        // Define exclude patterns - cheap checks first, ordered by simplicity
         $exclude_patterns = [
-            '#/\.(git|svn)/#',                    // Version control
-            '#/\.DS_Store$#',                     // Mac system files
-            '#/tests?/#i',                        // Test directories
-            '#/tools/#',                          // Build tools
-            '#/build/#',                          // Build output
-            '#\.(tmp|log|bak|zip|tar|gz|tgz)$#i', // Temp/archive files
-            '#^\.env[\w\-\.]*$#i',                // Environment files
+            '#^\.#',                              // Files starting with dot (simplest)
+            '#\.(tmp|log|bak|zip|tar|gz|tgz)$#i', // Temp/archive files (simple)
+            '#/build/#',                          // Build output (simple)
+            '#/tools/#',                          // Build tools (simple)
+            '#/tests?/#i',                        // Test directories (optional s)
+            '#/\.(git|svn)/#',                    // Version control (alternation)
         ];
+
+        // Top-level directory name in ZIP
+        $zip_root_dir = "djebel-app-{$version}";
 
         // Add src/ directory
         $src_iterator = new RecursiveIteratorIterator(
@@ -375,7 +375,7 @@ try {
             }
 
             if (!$excluded) {
-                $zip->addFile($file_path, $relative_path);
+                $zip->addFile($file_path, $zip_root_dir . '/' . $relative_path);
             }
         }
 
@@ -383,7 +383,7 @@ try {
         $root_index = $app_dir . '/index.php';
 
         if (file_exists($root_index)) {
-            $zip->addFile($root_index, 'index.php');
+            $zip->addFile($root_index, $zip_root_dir . '/index.php');
         }
 
         $zip_comment = "Djebel App v{$version} - Source Distribution\nCreated: $built_date";
