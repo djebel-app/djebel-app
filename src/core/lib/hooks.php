@@ -348,7 +348,16 @@ class Dj_App_Hooks {
         }
     }
 
+    /**
+     * Just an alias if somebody is using this in plural
+     * @param $executed_hook
+     * @param $cur_val
+     * @param $params
+     * @return mixed|null
+     * @throws Dj_App_Hooks_Exception
+     */
     public static function applyFilters( $executed_hook, $cur_val = null, $params = [] ) {
+        trigger_error("Please use Dj_App_Hooks::applyFilter instead of " . __METHOD__, E_USER_WARNING);
         return Dj_App_Hooks::applyFilter( $executed_hook, $cur_val, $params );
     }
 
