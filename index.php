@@ -59,10 +59,6 @@ if ($app_load_options) {
 $run_app = Dj_App_Config::cfg('app.core.run', true);
 $headless = Dj_App_Config::cfg('app.core.headless', false);
 
-if (empty($run_app) || $headless) {
-    return;
-}
-
 // @todo should this be a plugin or a core feature?
 $app_load_shortcodes = Dj_App_Config::cfg('app.core.shortcodes.load', true);
 
@@ -71,6 +67,11 @@ if ($app_load_shortcodes) {
     $shortcode_obj = Dj_App_Shortcode::getInstance();
     $shortcode_obj->installHooks();
     Dj_App_Hooks::doAction( 'app.core.shortcodes.loaded' );
+}
+
+// we return after the shortcodes are loaded as there could be plugins that rely on it.
+if (empty($run_app) || $headless) {
+    return;
 }
 
 $boostrap_obj = Dj_App_Bootstrap::getInstance();
