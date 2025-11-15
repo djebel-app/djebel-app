@@ -228,7 +228,7 @@ try {
         '#\.env[\w\-\.]*$#i',                    // Environment files
         '#/cache/#',                             // Cache directories
         '#/logs?/#i',                            // Log directories
-        '#\.(zip|tar|gz|tgz)$#i',               // Archive files
+        '#\.(zip|tar|gz|tgz|rar|7z|bz2)$#i',   // Archive files
         '#(^|/)\.DS_Store$#',                   // macOS metadata
         '#(^|/)Thumbs\.db$#i',                  // Windows thumbnails
         '#(^|/)desktop\.ini$#i',                // Windows folder config
