@@ -540,31 +540,54 @@ class Djebel_Tool_Bundle {
  * Djebel app loader.
  * https://djebel.com
  */
+
 // Full path override via environment
 $app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
+
 // Auto-detect if not set
 if (empty($app_djebel_priv_dir)) {
     $priv_dir_basename = '{{priv_dir_name}}';
+
     // Check directories in order (set to 0 to skip for better performance)
     $check_dirs = [
         dirname(__DIR__) => 1,      // Same level as public/ (which is document root (www/public_html)
         dirname(__DIR__, 2) => 1,   // One level up (non-public)
         dirname(__DIR__, 3) => 0,   // Two levels up (non-public)
     ];
+
     foreach ($check_dirs as $base_dir => $enabled) {
         if (empty($enabled)) {
             continue;
         }
+
         $check_path = $base_dir . '/' . $priv_dir_basename;
+
         if (is_dir($check_path)) {
             $app_djebel_priv_dir = $check_path;
             break;
         }
     }
+
     putenv('DJEBEL_APP_PRIVATE_DIR=' . $app_djebel_priv_dir);
 }
-// Load from PHAR
-require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
+
+
+// Check for PHAR package path
+$app_djebel_phar = getenv('DJEBEL_APP_PKG');
+
+if (!empty($app_djebel_phar)) {
+    if (substr($app_djebel_phar, -5) !== '.phar') {
+        die('Error: DJEBEL_APP_PKG must point to a .phar file');
+    }
+} else {
+    $app_djebel_phar = $app_djebel_priv_dir . '/app/djebel-app.phar';
+}
+
+if (!file_exists($app_djebel_phar)) {
+    die('Error: Cannot find Djebel app PHAR at: ' . $app_djebel_phar);
+}
+
+require_once $app_djebel_phar;
 <?php
         $content = ob_get_clean();
         $content = trim($content);
