@@ -349,7 +349,7 @@ try {
         ];
 
         // Top-level directory name in ZIP
-        $zip_root_dir = "djebel-app-{$version}";
+        $zip_root_dir = "djebel-app";
 
         // Add src/ directory
         $src_iterator = new RecursiveIteratorIterator(
