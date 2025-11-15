@@ -54,9 +54,10 @@ foreach ($args as $arg) {
 $exit_code = 0;
 
 try {
-    // Load Dj_App class for constants
+    // Load Djebel app to use existing utilities
     $app_dir = dirname(__DIR__);
-    require_once $app_dir . '/src/core/lib/util.php';
+    putenv('DJEBEL_APP_CORE_RUN=0'); // Don't execute, just load classes
+    require_once $app_dir . '/index.php';
 
     // Parse command-line parameters
     $bundle_id = '';
@@ -159,7 +160,8 @@ try {
 
     // Resolve to real path and validate
     $site_dir = realpath($site_dir);
-    if ($site_dir === false || !is_dir($site_dir)) {
+
+    if (empty($site_dir) || !is_dir($site_dir)) {
         throw new RuntimeException('Site directory not found: ' . $site_dir_param);
     }
 
@@ -172,52 +174,78 @@ try {
     }
 
     echo "Scanning plugins...\n";
-    $scanner = new Djebel_Tool_Bundle_Plugin_Scanner();
-    $plugins = $scanner->scanPlugins($site_dir);
+
+    $plugins = [];
+
+    // Scan and process site plugins from the site being bundled
+    $site_plugins_dir = $site_dir . '/dj-content/plugins';
+    $site_plugins_load_res = Dj_App_Plugins::loadPlugins(['dir' => $site_plugins_dir]);
+    $site_plugins = empty($site_plugins_load_res->data['plugins']) ? [] : $site_plugins_load_res->data['plugins'];
+
+    foreach ($site_plugins as $id => $plugin) {
+        $plugin_name = empty($plugin['meta']['plugin_name']) ? '' : $plugin['meta']['plugin_name'];
+        $plugin_version = empty($plugin['meta']['version']) ? '1.0.0' : $plugin['meta']['version'];
+        $plugin_type = empty($plugin['type']) ? 'site' : $plugin['type'];
+
+        $plugins[] = [
+            'id' => $id,
+            'type' => $plugin_type,
+            'name' => $plugin_name,
+            'version' => $plugin_version,
+        ];
+    }
+
+    // Scan and process system plugins from the site being bundled
+    $system_plugins_dir = $site_dir . '/.ht_djebel/app/plugins';
+    $system_plugins_load_res = Dj_App_Plugins::loadPlugins(['dir' => $system_plugins_dir, 'is_system' => true]);
+    $system_plugins = empty($system_plugins_load_res->data['plugins']) ? [] : $system_plugins_load_res->data['plugins'];
+
+    foreach ($system_plugins as $id => $plugin) {
+        $plugin_name = empty($plugin['meta']['plugin_name']) ? '' : $plugin['meta']['plugin_name'];
+        $plugin_version = empty($plugin['meta']['version']) ? '1.0.0' : $plugin['meta']['version'];
+        $plugin_type = empty($plugin['type']) ? 'system' : $plugin['type'];
+
+        $plugins[] = [
+            'id' => $id,
+            'type' => $plugin_type,
+            'name' => $plugin_name,
+            'version' => $plugin_version,
+        ];
+    }
 
     echo "Found " . count($plugins) . " plugins\n\n";
 
     // Define exclusion patterns - cheap checks first
     $exclude_patterns = [
-        '#^\.git$#',                             // .git directory itself
-        '#^\.gitignore$#',                       // .gitignore file
-        '#^\.gitmodules$#',                      // .gitmodules file
+        '#(^|/)\.(git|svn)#',                    // Version control files/dirs
         '#\.(log|tmp|bak|sql)$#i',              // Temp/log files
         '#\.env[\w\-\.]*$#i',                    // Environment files
-        '#/\.(git|svn)/#',                       // Version control directories
-        '#/\.gitignore$#',                       // .gitignore files
         '#/cache/#',                             // Cache directories
         '#/logs?/#i',                            // Log directories
         '#\.(zip|tar|gz|tgz)$#i',               // Archive files
     ];
 
-    echo "Copying files to bundle...\n";
+    echo "Copying site files to bundle...\n";
+    $add_dir_params = [
+        'zip_obj' => $zip,
+        'source_dir' => $site_dir,
+        'zip_prefix' => $zip_root_dir,
+        'exclude_patterns' => $exclude_patterns,
+    ];
 
-    // Copy index.php
-    $index_file = $site_dir . '/index.php';
-    if (file_exists($index_file)) {
-        $zip->addFile($index_file, $zip_root_dir . '/index.php');
-        echo "  + index.php\n";
-    }
-
-    // Copy .ht_djebel directory
-    $ht_djebel_dir = $site_dir . '/.ht_djebel';
-    if (is_dir($ht_djebel_dir)) {
-        echo "  + .ht_djebel/\n";
-        $tool->addDirectoryToZip($zip, $ht_djebel_dir, $zip_root_dir . '/.ht_djebel', $exclude_patterns);
-    }
-
-    // Copy dj-content directory
-    $dj_content_dir = $site_dir . '/dj-content';
-    if (is_dir($dj_content_dir)) {
-        echo "  + dj-content/\n";
-        $tool->addDirectoryToZip($zip, $dj_content_dir, $zip_root_dir . '/dj-content', $exclude_patterns);
-    }
+    $tool->addDirectoryToZip($add_dir_params);
 
     // Generate manifest
     echo "\nGenerating manifest...\n";
-    $manifest = $tool->generateManifest($bundle_id, $bundle_description, $bundle_ver, $plugins);
-    $zip->addFromString($zip_root_dir . '/.ht_djebel-manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
+    $manifest_params = [
+        'bundle_id' => $bundle_id,
+        'bundle_description' => $bundle_description,
+        'bundle_ver' => $bundle_ver,
+        'plugins' => $plugins,
+    ];
+    $manifest = $tool->generateManifest($manifest_params);
+    $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
+    $zip->addFromString($zip_root_dir . '/.ht_djebel-manifest.json', $manifest_json);
 
     // Add readme files
     echo "Adding readme files...\n";
@@ -226,12 +254,24 @@ try {
     $readme_txt = sprintf("Djebel Bundle: %s\n\n%s\n\nFor more info go to %s", $bundle_id, $bundle_description, $site_url);
     $zip->addFromString($zip_root_dir . '/000_readme.txt', $readme_txt);
 
-    $readme_html = $tool->generateReadmeHtml($site_url, $bundle_id, $bundle_description);
+    $readme_html_params = [
+        'site_url' => $site_url,
+        'bundle_id' => $bundle_id,
+        'bundle_description' => $bundle_description,
+    ];
+
+    $readme_html = $tool->generateReadmeHtml($readme_html_params);
     $zip->addFromString($zip_root_dir . '/000_readme.html', $readme_html);
 
     // Add ZIP comment
     $built_date = date('r');
-    $zip_comment = sprintf("Djebel Bundle: %s v%s\nCreated: %s\nSite: %s", $bundle_id, $bundle_ver, $built_date, $site_url);
+    $zip_comment_lines = [
+        sprintf('Djebel Bundle: %s v%s', $bundle_id, $bundle_ver),
+        sprintf('Created: %s', $built_date),
+        sprintf('Site: %s', $site_url),
+    ];
+
+    $zip_comment = join("\n", $zip_comment_lines);
     $zip->setArchiveComment($zip_comment);
 
     $zip->close();
@@ -248,17 +288,17 @@ try {
     echo "Size: $size_fmt bytes\n";
 
 } catch (Exception $e) {
-    $tool->stderr("Error: " . $e->getMessage());
+    Dj_Cli_Util::stderr("Error: " . $e->getMessage());
 
     $previous = $e->getPrevious();
     if ($previous !== null) {
-        $tool->stderr("Caused by: " . $previous->getMessage());
+        Dj_Cli_Util::stderr("Caused by: " . $previous->getMessage());
     }
 
     // Provide stack trace in verbose mode
     if (!empty(getenv('DJEBEL_TOOL_BUNDLE_VERBOSE'))) {
-        $tool->stderr("Stack trace:");
-        $tool->stderr($e->getTraceAsString());
+        Dj_Cli_Util::stderr("Stack trace:");
+        Dj_Cli_Util::stderr($e->getTraceAsString());
     }
 
     $exit_code = 255;
@@ -267,15 +307,11 @@ try {
 exit($exit_code);
 
 class Djebel_Tool_Bundle {
-    function stderr($msg) {
-        if (empty($msg)) {
-            return false;
-        }
+    function generateReadmeHtml($params) {
+        $site_url = $params['site_url'];
+        $bundle_id = $params['bundle_id'];
+        $bundle_description = $params['bundle_description'];
 
-        fputs(STDERR, $msg . "\n");
-    }
-
-    function generateReadmeHtml($site_url, $bundle_id, $bundle_description) {
         ob_start();
         ?>
 <!DOCTYPE html>
@@ -294,7 +330,12 @@ class Djebel_Tool_Bundle {
         return $html;
     }
 
-    function generateManifest($bundle_id, $bundle_description, $bundle_ver, $plugins) {
+    function generateManifest($params) {
+        $bundle_id = $params['bundle_id'];
+        $bundle_description = $params['bundle_description'];
+        $bundle_ver = $params['bundle_ver'];
+        $plugins = $params['plugins'];
+
         $manifest = [
             'themes' => [],
             'plugins' => [],
@@ -314,7 +355,7 @@ class Djebel_Tool_Bundle {
                 'id' => $plugin['id'],
                 'version' => empty($plugin['version']) ? '1.0.0' : $plugin['version'],
                 'active' => true,
-                'location' => $plugin['location'],
+                'type' => $plugin['type'],
             ];
 
             if (!empty($plugin['name'])) {
@@ -327,7 +368,12 @@ class Djebel_Tool_Bundle {
         return $manifest;
     }
 
-    function addDirectoryToZip($zip, $source_dir, $zip_prefix, $exclude_patterns) {
+    function addDirectoryToZip($params) {
+        $zip_obj = $params['zip_obj'];
+        $source_dir = $params['source_dir'];
+        $zip_prefix = $params['zip_prefix'];
+        $exclude_patterns = $params['exclude_patterns'];
+
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($source_dir, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST
@@ -340,6 +386,7 @@ class Djebel_Tool_Bundle {
 
             // Check exclusion patterns
             $excluded = false;
+
             foreach ($exclude_patterns as $pattern) {
                 // Cheap check first: basename is smaller
                 if (preg_match($pattern, $base_name) || preg_match($pattern, $relative_path)) {
@@ -355,110 +402,10 @@ class Djebel_Tool_Bundle {
             $zip_path = $zip_prefix . '/' . $relative_path;
 
             if ($file->isDir()) {
-                $zip->addEmptyDir($zip_path);
+                $zip_obj->addEmptyDir($zip_path);
             } else {
-                $zip->addFile($file_path, $zip_path);
+                $zip_obj->addFile($file_path, $zip_path);
             }
         }
-    }
-}
-
-class Djebel_Tool_Bundle_Plugin_Scanner {
-    function scanPlugins($base_dir) {
-        $plugins = [];
-
-        // Scan user plugins (dj-content/plugins/)
-        $user_plugins_dir = $base_dir . '/dj-content/plugins';
-        if (is_dir($user_plugins_dir)) {
-            $plugins = array_merge($plugins, $this->scanDirectory($user_plugins_dir, 'user'));
-        }
-
-        // Scan system plugins (.ht_djebel/app/plugins/)
-        $system_plugins_dir = $base_dir . '/.ht_djebel/app/plugins';
-        if (is_dir($system_plugins_dir)) {
-            $plugins = array_merge($plugins, $this->scanDirectory($system_plugins_dir, 'system'));
-        }
-
-        return $plugins;
-    }
-
-    function scanDirectory($dir, $location) {
-        $plugins = [];
-
-        if (!is_dir($dir)) {
-            return $plugins;
-        }
-
-        $items = scandir($dir);
-
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') {
-                continue;
-            }
-
-            $plugin_dir = $dir . '/' . $item;
-
-            if (!is_dir($plugin_dir)) {
-                continue;
-            }
-
-            $plugin_file = $plugin_dir . '/plugin.php';
-
-            if (!file_exists($plugin_file)) {
-                continue;
-            }
-
-            $plugin_info = $this->parsePluginHeader($plugin_file);
-
-            if (!empty($plugin_info)) {
-                $plugin_info['id'] = $item;
-                $plugin_info['location'] = $location;
-                $plugins[] = $plugin_info;
-            }
-        }
-
-        return $plugins;
-    }
-
-    function parsePluginHeader($plugin_file) {
-        $content = file_get_contents($plugin_file, false, null, 0, 8192);
-
-        if ($content === false) {
-            return [];
-        }
-
-        // Extract header comment block
-        if (!preg_match('#/\*(.+?)\*/#si', $content, $matches)) {
-            return [];
-        }
-
-        $header = $matches[1];
-        $info = [];
-
-        // Parse key: value pairs
-        $lines = explode("\n", $header);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-
-            if (strpos($line, ':') === false) {
-                continue;
-            }
-
-            list($key, $value) = explode(':', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-
-            // Convert to standard keys
-            if ($key === 'plugin_name') {
-                $info['name'] = $value;
-            } elseif ($key === 'version') {
-                $info['version'] = $value;
-            } elseif ($key === 'description') {
-                $info['description'] = $value;
-            }
-        }
-
-        return $info;
     }
 }
