@@ -63,6 +63,7 @@ try {
     $bundle_id = '';
     $bundle_description = '';
     $bundle_ver = '';
+    $bundle_url = '';
     $site_dir_param = '';
     $target_dir_param = '';
 
@@ -74,6 +75,8 @@ try {
             $bundle_description = substr($arg, strlen('--bundle_description='));
         } elseif (strpos($arg, '--bundle_ver=') === 0) {
             $bundle_ver = substr($arg, strlen('--bundle_ver='));
+        } elseif (strpos($arg, '--bundle_url=') === 0) {
+            $bundle_url = substr($arg, strlen('--bundle_url='));
         } elseif (strpos($arg, '--dir=') === 0) {
             $site_dir_param = substr($arg, strlen('--dir='));
         } elseif (strpos($arg, '--target_dir=') === 0) {
@@ -241,6 +244,7 @@ try {
         'bundle_id' => $bundle_id,
         'bundle_description' => $bundle_description,
         'bundle_ver' => $bundle_ver,
+        'bundle_url' => $bundle_url,
         'plugins' => $plugins,
     ];
     $manifest = $tool->generateManifest($manifest_params);
@@ -251,13 +255,26 @@ try {
     echo "Adding readme files...\n";
     $site_url = Dj_App::SITE_URL;
 
-    $readme_txt = sprintf("Djebel Bundle: %s\n\n%s\n\nFor more info go to %s", $bundle_id, $bundle_description, $site_url);
+    $readme_txt_lines = [
+        sprintf('Djebel Bundle: %s', $bundle_id),
+        '',
+        $bundle_description,
+        '',
+        sprintf('For more info go to %s', $site_url),
+    ];
+
+    if (!empty($bundle_url)) {
+        $readme_txt_lines[] = sprintf('Bundle URL: %s', $bundle_url);
+    }
+
+    $readme_txt = join("\n", $readme_txt_lines);
     $zip->addFromString($zip_root_dir . '/000_readme.txt', $readme_txt);
 
     $readme_html_params = [
         'site_url' => $site_url,
         'bundle_id' => $bundle_id,
         'bundle_description' => $bundle_description,
+        'bundle_url' => $bundle_url,
     ];
 
     $readme_html = $tool->generateReadmeHtml($readme_html_params);
@@ -270,6 +287,10 @@ try {
         sprintf('Created: %s', $built_date),
         sprintf('Site: %s', $site_url),
     ];
+
+    if (!empty($bundle_url)) {
+        $zip_comment_lines[] = sprintf('URL: %s', $bundle_url);
+    }
 
     $zip_comment = join("\n", $zip_comment_lines);
     $zip->setArchiveComment($zip_comment);
@@ -311,6 +332,7 @@ class Djebel_Tool_Bundle {
         $site_url = $params['site_url'];
         $bundle_id = $params['bundle_id'];
         $bundle_description = $params['bundle_description'];
+        $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
 
         ob_start();
         ?>
@@ -323,6 +345,9 @@ class Djebel_Tool_Bundle {
     <h1><?php echo htmlspecialchars($bundle_id); ?></h1>
     <p><?php echo htmlspecialchars($bundle_description); ?></p>
     <p>For more info go to <a href='<?php echo htmlspecialchars($site_url); ?>' target='_blank' rel='noopener'><?php echo htmlspecialchars($site_url); ?></a></p>
+    <?php if (!empty($bundle_url)): ?>
+    <p>Bundle URL: <a href='<?php echo htmlspecialchars($bundle_url); ?>' target='_blank' rel='noopener'><?php echo htmlspecialchars($bundle_url); ?></a></p>
+    <?php endif; ?>
 </body>
 </html>
 <?php
