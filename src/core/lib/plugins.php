@@ -51,17 +51,18 @@ class Dj_App_Plugins {
     /**
      * Loads regular or system plugins from a folder.
      * Dj_App_Plugins::loadPlugins();
-     * @param string $dir
-     * @param array $ctx
+     * @param array $params Associative array with 'dir' and optional context params
      * @return Dj_App_Result
      * @throws Dj_App_Exception
      */
-    public static function loadPlugins($dir = '', $ctx = [])
+    public static function loadPlugins($params = [])
     {
+        $dir = empty($params['dir']) ? Dj_App_Plugins::getPluginsDir() : $params['dir'];
+        $ctx = empty($params) ? [] : $params;
+
         $timer_id = __METHOD__ . sha1($dir.serialize($ctx));
         Dj_App_Util::microtime($timer_id);
         $res_obj = new Dj_App_Result();
-        $dir = empty($dir) ? Dj_App_Plugins::getPluginsDir() : $dir;
         $plugins = [];
         $plugin_load_times = [];
         $options_obj = Dj_App_Options::getInstance();
