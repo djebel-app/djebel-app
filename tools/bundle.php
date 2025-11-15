@@ -258,7 +258,7 @@ try {
     }
 
     // Sort by version (highest version first)
-    usort($phar_files, [$tool, 'comparePharVersions']);
+    usort($phar_files, [$tool, 'compareVersions']);
 
     $latest_phar = $phar_files[0];
     $phar_basename = basename($latest_phar);
@@ -370,7 +370,7 @@ try {
 exit($exit_code);
 
 class Djebel_Tool_Bundle {
-    function comparePharVersions($a, $b) {
+    function compareVersions($a, $b) {
         // Extract version from filename: djebel-app-1.2.3.phar
         $pattern = '/djebel-app-(.+)\.phar$/';
         $basename_a = basename($a);
