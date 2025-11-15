@@ -109,7 +109,7 @@ $sys_plugins_dir = Dj_App_Plugins::getSysPluginsDir();
 
 if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
     Dj_App_Hooks::doAction( 'app.core.system_plugins.pre_load' );
-    Dj_App_Plugins::loadPlugins($sys_plugins_dir, [ 'is_system' => true, ]);
+    Dj_App_Plugins::loadPlugins(['dir' => $sys_plugins_dir, 'is_system' => true]);
     Dj_App_Hooks::doAction( 'app.core.system_plugins.loaded' );
 }
 
@@ -148,7 +148,7 @@ if (!empty($plugin_dirs)) {
     Dj_App_Hooks::doAction( 'app.core.plugins.before_load_plugins', $ctx );
 
     foreach ($plugin_dirs as $plugin_dir) {
-        $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($plugin_dir);
+        $plugin_load_res_obj = Dj_App_Plugins::loadPlugins(['dir' => $plugin_dir]);
     }
 
     Dj_App_Hooks::doAction( 'app.core.plugins.loaded', $ctx );
