@@ -22,7 +22,7 @@ $tool = new Djebel_Tool_Bundle();
 // Help check (exit early before any processing)
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
-        echo "Usage: php $tool_name --bundle_id=VALUE --bundle_description='VALUE' --bundle_ver=VALUE --dir=VALUE [--help|-h]\n";
+        echo "Usage: php $tool_name --bundle_id=VALUE --bundle_description='VALUE' --bundle_ver=VALUE --dir=VALUE [--target_dir=VALUE] [--help|-h]\n";
         echo "Options:\n";
         echo "  --help, -h                     Show this help message\n";
         echo "  --bundle_id=VALUE              Bundle identifier (required, alphanumeric + hyphens)\n";
@@ -30,15 +30,18 @@ foreach ($args as $arg) {
         echo "  --bundle_ver=VALUE             Bundle version (required, format: X.Y.Z)\n";
         echo "  --dir=VALUE                    Site directory to bundle (required)\n";
         echo "                                 Can be site name from app/sites/ or full path\n";
+        echo "  --target_dir=VALUE             Output directory for bundle (optional)\n";
+        echo "                                 Overrides DJEBEL_TOOL_BUNDLE_TARGET_DIR env var\n";
         echo "\n";
         echo "Environment Variables:\n";
         echo "  DJEBEL_TOOL_BUNDLE_TARGET_DIR  Custom output directory (default: build/bundles/)\n";
         echo "  DJEBEL_TOOL_BUNDLE_VERBOSE      Enable verbose error output\n";
         echo "\n";
         echo "Examples:\n";
-        echo "  php $tool_name --bundle_id=simple-blog --bundle_description='Complete blog setup' --bundle_ver=1.0.0\n";
+        echo "  php $tool_name --bundle_id=simple-blog --bundle_description='Complete blog setup' --bundle_ver=1.0.0 --dir=djebel-live\n";
         echo "  php $tool_name --bundle_id=starter --bundle_description='Starter bundle' --bundle_ver=0.1.0 --dir=djebel-live\n";
         echo "  php $tool_name --bundle_id=custom --bundle_description='Custom site' --bundle_ver=1.0.0 --dir=/path/to/site\n";
+        echo "  php $tool_name --bundle_id=mybundle --bundle_description='My bundle' --bundle_ver=1.0.0 --dir=djebel-live --target_dir=/tmp/bundles\n";
         exit(0);
     }
 }
@@ -55,6 +58,7 @@ try {
     $bundle_description = '';
     $bundle_ver = '';
     $site_dir_param = '';
+    $target_dir_param = '';
 
     foreach ($args as $arg) {
         // Parse --key=value format
@@ -66,6 +70,8 @@ try {
             $bundle_ver = substr($arg, strlen('--bundle_ver='));
         } elseif (strpos($arg, '--dir=') === 0) {
             $site_dir_param = substr($arg, strlen('--dir='));
+        } elseif (strpos($arg, '--target_dir=') === 0) {
+            $target_dir_param = substr($arg, strlen('--target_dir='));
         } elseif (!in_array($arg, [ '--help', '-h', '-help', 'help', ], true)) {
             // Security: Reject unknown arguments
             throw new InvalidArgumentException("Unknown option: $arg");
@@ -99,9 +105,13 @@ try {
         throw new InvalidArgumentException("Invalid bundle_ver format. Use semantic versioning: X.Y.Z");
     }
 
-    // Get target directory from environment or use default
-    $target_dir_env = getenv('DJEBEL_TOOL_BUNDLE_TARGET_DIR');
-    $target_dir = empty($target_dir_env) ? "$app_dir/build/bundles" : $target_dir_env;
+    // Get target directory: --target_dir > env var > default
+    if (!empty($target_dir_param)) {
+        $target_dir = $target_dir_param;
+    } else {
+        $target_dir_env = getenv('DJEBEL_TOOL_BUNDLE_TARGET_DIR');
+        $target_dir = empty($target_dir_env) ? "$app_dir/build/bundles" : $target_dir_env;
+    }
 
     // Ensure target directory exists
     if (!is_dir($target_dir) && !mkdir($target_dir, 0750, true)) {
@@ -109,9 +119,9 @@ try {
     }
 
     // Define bundle filename and paths
-    $bundle_filename = "djebel-bundle-{$bundle_id}-{$bundle_ver}.zip";
+    $bundle_filename = sprintf('djebel-bundle-%s-%s.zip', $bundle_id, $bundle_ver);
     $bundle_file = $target_dir . '/' . $bundle_filename;
-    $zip_root_dir = "djebel-bundle-{$bundle_id}";
+    $zip_root_dir = sprintf('djebel-bundle-%s', $bundle_id);
 
     // Clean up old bundle file if exists
     if (file_exists($bundle_file) && !unlink($bundle_file)) {
