@@ -56,4 +56,19 @@ class Dj_Cli_Util {
 
         return $normalized;
     }
+
+    /**
+     * Write message to STDERR
+     *
+     * @param string $msg Message to write
+     * @return bool False if message is empty, true otherwise
+     */
+    static function stderr($msg) {
+        if (empty($msg)) {
+            return false;
+        }
+
+        fputs(STDERR, $msg . "\n");
+        return true;
+    }
 }
