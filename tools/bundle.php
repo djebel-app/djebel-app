@@ -381,7 +381,7 @@ try {
     }
 
     // Generate manifest
-    echo "\nGenerating manifest...\n";
+    echo "Generating manifest...\n";
     $manifest_params = [
         'bundle_id' => $bundle_id,
         'bundle_description' => $bundle_description,
@@ -397,7 +397,7 @@ try {
     $zip->addFromString($priv_dir_name . '/.ht_djebel-manifest.json', $manifest_json);
 
     // Add ZIP comment
-    echo "\nAdding ZIP comment...\n";
+    echo "Adding ZIP comment...\n";
     $zip_comment_lines = [
         sprintf('Djebel Bundle: %s', $bundle_id),
         sprintf('Version: %s', $bundle_ver),
@@ -421,7 +421,7 @@ try {
     $size = filesize($bundle_file);
     $size_fmt = number_format($size, 0);
 
-    echo "\nBundle created successfully!\n";
+    echo "Bundle created successfully!\n";
     echo "File: $bundle_file\n";
     echo "Size: $size_fmt bytes\n";
 
@@ -536,37 +536,29 @@ class Djebel_Tool_Bundle {
  * Djebel app loader.
  * https://djebel.com
  */
-
 // Full path override via environment
 $app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
-
 // Auto-detect if not set
 if (empty($app_djebel_priv_dir)) {
     $priv_dir_basename = '{{priv_dir_name}}';
-
     // Check directories in order (set to 0 to skip for better performance)
     $check_dirs = [
         dirname(__DIR__) => 1,      // Same level as public/ (which is document root (www/public_html)
         dirname(__DIR__, 2) => 1,   // One level up (non-public)
         dirname(__DIR__, 3) => 0,   // Two levels up (non-public)
     ];
-
     foreach ($check_dirs as $base_dir => $enabled) {
         if (empty($enabled)) {
             continue;
         }
-
         $check_path = $base_dir . '/' . $priv_dir_basename;
-
         if (is_dir($check_path)) {
             $app_djebel_priv_dir = $check_path;
             break;
         }
     }
-
     putenv('DJEBEL_APP_PRIVATE_DIR=' . $app_djebel_priv_dir);
 }
-
 // Load from PHAR
 require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
 <?php
