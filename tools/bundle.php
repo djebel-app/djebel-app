@@ -387,12 +387,15 @@ class Djebel_Tool_Bundle {
             'meta' => [
                 'bundle_id' => $bundle_id,
                 'bundle_version' => $bundle_ver,
-                'description' => $bundle_description,
                 'created' => date('c'),
                 'djebel_version' => Dj_App::VERSION,
                 'site_url' => Dj_App::SITE_URL,
             ],
         ];
+
+        if (!empty($bundle_description)) {
+            $manifest['meta']['description'] = $bundle_description;
+        }
 
         if (!empty($bundle_url)) {
             $manifest['meta']['bundle_url'] = $bundle_url;
