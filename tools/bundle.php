@@ -329,7 +329,7 @@ try {
     }
 
     // Copy .ht_djebel directory to .ht_djebel_{bundle_id} (or .ht_djebel for 'default')
-    echo "Adding .ht_djebel directory...\n";
+    echo "Adding $priv_dir_name directory...\n";
     $add_ht_djebel_params = [
         'zip_obj' => $zip,
         'source_dir' => $site_ht_djebel_dir,
