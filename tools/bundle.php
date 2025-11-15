@@ -543,9 +543,18 @@ $app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
 // Auto-detect if not set
 if (empty($app_djebel_priv_dir)) {
     $priv_dir_basename = '{{priv_dir_name}}';
-    $check_dirs = [ dirname(__DIR__), dirname(__DIR__, 2), ];
 
-    foreach ($check_dirs as $base_dir) {
+    // Check directories in order (set to 0 to skip for better performance)
+    $check_dirs = [
+        dirname(__DIR__) => 1,
+        dirname(__DIR__, 2) => 1,
+    ];
+
+    foreach ($check_dirs as $base_dir => $enabled) {
+        if (empty($enabled)) {
+            continue;
+        }
+
         $check_path = $base_dir . '/' . $priv_dir_basename;
 
         if (is_dir($check_path)) {
