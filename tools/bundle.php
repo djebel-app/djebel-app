@@ -234,7 +234,11 @@ try {
     // Prepare variables for readme files and index.php
     $site_url = Dj_App::SITE_URL;
     $built_date = date('r');
-    $priv_dir_name = $bundle_id == 'default' ? '.ht_djebel' : '.ht_djebel_' . $bundle_id;
+    $priv_dir_name = '.ht_djebel';
+
+    if (!empty($bundle_id) && $bundle_id != 'default') {
+        $priv_dir_name .= '_' . $bundle_id;
+    }
 
     // Add readme files first (appear at top of ZIP listing)
     echo "Adding readme files...\n";
