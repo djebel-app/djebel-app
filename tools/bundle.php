@@ -26,7 +26,7 @@ $tool = new Djebel_Tool_Bundle();
 // Help check (exit early before any processing)
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
-        echo "Usage: php $tool_name --bundle_id=VALUE --bundle_description='VALUE' --bundle_ver=VALUE --dir=VALUE [--target_dir=VALUE] [--help|-h]\n";
+        echo "Usage: php $tool_name --bundle_id=VALUE --bundle_description='VALUE' --bundle_ver=VALUE --dir=VALUE [--target_dir=VALUE] [--compression_level=VALUE] [--help|-h]\n";
         echo "Options:\n";
         echo "  --help, -h                     Show this help message\n";
         echo "  --bundle_id=VALUE              Bundle identifier (required, alphanumeric + hyphens)\n";
@@ -36,10 +36,14 @@ foreach ($args as $arg) {
         echo "                                 Can be site name from app/sites/ or full path\n";
         echo "  --target_dir=VALUE             Output directory for bundle (optional)\n";
         echo "                                 Overrides DJEBEL_TOOL_BUNDLE_TARGET_DIR env var\n";
+        echo "  --compression_level=VALUE      ZIP compression level 0-9 (optional, default: 9)\n";
+        echo "                                 0 = no compression, 9 = maximum compression\n";
+        echo "                                 Overrides DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL env var\n";
         echo "\n";
         echo "Environment Variables:\n";
-        echo "  DJEBEL_TOOL_BUNDLE_TARGET_DIR  Custom output directory (default: build/bundles/)\n";
-        echo "  DJEBEL_TOOL_BUNDLE_VERBOSE      Enable verbose error output\n";
+        echo "  DJEBEL_TOOL_BUNDLE_TARGET_DIR        Custom output directory (default: build/bundles/)\n";
+        echo "  DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
+        echo "  DJEBEL_TOOL_BUNDLE_VERBOSE            Enable verbose error output\n";
         echo "\n";
         echo "Examples:\n";
         echo "  php $tool_name --bundle_id=simple-blog --bundle_description='Complete blog setup' --bundle_ver=1.0.0 --dir=djebel-live\n";
@@ -66,6 +70,7 @@ try {
         'bundle_ver' => '1.0.0',
         'bundle_url' => '',
         'target_dir' => '',
+        'compression_level' => 9,
     ];
 
     $params = Dj_Cli_Util::parseArgs($expected_params, $args);
@@ -77,6 +82,7 @@ try {
     $bundle_url = $params['bundle_url'];
     $dir_input = $params['dir'];
     $target_dir_param = $params['target_dir'];
+    $compression_level_param = $params['compression_level'];
 
     // Validate required parameters - cheap checks first
     if (empty($bundle_id)) {
@@ -105,6 +111,21 @@ try {
     } else {
         $target_dir_env = getenv('DJEBEL_TOOL_BUNDLE_TARGET_DIR');
         $target_dir = empty($target_dir_env) ? "$app_dir/build/bundles" : $target_dir_env;
+    }
+
+    // Get compression level: --compression_level > env var > default (9)
+    if (!empty($compression_level_param)) {
+        $compression_level = $compression_level_param;
+    } else {
+        $compression_level_env = getenv('DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL');
+        $compression_level = empty($compression_level_env) ? 9 : $compression_level_env;
+    }
+
+    // Validate compression level (0-9)
+    $compression_level = (int) $compression_level;
+
+    if ($compression_level < 0 || $compression_level > 9) {
+        throw new InvalidArgumentException("Invalid compression level: $compression_level. Must be 0-9.");
     }
 
     // Ensure target directory exists
@@ -150,7 +171,7 @@ try {
         throw new RuntimeException('Failed to resolve site directory path: ' . $dir_input);
     }
 
-    // Create ZIP archive
+    // Create ZIP archive with maximum compression
     $zip = new ZipArchive();
     $zip_result = $zip->open($bundle_file, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
@@ -216,6 +237,7 @@ try {
         'source_dir' => $site_dir,
         'zip_prefix' => $zip_root_dir,
         'exclude_patterns' => $exclude_patterns,
+        'compression_level' => $compression_level,
     ];
 
     $tool->addDirectoryToZip($add_dir_params);
@@ -391,6 +413,7 @@ class Djebel_Tool_Bundle {
         $source_dir = $params['source_dir'];
         $zip_prefix = $params['zip_prefix'];
         $exclude_patterns = $params['exclude_patterns'];
+        $compression_level = empty($params['compression_level']) ? 9 : $params['compression_level'];
 
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($source_dir, FilesystemIterator::SKIP_DOTS),
@@ -422,7 +445,12 @@ class Djebel_Tool_Bundle {
             if ($file->isDir()) {
                 $zip_obj->addEmptyDir($zip_path);
             } else {
-                $zip_obj->addFile($file_path, $zip_path);
+                $add_result = $zip_obj->addFile($file_path, $zip_path);
+
+                if ($add_result) {
+                    // Set compression level for this file
+                    $zip_obj->setCompressionName($zip_path, ZipArchive::CM_DEFLATE, $compression_level);
+                }
             }
         }
     }
