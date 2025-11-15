@@ -324,6 +324,16 @@ try {
         $zip->setCompressionName($phar_zip_path, ZipArchive::CM_DEFLATE, $compression_level);
     }
 
+    // Extract commit hash from PHAR header
+    $phar_header = file_get_contents($latest_phar, false, null, 0, 1024);
+    $djebel_app_git_commit = '';
+
+    if (preg_match('/DJEBEL_TOOL_PKG_PHAR_BUILD_GIT_COMMIT.+[\'"]([a-f0-9]{7,40})[\'"]/', $phar_header, $commit_matches)) {
+        $djebel_app_git_commit = $commit_matches[1];
+        $short_hash = substr($djebel_app_git_commit, 0, 12);
+        echo "PHAR commit: $short_hash\n";
+    }
+
     // Generate manifest
     echo "\nGenerating manifest...\n";
     $manifest_params = [
@@ -333,7 +343,9 @@ try {
         'bundle_url' => $bundle_url,
         'plugins' => $plugins,
         'djebel_app_version' => $djebel_app_version,
+        'djebel_app_git_commit' => $djebel_app_git_commit,
     ];
+
     $manifest = $tool->generateManifest($manifest_params);
     $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
     $zip->addFromString($priv_dir_name . '/.ht_djebel-manifest.json', $manifest_json);
@@ -538,6 +550,7 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
         $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
         $plugins = $params['plugins'];
         $djebel_app_version = empty($params['djebel_app_version']) ? '' : $params['djebel_app_version'];
+        $djebel_app_git_commit = empty($params['djebel_app_git_commit']) ? '' : $params['djebel_app_git_commit'];
 
         $manifest = [
             'themes' => [],
@@ -561,6 +574,10 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
 
         if (!empty($djebel_app_version)) {
             $manifest['meta']['djebel_app_version'] = $djebel_app_version;
+        }
+
+        if (!empty($djebel_app_git_commit)) {
+            $manifest['meta']['djebel_app_git_commit'] = $djebel_app_git_commit;
         }
 
         // Add plugins to manifest
