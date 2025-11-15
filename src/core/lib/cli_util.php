@@ -82,6 +82,9 @@ class Dj_Cli_Util {
             array_shift($args); // Remove script name
         }
 
+        // Normalize arguments (convert hyphens to underscores)
+        $args = self::normalizeArgs($args);
+
         // Initialize with defaults
         $params = $expected_params;
         $known_params = array_keys($expected_params);
