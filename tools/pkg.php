@@ -13,31 +13,39 @@ if (php_sapi_name() !== 'cli') {
 // Get tool name for usage messages
 $tool_name = basename(__FILE__);
 
-// Check command line arguments first
-$args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
-array_shift($args); // Remove script name from arguments
-
-// Load CLI utilities and normalize arguments
+// Load CLI utilities
 $app_dir = dirname(__DIR__);
 require_once $app_dir . '/src/core/lib/cli_util.php';
-$args = Dj_Cli_Util::normalizeArgs($args);
+
+// Get command line arguments
+$args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+array_shift($args); // Remove script name from arguments
 
 $tool = new Djebel_Tool_Opt();
 
 // Help check (exit early before any processing)
 foreach ($args as $arg) {
     if ($arg === '--help' || $arg === '-h' || $arg === '-help' || $arg == 'help') {
-        echo "Usage: php $tool_name [--help|-h] [--phar] [--zip]\n";
+        echo "Usage: php $tool_name [--help|-h] [--phar] [--zip] [--compression_level=VALUE]\n";
         echo "Options:\n";
-        echo "  --help, -h         Show this help message\n";
-        echo "  --phar             Build PHAR archive only\n";
-        echo "  --zip              Create source distribution ZIP only (excludes tools/, .git/, tests/)\n";
+        echo "  --help, -h                  Show this help message\n";
+        echo "  --phar                      Build PHAR archive only\n";
+        echo "  --zip                       Create source distribution ZIP only (excludes tools/, .git/, tests/)\n";
+        echo "  --compression_level=VALUE   ZIP compression level 0-9 (optional, default: 9)\n";
+        echo "                              0 = no compression, 9 = maximum compression\n";
+        echo "                              Overrides DJEBEL_TOOL_PKG_COMPRESSION_LEVEL env var\n";
+        echo "\n";
+        echo "Environment Variables:\n";
+        echo "  DJEBEL_TOOL_PKG_BUILD_DIR        Custom build directory (default: build/)\n";
+        echo "  DJEBEL_TOOL_PKG_PHAR_NAME        Custom PHAR filename\n";
+        echo "  DJEBEL_TOOL_PKG_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
         echo "\n";
         echo "Examples:\n";
-        echo "  php $tool_name                   # Build both PHAR and source ZIP (default)\n";
-        echo "  php $tool_name --phar            # Build PHAR only\n";
-        echo "  php $tool_name --zip             # Build source ZIP only\n";
-        echo "  php $tool_name --phar --zip      # Build both PHAR and source ZIP (explicit)\n";
+        echo "  php $tool_name                           # Build both PHAR and source ZIP (default)\n";
+        echo "  php $tool_name --phar                    # Build PHAR only\n";
+        echo "  php $tool_name --zip                     # Build source ZIP only\n";
+        echo "  php $tool_name --phar --zip              # Build both PHAR and source ZIP (explicit)\n";
+        echo "  php $tool_name --compression_level=6     # Build with faster compression\n";
         exit(0);
     }
 }
@@ -86,19 +94,47 @@ try {
     $build_dir_env = getenv('DJEBEL_TOOL_PKG_BUILD_DIR');
     $build_dir = empty($build_dir_env) ? "$app_dir/build" : $build_dir_env;
 
+    // Parse command-line parameters with defaults
+    $expected_params = [
+        'compression_level' => 9,
+    ];
+
+    $params = Dj_Cli_Util::parseArgs($expected_params, $args);
+    $compression_level_param = $params['compression_level'];
+
+    // Get compression level: --compression_level > env var > default (9)
+    if (!empty($compression_level_param)) {
+        $compression_level = $compression_level_param;
+    } else {
+        $compression_level_env = getenv('DJEBEL_TOOL_PKG_COMPRESSION_LEVEL');
+        $compression_level = empty($compression_level_env) ? 9 : $compression_level_env;
+    }
+
+    // Validate compression level (0-9)
+    $compression_level = (int) $compression_level;
+
+    if ($compression_level < 0 || $compression_level > 9) {
+        throw new InvalidArgumentException("Invalid compression level: $compression_level. Must be 0-9.");
+    }
+
     $create_phar = false;
     $create_zip = false;
     $has_flags = false;
 
     // Parse command line flags (with validation)
     foreach ($args as $arg) {
+        // Skip --key=value args (handled by parseArgs)
+        if ((strpos($arg, '--') === 0) && (strpos($arg, '=') !== false)) {
+            continue;
+        }
+
         if ($arg === '--phar') {
             $create_phar = true;
             $has_flags = true;
         } elseif ($arg === '--zip') {
             $create_zip = true;
             $has_flags = true;
-        } elseif (!in_array($arg, [ '--help', '-h', '-help', 'help', ], true)) {
+        } elseif (!in_array($arg, [ '--help', '-h', '-help', 'help', ])) {
             // Security: Reject unknown arguments
             throw new InvalidArgumentException("Unknown option: $arg");
         }
@@ -380,7 +416,13 @@ try {
             }
 
             if (!$excluded) {
-                $zip->addFile($file_path, $zip_root_dir . '/' . $relative_path);
+                $zip_path = $zip_root_dir . '/' . $relative_path;
+                $add_result = $zip->addFile($file_path, $zip_path);
+
+                if ($add_result) {
+                    // Set compression level for this file
+                    $zip->setCompressionName($zip_path, ZipArchive::CM_DEFLATE, $compression_level);
+                }
             }
         }
 
@@ -388,7 +430,12 @@ try {
         $root_index = $app_dir . '/index.php';
 
         if (file_exists($root_index)) {
-            $zip->addFile($root_index, $zip_root_dir . '/index.php');
+            $zip_path = $zip_root_dir . '/index.php';
+            $add_result = $zip->addFile($root_index, $zip_path);
+
+            if ($add_result) {
+                $zip->setCompressionName($zip_path, ZipArchive::CM_DEFLATE, $compression_level);
+            }
         }
 
         // Add readme files with site URL
