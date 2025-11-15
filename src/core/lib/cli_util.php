@@ -60,14 +60,10 @@ class Dj_Cli_Util {
     /**
      * Write message to STDERR
      *
-     * @param string $msg Message to write
-     * @return bool False if message is empty, true otherwise
+     * @param string $msg Message to write (optional, defaults to empty for newline)
+     * @return bool Always returns true
      */
-    static function stderr($msg) {
-        if (empty($msg)) {
-            return false;
-        }
-
+    static function stderr($msg = '') {
         fputs(STDERR, $msg . "\n");
         return true;
     }
