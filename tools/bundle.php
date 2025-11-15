@@ -539,7 +539,11 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
         $content = trim($content);
         $content .= "\n";
 
-        $priv_dir_suffix = $bundle_id === 'default' ? '' : '_' . $bundle_id;
+        $priv_dir_suffix = '';
+
+        if (!empty($bundle_id) && $bundle_id != 'default') {
+            $priv_dir_suffix = '_' . $bundle_id;
+        }
 
         $replace_vars = [
             '{{PHP_OPEN_TAG}}' => '<?php',
