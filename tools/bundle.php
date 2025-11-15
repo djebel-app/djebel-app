@@ -17,6 +17,11 @@ $tool_name = basename(__FILE__);
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
 array_shift($args); // Remove script name from arguments
 
+// Load CLI utilities and normalize arguments
+$app_dir = dirname(__DIR__);
+require_once $app_dir . '/src/core/lib/cli_util.php';
+$args = Dj_Cli_Util::normalizeArgs($args);
+
 $tool = new Djebel_Tool_Bundle();
 
 // Help check (exit early before any processing)
@@ -167,7 +172,7 @@ try {
     }
 
     echo "Scanning plugins...\n";
-    $scanner = new Djebel_Bundle_Plugin_Scanner();
+    $scanner = new Djebel_Tool_Bundle_Plugin_Scanner();
     $plugins = $scanner->scanPlugins($site_dir);
 
     echo "Found " . count($plugins) . " plugins\n\n";
@@ -218,7 +223,7 @@ try {
     echo "Adding readme files...\n";
     $site_url = Dj_App::SITE_URL;
 
-    $readme_txt = "Djebel Bundle: {$bundle_id}\n\n{$bundle_description}\n\nFor more info go to {$site_url}";
+    $readme_txt = sprintf("Djebel Bundle: %s\n\n%s\n\nFor more info go to %s", $bundle_id, $bundle_description, $site_url);
     $zip->addFromString($zip_root_dir . '/000_readme.txt', $readme_txt);
 
     $readme_html = $tool->generateReadmeHtml($site_url, $bundle_id, $bundle_description);
@@ -226,7 +231,7 @@ try {
 
     // Add ZIP comment
     $built_date = date('r');
-    $zip_comment = "Djebel Bundle: {$bundle_id} v{$bundle_ver}\nCreated: $built_date\nSite: $site_url";
+    $zip_comment = sprintf("Djebel Bundle: %s v%s\nCreated: %s\nSite: %s", $bundle_id, $bundle_ver, $built_date, $site_url);
     $zip->setArchiveComment($zip_comment);
 
     $zip->close();
@@ -291,8 +296,8 @@ class Djebel_Tool_Bundle {
 
     function generateManifest($bundle_id, $bundle_description, $bundle_ver, $plugins) {
         $manifest = [
-            'plugins' => [],
             'themes' => [],
+            'plugins' => [],
             'meta' => [
                 'bundle_id' => $bundle_id,
                 'bundle_version' => $bundle_ver,
@@ -358,7 +363,7 @@ class Djebel_Tool_Bundle {
     }
 }
 
-class Djebel_Bundle_Plugin_Scanner {
+class Djebel_Tool_Bundle_Plugin_Scanner {
     function scanPlugins($base_dir) {
         $plugins = [];
 
