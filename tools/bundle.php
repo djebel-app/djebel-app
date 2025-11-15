@@ -145,9 +145,16 @@ try {
     }
 
     // Define bundle filename and paths
+    $bundle_dirname = sprintf('djebel-bundle-%s', $bundle_id);
+    $bundle_dir = $target_dir . '/' . $bundle_dirname;
     $bundle_filename = sprintf('djebel-bundle-%s-%s.zip', $bundle_id, $bundle_ver);
-    $bundle_file = $target_dir . '/' . $bundle_filename;
-    $zip_root_dir = sprintf('djebel-bundle-%s', $bundle_id);
+    $bundle_file = $bundle_dir . '/' . $bundle_filename;
+    $zip_root_dir = $bundle_dirname;
+
+    // Ensure bundle directory exists
+    if (!is_dir($bundle_dir) && !mkdir($bundle_dir, 0750, true)) {
+        throw new RuntimeException("Failed to create bundle directory: $bundle_dir");
+    }
 
     // Clean up old bundle file if exists
     if (file_exists($bundle_file) && !unlink($bundle_file)) {
