@@ -145,10 +145,10 @@ try {
             }
 
             if (function_exists('passthru')) {
-                $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
+                Dj_Cli_Util::stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
                 passthru($command, $exit_code);
             } elseif (function_exists('exec')) {
-                $tool->stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
+                Dj_Cli_Util::stderr("Restarting with -d phar.readonly=0 to be able to create a phar file ...");
                 $output = [];
                 exec($command, $output, $exit_code);
                 echo join('', $output) . "\n"; // output already has new lines
@@ -184,9 +184,9 @@ try {
     foreach ($clean_up_files as $clean_up_file) {
         if (file_exists($clean_up_file)) {
             if (unlink($clean_up_file)) {
-                $tool->stderr("Deleting [$clean_up_file] OK");
+                Dj_Cli_Util::stderr("Deleting [$clean_up_file] OK");
             } else {
-                $tool->stderr("Warning: Could not delete [$clean_up_file]");
+                Dj_Cli_Util::stderr("Warning: Could not delete [$clean_up_file]");
             }
         }
     }
@@ -423,33 +423,33 @@ try {
     // Clean up partially created PHAR file on failure
     if ( $create_phar && !empty($phar) && file_exists($phar_file)) {
         if (!unlink($phar_file)) {
-            $tool->stderr("Warning: Could not clean up partial PHAR file");
+            Dj_Cli_Util::stderr("Warning: Could not clean up partial PHAR file");
         }
     }
 
     // Clean up partially created source ZIP file on failure
     if ( $create_zip && !empty($source_zip_file) && file_exists($source_zip_file) ) {
         if (!unlink($source_zip_file)) {
-            $tool->stderr("Warning: Could not clean up partial source ZIP file");
+            Dj_Cli_Util::stderr("Warning: Could not clean up partial source ZIP file");
         }
     }
 
     // Main exception handler - catches all unhandled exceptions
-    $tool->stderr("Build failed: " . $e->getMessage());
-    
+    Dj_Cli_Util::stderr("Build failed: " . $e->getMessage());
+
     // If this is a nested exception, show the original cause
     $previous = $e->getPrevious();
 
     if ($previous !== null) {
-        $tool->stderr("Caused by: " . $previous->getMessage());
+        Dj_Cli_Util::stderr("Caused by: " . $previous->getMessage());
     }
-    
+
     // Provide stack trace in verbose mode (can be enabled via environment variable)
     if (!empty(getenv('DJEBEL_TOOL_PKG_VERBOSE'))) {
-        $tool->stderr("Stack trace:");
-        $tool->stderr($e->getTraceAsString());
+        Dj_Cli_Util::stderr("Stack trace:");
+        Dj_Cli_Util::stderr($e->getTraceAsString());
     }
-    
+
     $exit_code = 255;
 } finally {
     if (!empty($phar)) {
@@ -460,14 +460,6 @@ try {
 }
 
 class Djebel_Tool_Opt {
-    function stderr($msg) {
-        if (empty($msg)) {
-            return false;
-        }
-
-        fputs(STDERR, $msg . "\n");
-    }
-
     function generateReadmeHtml($site_url) {
         ob_start();
         ?>
