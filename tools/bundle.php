@@ -226,28 +226,81 @@ try {
         '#(^|/)\.(git|svn)#',                    // Version control files/dirs
         '#\.(log|tmp|bak|sql)$#i',              // Temp/log files
         '#\.env[\w\-\.]*$#i',                    // Environment files
-        '#/cache/#',                             // Cache directories
-        '#/logs?/#i',                            // Log directories
+        '#(^|/)cache(/|$)#',                     // Cache directories
+        '#(^|/)logs?(/|$)#i',                    // Log directories
         '#\.(zip|tar|gz|tgz|rar|7z|bz2)$#i',   // Archive files
+        '#\.phar$#i',                            // PHAR files
         '#(^|/)\.DS_Store$#',                   // macOS metadata
         '#(^|/)Thumbs\.db$#i',                  // Windows thumbnails
         '#(^|/)desktop\.ini$#i',                // Windows folder config
         '#(^|/)~\$#',                            // Office temp files
     ];
 
-    echo "Copying site files to bundle...\n";
-    $add_dir_params = [
+    // Copy dj-content to public/dj-content
+    $site_content_dir = $site_dir . '/dj-content';
+
+    if (is_dir($site_content_dir)) {
+        echo "Adding dj-content...\n";
+        $add_content_params = [
+            'zip_obj' => $zip,
+            'source_dir' => $site_content_dir,
+            'zip_prefix' => 'public/dj-content',
+            'exclude_patterns' => $exclude_patterns,
+            'compression_level' => $compression_level,
+        ];
+
+        $tool->addDirectoryToZip($add_content_params);
+    }
+
+    // Copy .htaccess to public/.htaccess
+    $site_htaccess = $site_dir . '/.htaccess';
+
+    if (file_exists($site_htaccess)) {
+        echo "Adding .htaccess...\n";
+        $add_result = $zip->addFile($site_htaccess, 'public/.htaccess');
+
+        if ($add_result) {
+            $zip->setCompressionName('public/.htaccess', ZipArchive::CM_DEFLATE, $compression_level);
+        }
+    }
+
+    // Find .ht_djebel directory
+    $site_ht_djebel_dir = $site_dir . '/.ht_djebel';
+
+    if (!is_dir($site_ht_djebel_dir)) {
+        echo "Searching for .ht_djebel* directory...\n";
+        $glob_pattern = $site_dir . '/.ht_djebel*';
+        $found_dirs = glob($glob_pattern, GLOB_ONLYDIR);
+
+        if (empty($found_dirs)) {
+            throw new RuntimeException("No .ht_djebel directory found in: $site_dir");
+        }
+
+        if (count($found_dirs) > 1) {
+            $dirs_list = implode(', ', $found_dirs);
+            throw new RuntimeException("Multiple .ht_djebel directories found: $dirs_list. Please specify which one to use.");
+        }
+
+        $site_ht_djebel_dir = $found_dirs[0];
+        echo "Found: " . basename($site_ht_djebel_dir) . "\n";
+    }
+
+    // Copy .ht_djebel directory to .ht_djebel_{bundle_id}
+    $priv_dir_name = '.ht_djebel_' . $bundle_id;
+
+    echo "Adding .ht_djebel directory...\n";
+    $add_ht_djebel_params = [
         'zip_obj' => $zip,
-        'source_dir' => $site_dir,
-        'zip_prefix' => $zip_root_dir,
+        'source_dir' => $site_ht_djebel_dir,
+        'zip_prefix' => $priv_dir_name,
         'exclude_patterns' => $exclude_patterns,
         'compression_level' => $compression_level,
     ];
 
-    $tool->addDirectoryToZip($add_dir_params);
+    $tool->addDirectoryToZip($add_ht_djebel_params);
 
-    // Add djebel-app PHAR to bundle
-    echo "\nAdding Djebel app PHAR...\n";
+    // Replace with latest PHAR from build
+    echo "Replacing with latest Djebel app PHAR...\n";
     $build_dir = $app_dir . '/build';
     $phar_pattern = $build_dir . '/djebel-app-*.phar';
     $phar_files = glob($phar_pattern);
@@ -257,14 +310,12 @@ try {
         throw new RuntimeException("No PHAR file found in $build_dir. Run 'php tools/pkg.php --phar' to build it.");
     }
 
-    // Sort by version (highest version first)
     usort($phar_files, [$tool, 'compareVersions']);
 
     $latest_phar = $phar_files[0];
     $phar_basename = basename($latest_phar);
-    $phar_zip_path = $zip_root_dir . '/.ht_djebel/app/djebel-app.phar';
+    $phar_zip_path = $priv_dir_name . '/app/djebel-app.phar';
 
-    // Extract version from filename
     $version_pattern = '/djebel-app-(.+)\.phar$/';
 
     if (preg_match($version_pattern, $phar_basename, $version_matches)) {
@@ -290,7 +341,16 @@ try {
     ];
     $manifest = $tool->generateManifest($manifest_params);
     $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
-    $zip->addFromString($zip_root_dir . '/.ht_djebel-manifest.json', $manifest_json);
+    $zip->addFromString($priv_dir_name . '/.ht_djebel-manifest.json', $manifest_json);
+
+    // Generate and add index.php to public/
+    echo "Generating public/index.php...\n";
+    $index_params = [
+        'bundle_id' => $bundle_id,
+    ];
+
+    $index_content = $tool->generateMainIndexFile($index_params);
+    $zip->addFromString('public/index.php', $index_content);
 
     // Add readme files
     echo "Adding readme files...\n";
@@ -309,17 +369,19 @@ try {
     }
 
     $readme_txt = join("\n", $readme_txt_lines);
-    $zip->addFromString($zip_root_dir . '/000_readme.txt', $readme_txt);
+    $readme_txt = trim($readme_txt);
+    $zip->addFromString('000_readme.txt', $readme_txt);
 
     $readme_html_params = [
         'site_url' => $site_url,
         'bundle_id' => $bundle_id,
-        'bundle_description' => $bundle_description,
         'bundle_url' => $bundle_url,
+        'bundle_description' => $bundle_description,
     ];
 
     $readme_html = $tool->generateReadmeHtml($readme_html_params);
-    $zip->addFromString($zip_root_dir . '/000_readme.html', $readme_html);
+    $readme_html = trim($readme_html);
+    $zip->addFromString('000_readme.html', $readme_html);
 
     // Add ZIP comment
     $built_date = date('r');
@@ -415,6 +477,55 @@ class Djebel_Tool_Bundle {
 <?php
         $html = ob_get_clean();
         return $html;
+    }
+
+    // Generate index.php for bundle with auto-detection of private dir
+    function generateMainIndexFile($params) {
+        $bundle_id = $params['bundle_id'];
+
+        ob_start();
+        ?>
+{{PHP_OPEN_TAG}}
+/**
+ * Djebel app loader.
+ * https://djebel.com
+ */
+
+// Full path override via environment
+$app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
+
+// Auto-detect if not set
+if (empty($app_djebel_priv_dir)) {
+    $priv_dir_basename = '.ht_djebel{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}';
+    $check_dirs = [ dirname(__DIR__), dirname(__DIR__, 2), ];
+
+    foreach ($check_dirs as $base_dir) {
+        $check_path = $base_dir . '/' . $priv_dir_basename;
+
+        if (is_dir($check_path)) {
+            $app_djebel_priv_dir = $check_path;
+            break;
+        }
+    }
+
+    putenv('DJEBEL_APP_PRIVATE_DIR=' . $app_djebel_priv_dir);
+}
+
+// Load from PHAR
+require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
+<?php
+        $content = ob_get_clean();
+        $content = trim($content);
+        $content .= "\n";
+
+        $replace_vars = [
+            '{{PHP_OPEN_TAG}}' => '<?php',
+            '{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}' => '_' . $bundle_id,
+        ];
+
+        $content = str_replace(array_keys($replace_vars), array_values($replace_vars), $content);
+
+        return $content;
     }
 
     function generateManifest($params) {
