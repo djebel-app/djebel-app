@@ -229,6 +229,10 @@ try {
         '#/cache/#',                             // Cache directories
         '#/logs?/#i',                            // Log directories
         '#\.(zip|tar|gz|tgz)$#i',               // Archive files
+        '#(^|/)\.DS_Store$#',                   // macOS metadata
+        '#(^|/)Thumbs\.db$#i',                  // Windows thumbnails
+        '#(^|/)desktop\.ini$#i',                // Windows folder config
+        '#(^|/)~\$#',                            // Office temp files
     ];
 
     echo "Copying site files to bundle...\n";
