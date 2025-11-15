@@ -16,6 +16,10 @@ $tool_name = basename(__FILE__);
 // Check command line arguments first
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
 array_shift($args); // Remove script name from arguments
+// Load CLI utilities and normalize arguments
+$app_dir = dirname(__DIR__);
+require_once $app_dir . '/src/core/lib/cli_util.php';
+$args = Dj_Cli_Util::normalizeArgs($args);
 
 $tool = new Djebel_Tool_Opt();
 
