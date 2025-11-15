@@ -400,9 +400,11 @@ class Djebel_Tool_Bundle {
 
         // Add plugins to manifest
         foreach ($plugins as $plugin) {
+            $plugin_version = empty($plugin['version']) ? '1.0.0' : $plugin['version'];
+
             $plugin_entry = [
                 'id' => $plugin['id'],
-                'version' => empty($plugin['version']) ? '1.0.0' : $plugin['version'],
+                'version' => $plugin_version,
                 'active' => true,
                 'type' => $plugin['type'],
             ];
