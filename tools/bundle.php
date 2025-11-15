@@ -546,8 +546,9 @@ if (empty($app_djebel_priv_dir)) {
 
     // Check directories in order (set to 0 to skip for better performance)
     $check_dirs = [
-        dirname(__DIR__) => 1,
-        dirname(__DIR__, 2) => 1,
+        dirname(__DIR__) => 1,      // Same level as public/ (which is document root (www/public_html)
+        dirname(__DIR__, 2) => 1,   // One level up (non-public)
+        dirname(__DIR__, 3) => 0,   // Two levels up (non-public)
     ];
 
     foreach ($check_dirs as $base_dir => $enabled) {
