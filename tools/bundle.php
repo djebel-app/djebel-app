@@ -568,7 +568,9 @@ if (empty($app_djebel_priv_dir)) {
         }
     }
 
-    putenv('DJEBEL_APP_PRIVATE_DIR=' . $app_djebel_priv_dir);
+    if (!empty($app_djebel_priv_dir)) {
+        putenv('DJEBEL_APP_PRIVATE_DIR=' . $app_djebel_priv_dir);
+    }
 }
 
 // Check for PHAR package path
