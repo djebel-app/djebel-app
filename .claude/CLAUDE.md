@@ -363,13 +363,22 @@ if ($condition){
     - Use `[\s\'\"]*` in regex patterns for brackets
     - Example: `/\[[\s\'\"]*(\w+)[\s\'\"]*\]/`
 
-16. **Comment complex logic BEFORE the code**:
+16. **Self-documenting code with minimal comments**:
+    - Write code that explains itself through clear structure and naming
+    - Use descriptive variable names and clear patterns
+    - Only comment complex logic to explain WHY, not WHAT
     - Format: `// [Action]: [explanation]`
-    - Explain WHAT the code does and WHY
     - Example:
     ```php
     // Handle array notation with auto-increment: var[] = value
     if (preg_match('/^([\w\-]+)\[\s*\]$/si', $key, $matches)) {
+
+    // Good self-documenting code with inline comments
+    $check_dirs = [
+        dirname(__DIR__) => 1,      // Same level as public/
+        dirname(__DIR__, 2) => 1,   // One level up
+        dirname(__DIR__, 3) => 0,   // Two levels up
+    ];
     ```
 
 17. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`

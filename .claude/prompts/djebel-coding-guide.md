@@ -166,6 +166,7 @@ $content = file_get_contents($file); // Could be MBs!
 
 ### 3. Clear and Understandable Code
 - **Readable over clever** - code is read 10x more than written
+- **Self-documenting code** - write code that explains itself through clear structure and naming
 - **Descriptive names** - variables, methods, classes should explain themselves
 - **Comments for WHY, not WHAT** - explain intent, not mechanics
   - **NEVER write obvious comments** - if the code is clear, don't comment it
