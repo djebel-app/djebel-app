@@ -17,10 +17,9 @@ $tool_name = basename(__FILE__);
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
 array_shift($args); // Remove script name from arguments
 
-// Load CLI utilities and normalize arguments
+// Load CLI utilities
 $app_dir = dirname(__DIR__);
 require_once $app_dir . '/src/core/lib/cli_util.php';
-$args = Dj_Cli_Util::normalizeArgs($args);
 
 $tool = new Djebel_Tool_Bundle();
 
@@ -59,53 +58,22 @@ try {
     putenv('DJEBEL_APP_CORE_RUN=0'); // Don't execute, just load classes
     require_once $app_dir . '/index.php';
 
-    // Parse command-line parameters
-    $known_params = [
-        'dir',
-        'bundle_id',
-        'bundle_description',
-        'bundle_ver',
-        'bundle_url',
-        'target_dir',
+    // Parse command-line parameters with defaults
+    $expected_params = [
+        'dir' => '',
+        'bundle_id' => '',
+        'bundle_description' => '',
+        'bundle_ver' => '1.0.0',
+        'bundle_url' => '',
+        'target_dir' => '',
     ];
 
-    $params = [];
+    $params = Dj_Cli_Util::parseArgs($expected_params, $args);
 
-    foreach ($known_params as $param) {
-        $params[$param] = '';
-    }
-
-    $help_args = [ '--help', '-h', '-help', 'help', ];
-
-    foreach ($args as $arg) {
-        // Skip help arguments
-        if (in_array($arg, $help_args, true)) {
-            continue;
-        }
-
-        $parsed = false;
-
-        // Parse --key=value format
-        foreach ($known_params as $param) {
-            $prefix = '--' . $param . '=';
-
-            if (strpos($arg, $prefix) === 0) {
-                $params[$param] = substr($arg, strlen($prefix));
-                $parsed = true;
-                break;
-            }
-        }
-
-        if (!$parsed) {
-            // Security: Reject unknown arguments
-            throw new InvalidArgumentException("Unknown option: $arg");
-        }
-    }
-
-    // Extract to local variables with defaults
+    // Extract to local variables
     $bundle_id = $params['bundle_id'];
-    $bundle_description = empty($params['bundle_description']) ? '' : $params['bundle_description'];
-    $bundle_ver = empty($params['bundle_ver']) ? '1.0.0' : $params['bundle_ver'];
+    $bundle_description = $params['bundle_description'];
+    $bundle_ver = $params['bundle_ver'];
     $bundle_url = $params['bundle_url'];
     $dir_input = $params['dir'];
     $target_dir_param = $params['target_dir'];
