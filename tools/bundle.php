@@ -234,11 +234,7 @@ try {
     // Prepare variables for readme files and index.php
     $site_url = Dj_App::SITE_URL;
     $built_date = date('r');
-    $priv_dir_name = '.ht_djebel';
-
-    if (!empty($bundle_id) && $bundle_id != 'default') {
-        $priv_dir_name .= '_' . $bundle_id;
-    }
+    $priv_dir_name = $tool->getDjebelPrivDirName($bundle_id);
 
     // Add readme files first (appear at top of ZIP listing)
     echo "Adding readme files...\n";
@@ -469,6 +465,17 @@ class Djebel_Tool_Bundle {
         return version_compare($version_b, $version_a);
     }
 
+    // Get private directory name based on bundle_id (single source of truth)
+    function getDjebelPrivDirName($bundle_id) {
+        $priv_dir_name = '.ht_djebel';
+
+        if (!empty($bundle_id) && $bundle_id != 'default') {
+            $priv_dir_name .= '_' . $bundle_id;
+        }
+
+        return $priv_dir_name;
+    }
+
     function generateReadmeHtml($params) {
         $site_url = $params['site_url'];
         $bundle_id = $params['bundle_id'];
@@ -517,7 +524,7 @@ $app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
 
 // Auto-detect if not set
 if (empty($app_djebel_priv_dir)) {
-    $priv_dir_basename = '.ht_djebel{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}';
+    $priv_dir_basename = '{{DJEBEL_PRIV_DIR_NAME}}';
     $check_dirs = [ dirname(__DIR__), dirname(__DIR__, 2), ];
 
     foreach ($check_dirs as $base_dir) {
@@ -539,15 +546,11 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
         $content = trim($content);
         $content .= "\n";
 
-        $priv_dir_suffix = '';
-
-        if (!empty($bundle_id) && $bundle_id != 'default') {
-            $priv_dir_suffix = '_' . $bundle_id;
-        }
+        $priv_dir_name = $this->getDjebelPrivDirName($bundle_id);
 
         $replace_vars = [
             '{{PHP_OPEN_TAG}}' => '<?php',
-            '{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}' => $priv_dir_suffix,
+            '{{DJEBEL_PRIV_DIR_NAME}}' => $priv_dir_name,
         ];
 
         $content = str_replace(array_keys($replace_vars), array_values($replace_vars), $content);
