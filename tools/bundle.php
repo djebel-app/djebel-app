@@ -65,7 +65,7 @@ try {
     // Parse command-line parameters with defaults
     $expected_params = [
         'dir' => '',
-        'bundle_id' => '',
+        'bundle_id' => 'default',
         'bundle_description' => '',
         'bundle_ver' => '1.0.0',
         'bundle_url' => '',
@@ -83,11 +83,6 @@ try {
     $dir_input = $params['dir'];
     $target_dir_param = $params['target_dir'];
     $compression_level_param = $params['compression_level'];
-
-    // Validate required parameters - cheap checks first
-    if (empty($bundle_id)) {
-        throw new InvalidArgumentException('Missing required parameter: --bundle_id');
-    }
 
     if (empty($dir_input)) {
         throw new InvalidArgumentException('Missing required parameter: --dir');
@@ -285,8 +280,8 @@ try {
         echo "Found: " . basename($site_ht_djebel_dir) . "\n";
     }
 
-    // Copy .ht_djebel directory to .ht_djebel_{bundle_id}
-    $priv_dir_name = '.ht_djebel_' . $bundle_id;
+    // Copy .ht_djebel directory to .ht_djebel_{bundle_id} (or .ht_djebel for 'default')
+    $priv_dir_name = $bundle_id === 'default' ? '.ht_djebel' : '.ht_djebel_' . $bundle_id;
 
     echo "Adding .ht_djebel directory...\n";
     $add_ht_djebel_params = [
@@ -355,9 +350,12 @@ try {
     // Add readme files
     echo "Adding readme files...\n";
     $site_url = Dj_App::SITE_URL;
+    $built_date = date('r');
 
     $readme_txt_lines = [
         sprintf('Djebel Bundle: %s', $bundle_id),
+        sprintf('Version: %s', $bundle_ver),
+        sprintf('Created: %s', $built_date),
         '',
         $bundle_description,
         '',
@@ -375,16 +373,15 @@ try {
     $readme_html_params = [
         'site_url' => $site_url,
         'bundle_id' => $bundle_id,
+        'bundle_ver' => $bundle_ver,
         'bundle_url' => $bundle_url,
         'bundle_description' => $bundle_description,
+        'built_date' => $built_date,
     ];
 
     $readme_html = $tool->generateReadmeHtml($readme_html_params);
     $readme_html = trim($readme_html);
     $zip->addFromString('000_readme.html', $readme_html);
-
-    // Add ZIP comment
-    $built_date = date('r');
     $zip_comment_lines = [
         sprintf('Djebel Bundle: %s', $bundle_id),
         sprintf('Version: %s', $bundle_ver),
@@ -455,7 +452,9 @@ class Djebel_Tool_Bundle {
     function generateReadmeHtml($params) {
         $site_url = $params['site_url'];
         $bundle_id = $params['bundle_id'];
+        $bundle_ver = $params['bundle_ver'];
         $bundle_description = $params['bundle_description'];
+        $built_date = $params['built_date'];
         $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
 
         ob_start();
@@ -467,6 +466,8 @@ class Djebel_Tool_Bundle {
 </head>
 <body>
     <h1><?php echo htmlspecialchars($bundle_id); ?></h1>
+    <p><strong>Version:</strong> <?php echo htmlspecialchars($bundle_ver); ?></p>
+    <p><strong>Created:</strong> <?php echo htmlspecialchars($built_date); ?></p>
     <p><?php echo htmlspecialchars($bundle_description); ?></p>
     <p>For more info go to <a href='<?php echo htmlspecialchars($site_url); ?>' target='_blank' rel='noopener'><?php echo htmlspecialchars($site_url); ?></a></p>
     <?php if (!empty($bundle_url)): ?>
@@ -518,9 +519,11 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
         $content = trim($content);
         $content .= "\n";
 
+        $priv_dir_suffix = $bundle_id === 'default' ? '' : '_' . $bundle_id;
+
         $replace_vars = [
             '{{PHP_OPEN_TAG}}' => '<?php',
-            '{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}' => '_' . $bundle_id,
+            '{{DJEBEL_TOOL_BUNDLE_PRIV_DIR_SUFFIX}}' => $priv_dir_suffix,
         ];
 
         $content = str_replace(array_keys($replace_vars), array_values($replace_vars), $content);
