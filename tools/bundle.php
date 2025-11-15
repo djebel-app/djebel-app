@@ -148,7 +148,11 @@ try {
     echo "Creating bundle: $bundle_filename\n";
     echo "Bundle ID: $bundle_id\n";
     echo "Version: $bundle_ver\n";
-    echo "Description: $bundle_description\n";
+
+    if (!empty($bundle_description)) {
+        echo "Description: $bundle_description\n";
+    }
+
     echo "Target: $target_dir\n\n";
 
     // Determine site directory path
