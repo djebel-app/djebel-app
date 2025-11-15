@@ -246,6 +246,38 @@ try {
 
     $tool->addDirectoryToZip($add_dir_params);
 
+    // Add djebel-app PHAR to bundle
+    echo "\nAdding Djebel app PHAR...\n";
+    $build_dir = $app_dir . '/build';
+    $phar_pattern = $build_dir . '/djebel-app-*.phar';
+    $phar_files = glob($phar_pattern);
+    $djebel_app_version = '';
+
+    if (empty($phar_files)) {
+        throw new RuntimeException("No PHAR file found in $build_dir. Run 'php tools/pkg.php --phar' to build it.");
+    }
+
+    // Sort by version (highest version first)
+    usort($phar_files, [$tool, 'comparePharVersions']);
+
+    $latest_phar = $phar_files[0];
+    $phar_basename = basename($latest_phar);
+    $phar_zip_path = $zip_root_dir . '/.ht_djebel/app/djebel-app.phar';
+
+    // Extract version from filename
+    $version_pattern = '/djebel-app-(.+)\.phar$/';
+
+    if (preg_match($version_pattern, $phar_basename, $version_matches)) {
+        $djebel_app_version = $version_matches[1];
+    }
+
+    echo "Using PHAR: $phar_basename\n";
+    $add_result = $zip->addFile($latest_phar, $phar_zip_path);
+
+    if ($add_result) {
+        $zip->setCompressionName($phar_zip_path, ZipArchive::CM_DEFLATE, $compression_level);
+    }
+
     // Generate manifest
     echo "\nGenerating manifest...\n";
     $manifest_params = [
@@ -254,6 +286,7 @@ try {
         'bundle_ver' => $bundle_ver,
         'bundle_url' => $bundle_url,
         'plugins' => $plugins,
+        'djebel_app_version' => $djebel_app_version,
     ];
     $manifest = $tool->generateManifest($manifest_params);
     $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
@@ -337,6 +370,26 @@ try {
 exit($exit_code);
 
 class Djebel_Tool_Bundle {
+    function comparePharVersions($a, $b) {
+        // Extract version from filename: djebel-app-1.2.3.phar
+        $pattern = '/djebel-app-(.+)\.phar$/';
+        $basename_a = basename($a);
+        $basename_b = basename($b);
+
+        $version_a = '0.0.0';
+        $version_b = '0.0.0';
+
+        if (preg_match($pattern, $basename_a, $matches_a)) {
+            $version_a = $matches_a[1];
+        }
+
+        if (preg_match($pattern, $basename_b, $matches_b)) {
+            $version_b = $matches_b[1];
+        }
+
+        return version_compare($version_b, $version_a);
+    }
+
     function generateReadmeHtml($params) {
         $site_url = $params['site_url'];
         $bundle_id = $params['bundle_id'];
@@ -370,6 +423,7 @@ class Djebel_Tool_Bundle {
         $bundle_ver = $params['bundle_ver'];
         $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
         $plugins = $params['plugins'];
+        $djebel_app_version = empty($params['djebel_app_version']) ? '' : $params['djebel_app_version'];
 
         $manifest = [
             'themes' => [],
@@ -389,6 +443,10 @@ class Djebel_Tool_Bundle {
 
         if (!empty($bundle_url)) {
             $manifest['meta']['bundle_url'] = $bundle_url;
+        }
+
+        if (!empty($djebel_app_version)) {
+            $manifest['meta']['djebel_app_version'] = $djebel_app_version;
         }
 
         // Add plugins to manifest
@@ -426,7 +484,8 @@ class Djebel_Tool_Bundle {
 
         foreach ($iterator as $file) {
             $file_path = $file->getPathname();
-            $relative_path = substr($file_path, strlen($source_dir) + 1);
+            $source_dir_len = strlen($source_dir);
+            $relative_path = substr($file_path, $source_dir_len + 1);
             $base_name = $file->getBasename();
 
             // Check exclusion patterns
