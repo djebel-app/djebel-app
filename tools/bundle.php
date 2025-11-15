@@ -265,7 +265,8 @@ try {
     // Add ZIP comment
     $built_date = date('r');
     $zip_comment_lines = [
-        sprintf('Djebel Bundle: %s v%s', $bundle_id, $bundle_ver),
+        sprintf('Djebel Bundle: %s', $bundle_id),
+        sprintf('Version: %s', $bundle_ver),
         sprintf('Created: %s', $built_date),
         sprintf('Site: %s', $site_url),
     ];
