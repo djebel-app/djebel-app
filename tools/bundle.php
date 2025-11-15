@@ -107,7 +107,7 @@ try {
     $bundle_description = empty($params['bundle_description']) ? '' : $params['bundle_description'];
     $bundle_ver = empty($params['bundle_ver']) ? '1.0.0' : $params['bundle_ver'];
     $bundle_url = $params['bundle_url'];
-    $site_dir_param = $params['dir'];
+    $dir_input = $params['dir'];
     $target_dir_param = $params['target_dir'];
 
     // Validate required parameters - cheap checks first
@@ -115,7 +115,7 @@ try {
         throw new InvalidArgumentException('Missing required parameter: --bundle_id');
     }
 
-    if (empty($site_dir_param)) {
+    if (empty($dir_input)) {
         throw new InvalidArgumentException('Missing required parameter: --dir');
     }
 
@@ -161,30 +161,18 @@ try {
     echo "Target: $target_dir\n\n";
 
     // Determine site directory path
-    // If --dir is absolute path, use it directly; otherwise treat as site name
-    if (strpos($site_dir_param, '/') === 0) {
-        // Absolute path provided
-        $site_dir = $site_dir_param;
-    } else {
-        // Relative site name - validate and format
-        if (!Dj_App_String_Util::isAlphaNumericExt($site_dir_param)) {
-            throw new InvalidArgumentException('Invalid site name format. Use alphanumeric characters and hyphens only.');
-        }
+    $site_dir = $dir_input;
 
-        $site_dir_param = Dj_App_String_Util::formatStringId($site_dir_param, Dj_App_String_Util::KEEP_DASH);
-
-        // Source directory (site to bundle)
-        // From: /path/to/djebel/github/djebel-app
-        // To: /path/to/djebel/app/sites/{site_dir_param}
-        $djebel_root = dirname(dirname($app_dir));
-        $site_dir = $djebel_root . '/app/sites/' . $site_dir_param;
+    // Validate directory exists
+    if (!is_dir($site_dir)) {
+        throw new RuntimeException('Site directory not found: ' . $dir_input);
     }
 
-    // Resolve to real path and validate
+    // Resolve to real path
     $site_dir = realpath($site_dir);
 
-    if (empty($site_dir) || !is_dir($site_dir)) {
-        throw new RuntimeException('Site directory not found: ' . $site_dir_param);
+    if (empty($site_dir)) {
+        throw new RuntimeException('Failed to resolve site directory path: ' . $dir_input);
     }
 
     // Create ZIP archive
