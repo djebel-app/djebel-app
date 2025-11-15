@@ -67,4 +67,51 @@ class Dj_Cli_Util {
         fputs(STDERR, $msg . "\n");
         return true;
     }
+
+    /**
+     * Parse command-line arguments with defaults
+     *
+     * @param array $expected_params Associative array of param_name => default_value
+     * @param array $args Raw arguments from $_SERVER['argv'] (optional, defaults to $_SERVER['argv'])
+     * @return array Parsed parameters with values
+     */
+    static function parseArgs($expected_params = [], $args = []) {
+        // Default to global argv if not provided
+        if (empty($args)) {
+            $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
+            array_shift($args); // Remove script name
+        }
+
+        // Initialize with defaults
+        $params = $expected_params;
+        $known_params = array_keys($expected_params);
+        $has_expected_params = !empty($expected_params);
+        $help_args = [ '--help', '-h', '-help', 'help', ];
+
+        foreach ($args as $arg) {
+            // Skip help arguments - cheap check first
+            if ((strpos($arg, 'h') !== false) && in_array($arg, $help_args)) {
+                continue;
+            }
+
+            // Skip invalid format: must be --key=value
+            if ((strpos($arg, '--') !== 0) || (strpos($arg, '=') === false)) {
+                continue;
+            }
+
+            // Parse --key=value format
+            $equals_pos = strpos($arg, '=');
+            $key = substr($arg, 2, $equals_pos - 2);
+            $value = substr($arg, $equals_pos + 1);
+
+            // Skip unknown keys if we have expected params
+            if ($has_expected_params && !in_array($key, $known_params)) {
+                continue;
+            }
+
+            $params[$key] = $value;
+        }
+
+        return $params;
+    }
 }
