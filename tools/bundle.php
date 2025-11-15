@@ -60,54 +60,71 @@ try {
     require_once $app_dir . '/index.php';
 
     // Parse command-line parameters
-    $bundle_id = '';
-    $bundle_description = '';
-    $bundle_ver = '';
-    $bundle_url = '';
-    $site_dir_param = '';
-    $target_dir_param = '';
+    $known_params = [
+        'dir',
+        'bundle_id',
+        'bundle_description',
+        'bundle_ver',
+        'bundle_url',
+        'target_dir',
+    ];
+
+    $params = [];
+
+    foreach ($known_params as $param) {
+        $params[$param] = '';
+    }
+
+    $help_args = [ '--help', '-h', '-help', 'help', ];
 
     foreach ($args as $arg) {
+        // Skip help arguments
+        if (in_array($arg, $help_args, true)) {
+            continue;
+        }
+
+        $parsed = false;
+
         // Parse --key=value format
-        if (strpos($arg, '--bundle_id=') === 0) {
-            $bundle_id = substr($arg, strlen('--bundle_id='));
-        } elseif (strpos($arg, '--bundle_description=') === 0) {
-            $bundle_description = substr($arg, strlen('--bundle_description='));
-        } elseif (strpos($arg, '--bundle_ver=') === 0) {
-            $bundle_ver = substr($arg, strlen('--bundle_ver='));
-        } elseif (strpos($arg, '--bundle_url=') === 0) {
-            $bundle_url = substr($arg, strlen('--bundle_url='));
-        } elseif (strpos($arg, '--dir=') === 0) {
-            $site_dir_param = substr($arg, strlen('--dir='));
-        } elseif (strpos($arg, '--target_dir=') === 0) {
-            $target_dir_param = substr($arg, strlen('--target_dir='));
-        } elseif (!in_array($arg, [ '--help', '-h', '-help', 'help', ], true)) {
+        foreach ($known_params as $param) {
+            $prefix = '--' . $param . '=';
+
+            if (strpos($arg, $prefix) === 0) {
+                $params[$param] = substr($arg, strlen($prefix));
+                $parsed = true;
+                break;
+            }
+        }
+
+        if (!$parsed) {
             // Security: Reject unknown arguments
             throw new InvalidArgumentException("Unknown option: $arg");
         }
     }
+
+    // Extract to local variables with defaults
+    $bundle_id = $params['bundle_id'];
+    $bundle_description = empty($params['bundle_description']) ? '' : $params['bundle_description'];
+    $bundle_ver = empty($params['bundle_ver']) ? '1.0.0' : $params['bundle_ver'];
+    $bundle_url = $params['bundle_url'];
+    $site_dir_param = $params['dir'];
+    $target_dir_param = $params['target_dir'];
 
     // Validate required parameters - cheap checks first
     if (empty($bundle_id)) {
         throw new InvalidArgumentException('Missing required parameter: --bundle_id');
     }
 
-    if (empty($bundle_description)) {
-        throw new InvalidArgumentException('Missing required parameter: --bundle_description');
-    }
-
-    if (empty($bundle_ver)) {
-        throw new InvalidArgumentException('Missing required parameter: --bundle_ver');
-    }
-
     if (empty($site_dir_param)) {
         throw new InvalidArgumentException('Missing required parameter: --dir');
     }
 
-    // Validate bundle_id format - alphanumeric and hyphens only
-    if (!preg_match('/^[\w\-]+$/si', $bundle_id)) {
+    // Validate and format bundle_id - alphanumeric and hyphens only, lowercase
+    if (!Dj_App_String_Util::isAlphaNumericExt($bundle_id)) {
         throw new InvalidArgumentException("Invalid bundle_id format. Use alphanumeric characters and hyphens only.");
     }
+
+    $bundle_id = Dj_App_String_Util::formatStringId($bundle_id, Dj_App_String_Util::KEEP_DASH);
 
     // Validate version format (semantic versioning)
     if (!preg_match('/^\d+\.\d+\.\d+(-[\w\.\-]+)?$/si', $bundle_ver)) {
@@ -149,10 +166,12 @@ try {
         // Absolute path provided
         $site_dir = $site_dir_param;
     } else {
-        // Relative site name - validate format
-        if (!preg_match('/^[\w\-]+$/si', $site_dir_param)) {
+        // Relative site name - validate and format
+        if (!Dj_App_String_Util::isAlphaNumericExt($site_dir_param)) {
             throw new InvalidArgumentException('Invalid site name format. Use alphanumeric characters and hyphens only.');
         }
+
+        $site_dir_param = Dj_App_String_Util::formatStringId($site_dir_param, Dj_App_String_Util::KEEP_DASH);
 
         // Source directory (site to bundle)
         // From: /path/to/djebel/github/djebel-app
@@ -359,6 +378,7 @@ class Djebel_Tool_Bundle {
         $bundle_id = $params['bundle_id'];
         $bundle_description = $params['bundle_description'];
         $bundle_ver = $params['bundle_ver'];
+        $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
         $plugins = $params['plugins'];
 
         $manifest = [
@@ -373,6 +393,10 @@ class Djebel_Tool_Bundle {
                 'site_url' => Dj_App::SITE_URL,
             ],
         ];
+
+        if (!empty($bundle_url)) {
+            $manifest['meta']['bundle_url'] = $bundle_url;
+        }
 
         // Add plugins to manifest
         foreach ($plugins as $plugin) {
