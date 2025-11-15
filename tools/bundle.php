@@ -231,6 +231,54 @@ try {
         '#(^|/)~\$#',                            // Office temp files
     ];
 
+    // Prepare variables for readme files and index.php
+    $site_url = Dj_App::SITE_URL;
+    $built_date = date('r');
+    $priv_dir_name = $bundle_id == 'default' ? '.ht_djebel' : '.ht_djebel_' . $bundle_id;
+
+    // Add readme files first (appear at top of ZIP listing)
+    echo "Adding readme files...\n";
+
+    $readme_txt_lines = [
+        sprintf('Djebel Bundle: %s', $bundle_id),
+        sprintf('Version: %s', $bundle_ver),
+        sprintf('Created: %s', $built_date),
+        '',
+        $bundle_description,
+        '',
+        sprintf('For more info go to %s', $site_url),
+    ];
+
+    if (!empty($bundle_url)) {
+        $readme_txt_lines[] = sprintf('Bundle URL: %s', $bundle_url);
+    }
+
+    $readme_txt = join("\n", $readme_txt_lines);
+    $readme_txt = trim($readme_txt);
+    $zip->addFromString('000_readme.txt', $readme_txt);
+
+    $readme_html_params = [
+        'site_url' => $site_url,
+        'bundle_id' => $bundle_id,
+        'bundle_ver' => $bundle_ver,
+        'bundle_url' => $bundle_url,
+        'bundle_description' => $bundle_description,
+        'built_date' => $built_date,
+    ];
+
+    $readme_html = $tool->generateReadmeHtml($readme_html_params);
+    $readme_html = trim($readme_html);
+    $zip->addFromString('000_readme.html', $readme_html);
+
+    // Generate and add index.php to public/
+    echo "Generating public/index.php...\n";
+    $index_params = [
+        'bundle_id' => $bundle_id,
+    ];
+
+    $index_content = $tool->generateMainIndexFile($index_params);
+    $zip->addFromString('public/index.php', $index_content);
+
     // Copy dj-content to public/dj-content
     $site_content_dir = $site_dir . '/dj-content';
 
@@ -281,8 +329,6 @@ try {
     }
 
     // Copy .ht_djebel directory to .ht_djebel_{bundle_id} (or .ht_djebel for 'default')
-    $priv_dir_name = $bundle_id === 'default' ? '.ht_djebel' : '.ht_djebel_' . $bundle_id;
-
     echo "Adding .ht_djebel directory...\n";
     $add_ht_djebel_params = [
         'zip_obj' => $zip,
@@ -350,50 +396,8 @@ try {
     $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
     $zip->addFromString($priv_dir_name . '/.ht_djebel-manifest.json', $manifest_json);
 
-    // Generate and add index.php to public/
-    echo "Generating public/index.php...\n";
-    $index_params = [
-        'bundle_id' => $bundle_id,
-    ];
-
-    $index_content = $tool->generateMainIndexFile($index_params);
-    $zip->addFromString('public/index.php', $index_content);
-
-    // Add readme files
-    echo "Adding readme files...\n";
-    $site_url = Dj_App::SITE_URL;
-    $built_date = date('r');
-
-    $readme_txt_lines = [
-        sprintf('Djebel Bundle: %s', $bundle_id),
-        sprintf('Version: %s', $bundle_ver),
-        sprintf('Created: %s', $built_date),
-        '',
-        $bundle_description,
-        '',
-        sprintf('For more info go to %s', $site_url),
-    ];
-
-    if (!empty($bundle_url)) {
-        $readme_txt_lines[] = sprintf('Bundle URL: %s', $bundle_url);
-    }
-
-    $readme_txt = join("\n", $readme_txt_lines);
-    $readme_txt = trim($readme_txt);
-    $zip->addFromString('000_readme.txt', $readme_txt);
-
-    $readme_html_params = [
-        'site_url' => $site_url,
-        'bundle_id' => $bundle_id,
-        'bundle_ver' => $bundle_ver,
-        'bundle_url' => $bundle_url,
-        'bundle_description' => $bundle_description,
-        'built_date' => $built_date,
-    ];
-
-    $readme_html = $tool->generateReadmeHtml($readme_html_params);
-    $readme_html = trim($readme_html);
-    $zip->addFromString('000_readme.html', $readme_html);
+    // Add ZIP comment
+    echo "\nAdding ZIP comment...\n";
     $zip_comment_lines = [
         sprintf('Djebel Bundle: %s', $bundle_id),
         sprintf('Version: %s', $bundle_ver),
