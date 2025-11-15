@@ -484,6 +484,12 @@ class Djebel_Tool_Bundle {
         $built_date = $params['built_date'];
         $bundle_url = empty($params['bundle_url']) ? '' : $params['bundle_url'];
 
+        $bundle_url_line = '';
+
+        if (!empty($bundle_url)) {
+            $bundle_url_line = "<p>Bundle URL: <a href='{{bundle_url_esc}}' target='_blank' rel='noopener'>{{bundle_url_esc}}</a></p>";
+        }
+
         ob_start();
         ?>
 <!DOCTYPE html>
@@ -492,18 +498,30 @@ class Djebel_Tool_Bundle {
     <title>Djebel Bundle</title>
 </head>
 <body>
-    <h1><?php echo htmlspecialchars($bundle_id); ?></h1>
-    <p><strong>Version:</strong> <?php echo htmlspecialchars($bundle_ver); ?></p>
-    <p><strong>Created:</strong> <?php echo htmlspecialchars($built_date); ?></p>
-    <p><?php echo htmlspecialchars($bundle_description); ?></p>
-    <p>For more info go to <a href='<?php echo htmlspecialchars($site_url); ?>' target='_blank' rel='noopener'><?php echo htmlspecialchars($site_url); ?></a></p>
-    <?php if (!empty($bundle_url)): ?>
-    <p>Bundle URL: <a href='<?php echo htmlspecialchars($bundle_url); ?>' target='_blank' rel='noopener'><?php echo htmlspecialchars($bundle_url); ?></a></p>
-    <?php endif; ?>
+    <h1>{{bundle_id_esc}}</h1>
+    <p><strong>Version:</strong> {{bundle_ver_esc}}</p>
+    <p><strong>Created:</strong> {{built_date_esc}}</p>
+    <p>{{bundle_description_esc}}</p>
+    <p>For more info go to <a href='{{site_url_esc}}' target='_blank' rel='noopener'>{{site_url_esc}}</a></p>
+    {{bundle_url_line}}
 </body>
 </html>
 <?php
         $html = ob_get_clean();
+        $html = trim($html);
+
+        $replace_vars = [
+            '{{bundle_id_esc}}' => htmlspecialchars($bundle_id),
+            '{{bundle_ver_esc}}' => htmlspecialchars($bundle_ver),
+            '{{built_date_esc}}' => htmlspecialchars($built_date),
+            '{{bundle_description_esc}}' => htmlspecialchars($bundle_description),
+            '{{site_url_esc}}' => htmlspecialchars($site_url),
+            '{{bundle_url_esc}}' => htmlspecialchars($bundle_url),
+            '{{bundle_url_line}}' => $bundle_url_line,
+        ];
+
+        $html = str_replace(array_keys($replace_vars), array_values($replace_vars), $html);
+
         return $html;
     }
 
@@ -513,7 +531,7 @@ class Djebel_Tool_Bundle {
 
         ob_start();
         ?>
-{{PHP_OPEN_TAG}}
+{{php_open_tag}}
 /**
  * Djebel app loader.
  * https://djebel.com
@@ -524,7 +542,7 @@ $app_djebel_priv_dir = getenv('DJEBEL_APP_PRIVATE_DIR');
 
 // Auto-detect if not set
 if (empty($app_djebel_priv_dir)) {
-    $priv_dir_basename = '{{DJEBEL_PRIV_DIR_NAME}}';
+    $priv_dir_basename = '{{priv_dir_name}}';
     $check_dirs = [ dirname(__DIR__), dirname(__DIR__, 2), ];
 
     foreach ($check_dirs as $base_dir) {
@@ -549,8 +567,8 @@ require_once $app_djebel_priv_dir . '/app/djebel-app.phar';
         $priv_dir_name = $this->getDjebelPrivDirName($bundle_id);
 
         $replace_vars = [
-            '{{PHP_OPEN_TAG}}' => '<?php',
-            '{{DJEBEL_PRIV_DIR_NAME}}' => $priv_dir_name,
+            '{{php_open_tag}}' => '<?php',
+            '{{priv_dir_name}}' => $priv_dir_name,
         ];
 
         $content = str_replace(array_keys($replace_vars), array_values($replace_vars), $content);
