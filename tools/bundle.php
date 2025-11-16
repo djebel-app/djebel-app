@@ -236,7 +236,7 @@ try {
     ];
 
     // Prepare variables for readme files and index.php
-    $site_url = Dj_App::SITE_URL;
+    $djebel_url = Dj_App::SITE_URL;
     $built_date = date('r');
     $priv_dir_name = $tool->getDjebelPrivDirName($bundle_id);
 
@@ -250,7 +250,7 @@ try {
         '',
         $bundle_description,
         '',
-        sprintf('For more info go to %s', $site_url),
+        sprintf('For more info go to %s', $djebel_url),
     ];
 
     if (!empty($bundle_url)) {
@@ -263,7 +263,7 @@ try {
     $zip->setCompressionName('000_readme.txt', ZipArchive::CM_DEFLATE, $compression_level);
 
     $readme_html_params = [
-        'site_url' => $site_url,
+        'djebel_url' => $djebel_url,
         'bundle_id' => $bundle_id,
         'bundle_ver' => $bundle_ver,
         'bundle_url' => $bundle_url,
@@ -289,7 +289,7 @@ try {
     // Generate and add dj-content/index.html (prevent directory browsing)
     echo "Generating dj-content/index.html...\n";
     $content_index_params = [
-        'site_url' => $site_url,
+        'djebel_url' => $djebel_url,
     ];
 
     $content_index_html = $tool->generateContentIndexHtml($content_index_params);
@@ -421,7 +421,7 @@ try {
         sprintf('Djebel Bundle: %s', $bundle_id),
         sprintf('Version: %s', $bundle_ver),
         sprintf('Created: %s', $built_date),
-        sprintf('Site: %s', $site_url),
+        sprintf('Site: %s', $djebel_url),
     ];
 
     if (!empty($bundle_url)) {
@@ -496,7 +496,7 @@ class Djebel_Tool_Bundle {
     }
 
     function generateReadmeHtml($params) {
-        $site_url = $params['site_url'];
+        $djebel_url = $params['djebel_url'];
         $bundle_id = $params['bundle_id'];
         $bundle_ver = $params['bundle_ver'];
         $bundle_description = $params['bundle_description'];
@@ -521,7 +521,7 @@ class Djebel_Tool_Bundle {
     <p><strong>Version:</strong> {{bundle_ver_esc}}</p>
     <p><strong>Created:</strong> {{built_date_esc}}</p>
     <p>{{bundle_description_esc}}</p>
-    <p>For more info go to <a href='{{site_url_esc}}' target='_blank' rel='noopener'>{{site_url_esc}}</a></p>
+    <p>For more info go to <a href='{{djebel_url_esc}}' target='_blank' rel='noopener'>{{djebel_url_esc}}</a></p>
     {{bundle_url_line}}
 </body>
 </html>
@@ -534,7 +534,7 @@ class Djebel_Tool_Bundle {
             '{{bundle_ver_esc}}' => htmlspecialchars($bundle_ver),
             '{{built_date_esc}}' => htmlspecialchars($built_date),
             '{{bundle_description_esc}}' => htmlspecialchars($bundle_description),
-            '{{site_url_esc}}' => htmlspecialchars($site_url),
+            '{{djebel_url_esc}}' => htmlspecialchars($djebel_url),
             '{{bundle_url_esc}}' => htmlspecialchars($bundle_url),
             '{{bundle_url_line}}' => $bundle_url_line,
         ];
@@ -622,7 +622,7 @@ require_once $app_djebel_phar;
     }
 
     function generateContentIndexHtml($params) {
-        $djebel_site_url = $params['site_url'];
+        $djebel_url = $params['djebel_url'];
 
         ob_start();
         ?>
@@ -664,7 +664,7 @@ require_once $app_djebel_phar;
 <body>
     <h1>Hey! It's going to be a great day!</h1>
     <p>
-        <a href="{{djebel_site_url_esc}}" target="_blank" rel="noopener noreferrer" title="Djebel - Fast, Lightweight, Plugin-Based PHP Framework for Building High-Performance Websites">
+        <a href="{{djebel_url_esc}}" target="_blank" rel="noopener noreferrer" title="Djebel - Fast, Lightweight, Plugin-Based PHP Framework for Building High-Performance Websites">
             Learn more about Djebel
         </a>
     </p>
@@ -675,7 +675,7 @@ require_once $app_djebel_phar;
         $html = trim($html);
 
         $replace_vars = [
-            '{{djebel_site_url_esc}}' => htmlspecialchars($djebel_site_url),
+            '{{djebel_url_esc}}' => htmlspecialchars($djebel_url),
         ];
 
         $html = str_replace(array_keys($replace_vars), array_values($replace_vars), $html);
@@ -700,7 +700,7 @@ require_once $app_djebel_phar;
                 'bundle_version' => $bundle_ver,
                 'created' => date('c'),
                 'djebel_version' => Dj_App::VERSION,
-                'site_url' => Dj_App::SITE_URL,
+                'djebel_url' => Dj_App::SITE_URL,
             ],
         ];
 
