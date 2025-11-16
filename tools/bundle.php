@@ -260,6 +260,7 @@ try {
     $readme_txt = join("\n", $readme_txt_lines);
     $readme_txt = trim($readme_txt);
     $zip->addFromString('000_readme.txt', $readme_txt);
+    $zip->setCompressionName('000_readme.txt', ZipArchive::CM_DEFLATE, $compression_level);
 
     $readme_html_params = [
         'site_url' => $site_url,
@@ -273,6 +274,7 @@ try {
     $readme_html = $tool->generateReadmeHtml($readme_html_params);
     $readme_html = trim($readme_html);
     $zip->addFromString('000_readme.html', $readme_html);
+    $zip->setCompressionName('000_readme.html', ZipArchive::CM_DEFLATE, $compression_level);
 
     // Generate and add index.php to public/
     echo "Generating public/index.php...\n";
@@ -282,6 +284,17 @@ try {
 
     $index_content = $tool->generateMainIndexFile($index_params);
     $zip->addFromString('public/index.php', $index_content);
+    $zip->setCompressionName('public/index.php', ZipArchive::CM_DEFLATE, $compression_level);
+
+    // Generate and add dj-content/index.html (prevent directory browsing)
+    echo "Generating dj-content/index.html...\n";
+    $content_index_params = [
+        'site_url' => $site_url,
+    ];
+
+    $content_index_html = $tool->generateContentIndexHtml($content_index_params);
+    $zip->addFromString('public/dj-content/index.html', $content_index_html);
+    $zip->setCompressionName('public/dj-content/index.html', ZipArchive::CM_DEFLATE, $compression_level);
 
     // Copy dj-content to public/dj-content
     $site_content_dir = $site_dir . '/dj-content';
@@ -398,7 +411,9 @@ try {
 
     $manifest = $tool->generateManifest($manifest_params);
     $manifest_json = json_encode($manifest, JSON_PRETTY_PRINT);
-    $zip->addFromString($priv_dir_name . '/.ht_djebel-manifest.json', $manifest_json);
+    $manifest_zip_path = $priv_dir_name . '/.ht_djebel-manifest.json';
+    $zip->addFromString($manifest_zip_path, $manifest_json);
+    $zip->setCompressionName($manifest_zip_path, ZipArchive::CM_DEFLATE, $compression_level);
 
     // Add ZIP comment
     echo "Adding ZIP comment...\n";
@@ -604,6 +619,68 @@ require_once $app_djebel_phar;
         $content = str_replace(array_keys($replace_vars), array_values($replace_vars), $content);
 
         return $content;
+    }
+
+    function generateContentIndexHtml($params) {
+        $djebel_site_url = $params['site_url'];
+
+        ob_start();
+        ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Djebel</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 600px;
+            margin: 100px auto;
+            padding: 20px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            font-size: 2em;
+            margin-bottom: 0.5em;
+        }
+        p {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 1.5em;
+        }
+        a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hey! It's going to be a great day!</h1>
+    <p>
+        <a href="{{djebel_site_url_esc}}" target="_blank" rel="noopener noreferrer" title="Djebel - Fast, Lightweight, Plugin-Based PHP Framework for Building High-Performance Websites">
+            Learn more about Djebel
+        </a>
+    </p>
+</body>
+</html>
+<?php
+        $html = ob_get_clean();
+        $html = trim($html);
+
+        $replace_vars = [
+            '{{djebel_site_url_esc}}' => htmlspecialchars($djebel_site_url),
+        ];
+
+        $html = str_replace(array_keys($replace_vars), array_values($replace_vars), $html);
+
+        return $html;
     }
 
     function generateManifest($params) {
