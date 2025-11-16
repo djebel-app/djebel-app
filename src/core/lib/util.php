@@ -132,24 +132,25 @@ class Dj_App_Util {
      * $timestamp = Dj_App_Util::strtotime('+1 day');
      *
      * @param string $datetime Date/time string to parse
-     * @param int|null $baseTimestamp Optional base timestamp (default: current time)
+     * @param int|null $base_timestamp Optional base timestamp (default: current time)
      * @return int|false Unix timestamp or false on failure
      */
-    public static function strtotime($datetime, $baseTimestamp = null)
+    public static function strtotime($datetime, $base_timestamp = null)
     {
         if (empty($datetime)) {
             return false;
         }
 
+        $result = false;
         $timezone = self::getTimezone();
 
         try {
             if ($timezone) {
                 // Create base DateTime in configured timezone
-                if ($baseTimestamp === null) {
+                if (is_null($base_timestamp)) {
                     $dt = new DateTime('now', $timezone);
                 } else {
-                    $dt = new DateTime('@' . $baseTimestamp);
+                    $dt = new DateTime('@' . $base_timestamp);
                     $dt->setTimezone($timezone);
                 }
 
@@ -159,10 +160,12 @@ class Dj_App_Util {
             }
 
             // Fallback to PHP's strtotime
-            return $baseTimestamp === null ? strtotime($datetime) : strtotime($datetime, $baseTimestamp);
+            $result = is_null($base_timestamp) ? strtotime($datetime) : strtotime($datetime, $base_timestamp);
         } catch (Exception $e) {
-            return false;
+            // relax
         }
+
+        return $result;
     }
 
     /**
