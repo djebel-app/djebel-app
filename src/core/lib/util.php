@@ -387,7 +387,7 @@ class Dj_App_Util {
             return '';
         }
 
-        $dir .= '/data';
+        $dir .= '/data/app';
 
         $ctx = [];
         $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_data_dir', $dir, $ctx );
