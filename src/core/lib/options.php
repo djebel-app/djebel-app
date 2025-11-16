@@ -430,6 +430,17 @@ class Dj_App_Options implements ArrayAccess, Countable {
     }
 
     /**
+     * Get all options data
+     * Alias for toArray()
+     *
+     * @return array All options data
+     */
+    public function getAll()
+    {
+        return $this->toArray();
+    }
+
+    /**
      * Countable interface - allows count($options_obj)
      * @return int
      */
