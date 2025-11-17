@@ -302,7 +302,7 @@ class Dj_App_Themes {
                 $file = Dj_App_Hooks::applyFilter('app.core.theme.page_file_not_found', '', $not_found_ctx);
 
                 if (empty($file) || !file_exists($file)) {
-                    Dj_App_Util::die( "The requested page can not be found", "Page not found", [ 'code' => 404, ] );
+                    Dj_App_Util::die( "The requested page can not be found", "Page not found", [ 'code' => 404, 'file' => $file, ] );
                 }
             }
         }
