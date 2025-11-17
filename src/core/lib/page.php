@@ -182,10 +182,11 @@ class Dj_App_Page {
             if (stripos($url, 'http') === false) {
                 $url_slug = Dj_App_Util::removeSlash($url, Dj_App_Util::FLAG_LEADING | Dj_App_Util::FLAG_TRAILING);
                 $web_path = $req_obj->getWebPath();
-                $url = $web_path;
 
-                if (!empty($url_slug)) {
-                    $url .= '/' . $url_slug;
+                if (empty($url_slug)) {
+                    $url = $web_path;
+                } else {
+                    $url = Dj_App_Util::removeSlash($web_path) . '/' . $url_slug;
                 }
             }
 
