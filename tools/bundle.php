@@ -521,7 +521,7 @@ class Djebel_Tool_Bundle {
     <p><strong>Version:</strong> {{bundle_ver_esc}}</p>
     <p><strong>Created:</strong> {{built_date_esc}}</p>
     <p>{{bundle_description_esc}}</p>
-    <p>For more info go to <a href='{{djebel_url_esc}}' target='_blank' rel='noopener'>{{djebel_url_esc}}</a></p>
+    <p>For more info go to <a href='{{djebel_url_esc}}/?utm_source=djebel-app-readme' target='_blank' rel='noopener'>{{djebel_url_esc}}</a></p>
     {{bundle_url_line}}
 </body>
 </html>
@@ -664,7 +664,7 @@ require_once $app_djebel_phar;
 <body>
     <h1>Hey! It's going to be a great day!</h1>
     <p>
-        <a href="{{djebel_url_esc}}" target="_blank" rel="noopener noreferrer" title="Djebel - Fast, Lightweight, Plugin-Based PHP Framework for Building High-Performance Websites">
+        <a href="{{djebel_url_esc}}/?utm_source=djebel-app-dj-content" target="_blank" rel="noopener noreferrer" title="Djebel - Fast, Lightweight, Plugin-Based PHP Framework for Building High-Performance Websites">
             Learn more about Djebel
         </a>
     </p>
