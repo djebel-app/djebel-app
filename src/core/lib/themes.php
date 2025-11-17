@@ -94,7 +94,10 @@ class Dj_App_Themes {
             $current_theme_dir = Dj_App_Hooks::applyFilter('app.themes.current_theme_dir', $current_theme_dir, $ctx);
 
             $this->current_theme_dir = $current_theme_dir;
-            $this->current_theme_url = $req_obj->contentUrlPrefix() . '/themes/' . $current_theme;
+
+            // Build full URL: site_url/dj-content/themes/theme-name
+            $content_dir_url = Dj_App_Util::getContentDirUrl();
+            $this->current_theme_url = $content_dir_url . '/themes/' . $current_theme;
             $default_theme_file = $current_theme_dir . '/index.php';
 
             // should we load theme's functions file?
