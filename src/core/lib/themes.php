@@ -169,7 +169,7 @@ class Dj_App_Themes {
                 $full_page_content = $header_buff . $page_content_buff . $footer_buff;
             } else {
                 if (!file_exists($default_theme_file)) {
-                    Dj_App_Util::die("Theme file not found", $current_theme, ['code' => 404,]);
+                    Dj_App_Util::die("Theme file not found: [theme:$current_theme]", ['code' => 404,]);
                 }
 
                 ob_start();
