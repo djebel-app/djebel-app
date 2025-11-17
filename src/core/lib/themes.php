@@ -84,8 +84,9 @@ class Dj_App_Themes {
 
             $site_section = Dj_App_Options::getInstance()->site;
             $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme() : $inp_params['theme'];
-            $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
+            $current_theme = $this->formatId($current_theme);
             $this->current_theme = $current_theme;
+            $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
 
             $themes_dir = $this->getThemesDir();
             $current_theme_dir = $themes_dir . '/' . $current_theme;
