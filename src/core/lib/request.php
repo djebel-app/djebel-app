@@ -199,6 +199,16 @@ class Dj_App_Request {
             return $web_path;
         }
 
+        // Get optional strip segment from config (e.g., 'public' for public directory setups)
+        $options_obj = Dj_App_Options::getInstance();
+        $strip_segment = $options_obj->get('site.strip_url_segment');
+        $strip_segment = empty($strip_segment) ? '' : Dj_App_String_Util::trim($strip_segment);
+
+        // Normalize to /segment/ format for consistent replacement
+        if (!empty($strip_segment)) {
+            $strip_segment = '/' . Dj_App_Util::removeSlash($strip_segment, Dj_App_Util::FLAG_BOTH) . '/';
+        }
+
         // Multiple proxies may append multiple values in the X-Forwarded-Prefix header and it can be comma-separated paths; taking the first hop is common for mount-path logic.
         $prefix_to_web_prefix = empty($_SERVER['HTTP_X_FORWARDED_PREFIX']) ? '' : $_SERVER['HTTP_X_FORWARDED_PREFIX'];
 
@@ -225,6 +235,11 @@ class Dj_App_Request {
 
         // Traditional detection from SCRIPT_NAME
         if (!empty($script_name)) {
+            // Strip configured segment from path (e.g., /public/ for public directory setups)
+            if (!empty($strip_segment) && (strpos($script_name, $strip_segment) !== false)) {
+                $script_name = str_replace($strip_segment, '/', $script_name);
+            }
+
             $web_path = dirname($script_name);
             $web_path = Dj_App_Util::removeSlash($web_path);
 
@@ -237,6 +252,11 @@ class Dj_App_Request {
             $php_self = empty($_SERVER['PHP_SELF']) ? '' : $_SERVER['PHP_SELF'];
 
             if (!empty($php_self)) {
+                // Strip configured segment from path (e.g., /public/ for public directory setups)
+                if (!empty($strip_segment) && (strpos($php_self, $strip_segment) !== false)) {
+                    $php_self = str_replace($strip_segment, '/', $php_self);
+                }
+
                 $web_path = dirname($php_self);
                 $web_path = Dj_App_Util::removeSlash($web_path);
 
