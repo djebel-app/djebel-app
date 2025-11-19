@@ -71,8 +71,17 @@ class Dj_App_Shortcode {
      */
     public function renderPageFooter($params = []) {
         ob_start();
+        $page_obj = Dj_App_Page::getInstance();
+        $djebel_url_esc = dj_esc_url(Dj_App::SITE_URL);
+        $powered_by = "Powered by <a href='$djebel_url_esc' target='_blank'>Djebel</a>";
+        $powered_by = Dj_App_Hooks::applyFilter('app.page.render.footer.powered_by', $powered_by);
         ?>
-        <div>&copy; <?php echo date('Y'); ?> All rights reserved. Powered by Djebel</div>
+        <div>
+            &copy; <?php echo date('Y'); ?>
+            All rights reserved.
+            <?php echo $page_obj->esc_site_title; ?>
+            <?php echo $powered_by; ?>
+        </div>
         <?php
         $buff = ob_get_clean();
         $buff = Dj_App_Hooks::applyFilter('app.page.render.footer', $buff, $params);
