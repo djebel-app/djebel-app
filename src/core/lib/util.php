@@ -1534,13 +1534,17 @@ MSG_EOF;
         $buff = self::cleanMagicVars($buff);
 
         $web_path = $req_obj->getWebPath();
+        $site_url = $req_obj->getSiteUrl();
+        $content_dir_url = Dj_App_Util::getContentDirUrl();
+        $site_web_path = Dj_App_Util::removeSlash($web_path);
+        $site_content_web_path = Dj_App_Util::removeSlash($web_path) . '/' . Dj_App_Util::getContentDirName();
 
         // Define magic variables and their values
         $search_magic_vars = [
-            '__SITE_URL__' => $req_obj->getSiteUrl(),
-            '__SITE_CONTENT_DIR_URL__' => Dj_App_Util::getContentDirUrl(),
-            '__SITE_WEB_PATH__' => $web_path,
-            '__SITE_CONTENT_WEB_PATH__' => rtrim($web_path, '/') . '/' . Dj_App_Util::getContentDirName(),
+            '__SITE_URL__' => $site_url,
+            '__SITE_WEB_PATH__' => $site_web_path,
+            '__SITE_CONTENT_DIR_URL__' => $content_dir_url,
+            '__SITE_CONTENT_WEB_PATH__' => $site_content_web_path,
         ];
 
         // allows others to add other magic vars
