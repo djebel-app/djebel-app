@@ -281,18 +281,14 @@ class Djebel_App_HTML {
 		];
 
         $content = Dj_App_Hooks::applyFilter('app.page.render.content', $content, $filter_context);
-        
+
         // Set status code if provided
+        $req_obj = Dj_App_Request::getInstance();
+
         if (!empty($status_code)) {
-            $req_obj = Dj_App_Request::getInstance();
             $req_obj->setResponseCode($status_code);
         }
-        
-        // Output HTTP headers via system hook
-        if (!Dj_App_Hooks::hasRun('app.page.output_http_headers')) {
-            Dj_App_Hooks::doAction('app.page.output_http_headers');
-        }
-		
+
 		ob_start();
 		?>
 		<!DOCTYPE html>
@@ -432,7 +428,9 @@ class Djebel_App_HTML {
 		<?php
 		$buff = ob_get_clean();
 		$buff = trim($buff);
-		echo $buff;
+
+		// Output headers then content
+		$req_obj->outputContent($buff);
 		exit;
 	}
 

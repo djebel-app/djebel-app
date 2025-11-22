@@ -73,8 +73,9 @@ class Dj_App_Themes {
      */
     public function loadTheme($inp_params = [])
     {
+        $req_obj = Dj_App_Request::getInstance();
+
         try {
-            $req_obj = Dj_App_Request::getInstance();
             $page_obj = Dj_App_Page::getInstance();
             $options_obj = Dj_App_Options::getInstance();
 
@@ -183,7 +184,7 @@ class Dj_App_Themes {
             $full_page_content = Dj_App_Hooks::applyFilter('app.page.full_content', $full_page_content);
             $full_page_content = trim($full_page_content);
 
-            echo $full_page_content;
+            $req_obj->outputContent($full_page_content);
         } finally {
             Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded', $ctx );
         }

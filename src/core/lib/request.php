@@ -1257,8 +1257,9 @@ CLEAR_AND_REDIRECT_HTML;
      * @return void
      */
     public function servePageNotFound() {
-        header( $this->getRequestProtocol() . ' 404 Not Found', true, 404 );
-        die( "404 Not Found" );
+        $this->setResponseCode(404);
+        $this->outputContent("404 Not Found");
+        exit;
     }
 
     /**
@@ -1673,7 +1674,7 @@ CLEAR_AND_REDIRECT_HTML;
 
     /**
      * Outputs all headers to the browser
-     * 
+     *
      * @return void
      */
     public function outputHeaders()
@@ -1697,6 +1698,22 @@ CLEAR_AND_REDIRECT_HTML;
 
         $this->clearHeaders(); // just in case
         $this->sendCORS();
+    }
+
+    /**
+     * Outputs headers and then content
+     * Ensures headers are sent before content regardless of when plugins set them
+     *
+     * @param string $content Content to output
+     * @return void
+     */
+    public function outputContent($content = '')
+    {
+        // Trigger hook to output headers (calls outputHeaders via hook)
+        Dj_App_Hooks::doAction('app.page.output_http_headers');
+
+        // Output content
+        echo $content;
     }
 
     /**
