@@ -367,6 +367,7 @@ if ($condition){
     - Write code that explains itself through clear structure and naming
     - Use descriptive variable names and clear patterns
     - Only comment complex logic to explain WHY, not WHAT
+    - **NEVER add obvious comments** - if the code is self-explanatory, don't comment it
     - Format: `// [Action]: [explanation]`
     - Example:
     ```php
@@ -380,6 +381,14 @@ if ($condition){
         dirname(__DIR__, 3) => 0,   // Two levels up
     ];
     ```
+
+    **Examples of useless obvious comments to NEVER add**:
+    - ❌ WRONG: `// Output content` before `echo $content;`
+    - ❌ WRONG: `// Get instance` before `$req_obj = Dj_App_Request::getInstance();`
+    - ❌ WRONG: `// Set header` before `$req_obj->setHeader('ETag', $etag);`
+    - ❌ WRONG: `// Store content` before `$req_obj->setContent($buff);`
+    - ❌ WRONG: `// Output headers and content` before `$req_obj->outputContent();`
+    - ✅ CORRECT: No comment - the code is self-explanatory
 
 17. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`
     - ❌ WRONG: Calling `load()` inside `__get()` method
