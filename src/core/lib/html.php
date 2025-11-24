@@ -429,8 +429,8 @@ class Djebel_App_HTML {
 		$buff = ob_get_clean();
 		$buff = trim($buff);
 
-		// Output headers then content
-		$req_obj->outputContent($buff);
+		$req_obj->setContent($buff);
+		$req_obj->outputContent();
 		exit;
 	}
 

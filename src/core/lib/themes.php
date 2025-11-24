@@ -184,7 +184,7 @@ class Dj_App_Themes {
             $full_page_content = Dj_App_Hooks::applyFilter('app.page.full_content', $full_page_content);
             $full_page_content = trim($full_page_content);
 
-            $req_obj->outputContent($full_page_content);
+            $req_obj->setContent($full_page_content);
         } finally {
             Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded', $ctx );
         }

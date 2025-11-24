@@ -1258,7 +1258,8 @@ CLEAR_AND_REDIRECT_HTML;
      */
     public function servePageNotFound() {
         $this->setResponseCode(404);
-        $this->outputContent("404 Not Found");
+        $this->setContent("404 Not Found");
+        $this->outputContent();
         exit;
     }
 
@@ -1645,6 +1646,7 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     private $response_status_code = 200;
+    private $content = '';
 
     /**
      * Sets the HTTP response code
@@ -1701,18 +1703,42 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Sets content to be output later
+     *
+     * @param string $content Content to set
+     * @return void
+     */
+    public function setContent($content = '')
+    {
+        $this->content = $content;
+    }
+
+    /**
+     * Gets stored content
+     *
+     * @return string Content
+     */
+    public function getContent()
+    {
+        $content = empty($this->content) ? '' : $this->content;
+        return $content;
+    }
+
+    /**
      * Outputs headers and then content
      * Ensures headers are sent before content regardless of when plugins set them
      *
-     * @param string $content Content to output
+     * @param string $content Content to output (uses stored content if not provided)
      * @return void
      */
     public function outputContent($content = '')
     {
-        // Trigger hook to output headers (calls outputHeaders via hook)
         Dj_App_Hooks::doAction('app.page.output_http_headers');
 
-        // Output content
+        if (empty($content)) {
+            $content = $this->getContent();
+        }
+
         echo $content;
     }
 

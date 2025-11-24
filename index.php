@@ -157,6 +157,8 @@ if (!empty($plugin_dirs)) {
 
 Dj_App_Hooks::doAction( 'app.core.init' );
 
+$req_obj = Dj_App_Request::getInstance();
+
 $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
 $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
 $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
@@ -168,7 +170,6 @@ if ($load_theme) {
     $themes_obj->loadTheme();
 } elseif (0) {
     // this is a code duplication from themes.php until we refactor it.
-    $req_obj = Dj_App_Request::getInstance();
     ob_start();
     Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
     // we have to call this so it's rendered by whatever plugin is handling it
@@ -179,9 +180,10 @@ if ($load_theme) {
 
     $content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $content );
 
-    // Output headers then content
-    $req_obj->outputContent($content);
+    $req_obj->setContent($content);
 }
+
+$req_obj->outputContent();
 
 $exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 
