@@ -390,6 +390,14 @@ if ($condition){
     - ❌ WRONG: `// Output headers and content` before `$req_obj->outputContent();`
     - ✅ CORRECT: No comment - the code is self-explanatory
 
+    **CRITICAL: Never delete existing comments unless**:
+    - The code containing the comment is being modified/refactored
+    - Specifically asked by the user to remove it
+    - ✅ KEEP: `// move this to shutdown` - TODO/reminder comments
+    - ✅ KEEP: `// jic` (just in case), `// FIXME`, `// TODO` - intention markers
+    - ❌ REMOVE ONLY IF: Refactoring that code or user asks
+    - When in doubt, KEEP the comment - don't delete existing comments
+
 17. **NO side effects in getter methods**: NEVER load data or modify state in `__get()`
     - ❌ WRONG: Calling `load()` inside `__get()` method
     - ❌ WRONG: Calling `setData()` inside `__get()` method
