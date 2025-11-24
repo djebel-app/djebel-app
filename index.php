@@ -159,33 +159,32 @@ Dj_App_Hooks::doAction( 'app.core.init' );
 
 $req_obj = Dj_App_Request::getInstance();
 
-$load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
-$load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
-$load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
+try {
+    $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
+    $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
+    $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
 
-if ($load_theme) {
-    require_once $app_lib_dir . '/themes.php';
-    $themes_obj = Dj_App_Themes::getInstance();
-    $themes_obj->installHooks();
-    $themes_obj->loadTheme();
-} elseif (0) {
-    // this is a code duplication from themes.php until we refactor it.
-    ob_start();
-    Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
-    // we have to call this so it's rendered by whatever plugin is handling it
-    Dj_App_Hooks::doAction( 'app.page.content.render' );
-    $content = ob_get_clean();
-    $content = Dj_App_Hooks::applyFilter( 'app.page.content', $content );
-    $content = trim($content);
+    if ($load_theme) {
+        require_once $app_lib_dir . '/themes.php';
+        $themes_obj = Dj_App_Themes::getInstance();
+        $themes_obj->installHooks();
+        $themes_obj->loadTheme();
+    } elseif (0) {
+        ob_start();
+        Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
+        Dj_App_Hooks::doAction( 'app.page.content.render' );
+        $content = ob_get_clean();
+        $content = Dj_App_Hooks::applyFilter( 'app.page.content', $content );
+        $content = trim($content);
 
-    $content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $content );
+        $content = Dj_App_Hooks::applyFilter( 'app.page.full_content', $content );
 
-    $req_obj->setContent($content);
+        $req_obj->setContent($content);
+    }
+} finally {
+    $req_obj->outputContent();
+    $exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 }
-
-$req_obj->outputContent();
-
-$exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 
 class Dj_App_Config {
     const APP_ENV = 'env';

@@ -1645,8 +1645,9 @@ CLEAR_AND_REDIRECT_HTML;
         return $headers;
     }
 
-    private $response_status_code = 200;
     private $content = '';
+    private $content_output = false;
+    private $response_status_code = 200;
 
     /**
      * Sets the HTTP response code
@@ -1725,6 +1726,16 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Clears stored content
+     *
+     * @return void
+     */
+    public function clearContent()
+    {
+        $this->content = '';
+    }
+
+    /**
      * Outputs headers and then content
      * Ensures headers are sent before content regardless of when plugins set them
      *
@@ -1733,6 +1744,12 @@ CLEAR_AND_REDIRECT_HTML;
      */
     public function outputContent($content = '')
     {
+        if ($this->content_output) {
+            return;
+        }
+
+        $this->content_output = true;
+
         Dj_App_Hooks::doAction('app.page.output_http_headers');
 
         if (empty($content)) {
