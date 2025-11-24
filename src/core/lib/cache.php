@@ -17,6 +17,10 @@ class Dj_App_Cache
      */
     public static function get($key, $params = [])
     {
+        if (isset($params['enabled']) && empty($params['enabled'])) {
+            return null;
+        }
+
         $ctx = ['key' => $key, 'params' => $params];
 
         $result = [];
@@ -206,6 +210,14 @@ class Dj_App_Cache
     public static function write($cache_file, $data, $params = [])
     {
         $res_obj = new Dj_App_Result();
+
+        if (empty($data)) {
+            return $res_obj;
+        }
+
+        if (isset($params['enabled']) && empty($params['enabled'])) {
+            return $res_obj;
+        }
 
         // Structure with meta and data sections
         $ttl = isset($params['ttl']) ? $params['ttl'] : 4 * 60 * 60; // default 4 hours
