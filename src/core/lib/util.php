@@ -1545,6 +1545,7 @@ MSG_EOF;
             '__SITE_WEB_PATH__' => $site_web_path,
             '__SITE_CONTENT_DIR_URL__' => $content_dir_url,
             '__SITE_CONTENT_WEB_PATH__' => $site_content_web_path,
+            '__CONTENT_URL__' => $content_dir_url,
         ];
 
         // allows others to add other magic vars
@@ -1610,6 +1611,8 @@ MSG_EOF;
             'SITE_WEB_PATH',
             'THEME_URL',
             'THEME_URI',
+            'CONTENT_URL',
+            'CONTENT_URI',
         ];
 
         // let's check if those exist in the buffer
