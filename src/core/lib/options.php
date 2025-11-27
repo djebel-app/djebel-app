@@ -316,12 +316,11 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // if section is empty but key has section.key then we'll take that as a section
         if (strpos($key, '.') !== false) {
             $parts = explode('.', $key);
+            $parts = array_map('Dj_App_String_Util::formatKey', $parts);
             $section = array_shift($parts);
-            $section = Dj_App_String_Util::formatKey($section);
 
             if (count($parts) > 1) { // we've taken the main section. Do we have sub section?
                 $sub_section = array_shift($parts);
-                $sub_section = Dj_App_String_Util::formatKey($sub_section);
             }
 
             $key = implode('.', $parts);
