@@ -310,25 +310,31 @@ class Dj_App_Options implements ArrayAccess, Countable {
             return $val;
         }
 
-        $section = '';
-        $sub_section = '';
+        $level1 = '';
+        $level2 = '';
+        $level3 = '';
 
-        // if section is empty but key has section.key then we'll take that as a section
+        // if key has dots, split into levels
         if (strpos($key, '.') !== false) {
             $parts = explode('.', $key);
             $parts = array_map('Dj_App_String_Util::formatKey', $parts);
-            $section = array_shift($parts);
+            $level1 = array_shift($parts);
 
-            if (count($parts) > 1) { // we've taken the main section. Do we have sub section?
-                $sub_section = array_shift($parts);
+            if (count($parts) > 1) {
+                $level2 = array_shift($parts);
+            }
+
+            if (count($parts) > 1) {
+                $level3 = array_shift($parts);
             }
 
             $key = implode('.', $parts);
         }
 
         $ctx['key'] = $key;
-        $ctx['section'] = $section;
-        $ctx['sub_section'] = $sub_section;
+        $ctx['level1'] = $level1;
+        $ctx['level2'] = $level2;
+        $ctx['level3'] = $level3;
 
         // option specific filter again
         $val = Dj_App_Hooks::applyFilter( 'app.core.filter.pre_option_' . $key, false, $ctx );
@@ -339,11 +345,13 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
         $val = null;
 
-        if (!empty($sub_section) && isset($data[$section][$sub_section][$key])) {
-            $val = $data[$section][$sub_section][$key];
-        } elseif (!empty($section) && isset($data[$section][$key])) {
-            $val = $data[$section][$key];
-        } elseif (empty($section) && isset($data[$key])) {
+        if (!empty($level3) && isset($data[$level1][$level2][$level3][$key])) {
+            $val = $data[$level1][$level2][$level3][$key];
+        } elseif (!empty($level2) && isset($data[$level1][$level2][$key])) {
+            $val = $data[$level1][$level2][$key];
+        } elseif (!empty($level1) && isset($data[$level1][$key])) {
+            $val = $data[$level1][$key];
+        } elseif (empty($level1) && isset($data[$key])) {
             $val = $data[$key];
         }
 
