@@ -4,6 +4,34 @@ class Dj_App {
     const NAME = 'Djebel';
     const VERSION = '0.0.1';
     const SITE_URL = 'https://djebel.com';
+
+    /**
+     * Exit the application
+     * Proxy to PHP exit() for testability and future hooks
+     *
+     * @param array $params Optional parameters
+     *   - code: Exit code (default: 0)
+     *   - message: Optional message to output before exit
+     * @return void
+     */
+    public static function exit($params = [])
+    {
+        $code = empty($params['code']) ? 0 : (int) $params['code'];
+        $message = empty($params['message']) ? '' : $params['message'];
+
+        if (!empty($message)) {
+            echo $message;
+        }
+
+        $ctx = [
+            'code' => $code,
+            'message' => $message,
+        ];
+
+        Dj_App_Hooks::doAction('app.exit', $ctx);
+
+        exit($code);
+    }
 }
 
 class Dj_App_Util {
