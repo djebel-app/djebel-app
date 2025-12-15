@@ -103,6 +103,49 @@ class Dj_App_Util {
     }
 
     /**
+     * Generate SHA1-based hash (optionally partial, defaults to 12 chars)
+     *
+     * @param mixed $data
+     * @param int $length Desired length (1-40); defaults to full SHA1
+     * @return string
+     */
+    public static function generateHash($data = '', $length = 12)
+    {
+        $data_str = '';
+
+        if (empty($data)) {
+            $data = [];
+            $data['t'] = self::microtime(true);
+            $data['r'] = mt_rand(999, 99999);
+            $data['_env'] = $_ENV;
+            $data['_server'] = $_SERVER;
+        }
+
+        $filter_ctx = [ 'length' => $length, ];
+        $data = Dj_App_Hooks::applyFilter('app.util.generate_hash.data', $data, $filter_ctx);
+
+        if (is_scalar($data)) {
+            $data_str = $data;
+        } elseif (is_array($data)) {
+            $normalized = self::normalizeForSerialization($data);
+            ksort($normalized); // ensure consistent keys order
+        } else {
+            $data_str = self::serialize($data);
+        }
+
+        $hash = sha1($data_str);
+        $length = (int) $length;
+
+        if ($length <= 0 || $length >= 40) {
+            return $hash;
+        }
+
+        $hash = substr($hash, 0, $length);
+
+        return $hash;
+    }
+
+    /**
      * Timezone-aware time() - returns current Unix timestamp in configured timezone
      * Falls back to server timezone if not configured in site.timezone
      *
@@ -1757,7 +1800,9 @@ MSG_EOF;
                 $array_data = (array) $data;
             }
 
-            return self::normalizeForSerialization($array_data);
+            $array_data = self::normalizeForSerialization($array_data);
+
+            return $array_data;
         }
 
         return null;
