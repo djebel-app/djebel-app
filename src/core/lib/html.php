@@ -431,10 +431,9 @@ class Djebel_App_HTML {
 
 		$req_obj->setContent($buff);
 		$req_obj->outputContent();
-		exit;
+
+		Dj_App::exit();
 	}
-
-
 
     /**
      * Encode all applicable characters to HTML entities

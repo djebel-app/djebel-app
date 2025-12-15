@@ -771,7 +771,7 @@ CLEAR_AND_REDIRECT_HTML;
             header("Location: $url", 302, $redir_code);
         }
 
-        exit;
+        Dj_App::exit();
     }
 
     /**
@@ -1065,7 +1065,8 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         echo ($callback ? $callback . '(' : '') . Dj_App_String_Util::jsonEncode($struct) . ($callback ? ')' : '');
-        exit;
+
+        Dj_App::exit();
     }
 
     /**
@@ -1137,7 +1138,7 @@ CLEAR_AND_REDIRECT_HTML;
 
         // Exit for OPTIONS requests, no need to render the whole page. the browser just tests things.
         if ($is_options_request) {
-            exit(0);
+            Dj_App::exit();
         }
     }
 
@@ -1260,7 +1261,8 @@ CLEAR_AND_REDIRECT_HTML;
         $this->setResponseCode(404);
         $this->setContent("404 Not Found");
         $this->outputContent();
-        exit;
+
+        Dj_App::exit();
     }
 
     /**
