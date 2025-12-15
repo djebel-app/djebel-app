@@ -335,5 +335,16 @@ class Dj_App_Page {
 
         return $formatted_page;
     }
+
+    /**
+     * Check if current page is home/front page
+     * @return bool
+     */
+    public function isHomePage()
+    {
+        $page = $this->get('full_page');
+        $is_home = empty($page) || $page == '/';
+        return $is_home;
+    }
 }
 
