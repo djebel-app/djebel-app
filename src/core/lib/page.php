@@ -347,6 +347,8 @@ class Dj_App_Page {
         return $is_home;
     }
 
+    private $has_content = false;
+
     /**
      * Set page content
      * @param string $content
@@ -362,10 +364,31 @@ class Dj_App_Page {
 
         $content = Dj_App_Hooks::applyFilter('app.page.set_content', $content, $ctx);
         $this->data['site_content'] = $content;
+        $this->has_content = $content !== '';
 
         if (!empty($meta)) {
             $this->data['site_content_meta'] = $meta;
         }
+    }
+
+    /**
+     * Check if page has content (no filter overhead)
+     * @return bool
+     */
+    public function hasContent()
+    {
+        return $this->has_content;
+    }
+
+    /**
+     * Clear page content and metadata
+     * @return void
+     */
+    public function clearContent()
+    {
+        $this->data['site_content'] = '';
+        $this->data['site_content_meta'] = [];
+        $this->has_content = false;
     }
 
     /**
