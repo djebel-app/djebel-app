@@ -390,4 +390,111 @@ class File_Util_Test extends TestCase {
             $this->assertEquals($expected, $result, "Failed for: {$input}");
         }
     }
+
+    public function testGetExtSimpleFilename()
+    {
+        $path = 'file.md';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEquals('md', $result);
+    }
+
+    public function testGetExtUppercase()
+    {
+        $path = 'file.MD';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEquals('md', $result);
+    }
+
+    public function testGetExtFullPath()
+    {
+        $path = '/path/to/file.PHP';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEquals('php', $result);
+    }
+
+    public function testGetExtMultipleDots()
+    {
+        $path = 'file.tar.gz';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEquals('gz', $result);
+    }
+
+    public function testGetExtNoExtension()
+    {
+        $path = 'file';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testGetExtEmptyString()
+    {
+        $path = '';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testGetExtDotFile()
+    {
+        $path = '.htaccess';
+        $result = Dj_App_File_Util::getExt($path);
+        $this->assertEquals('htaccess', $result);
+    }
+
+    public function testGetExtDifferentExtensions()
+    {
+        $test_cases = [
+            'script.JS' => 'js',
+            'style.CSS' => 'css',
+            'image.PNG' => 'png',
+            'doc.Pdf' => 'pdf',
+            'archive.ZIP' => 'zip',
+        ];
+
+        foreach ($test_cases as $input => $expected) {
+            $result = Dj_App_File_Util::getExt($input);
+            $this->assertEquals($expected, $result, "Failed for: {$input}");
+        }
+    }
+
+    public function testGetBasenameFullPath()
+    {
+        $path = '/path/to/file.php';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEquals('file.php', $result);
+    }
+
+    public function testGetBasenameFilenameOnly()
+    {
+        $path = 'file.md';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEquals('file.md', $result);
+    }
+
+    public function testGetBasenameTrailingSlash()
+    {
+        $path = '/path/to/';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEquals('to', $result);
+    }
+
+    public function testGetBasenameEmptyString()
+    {
+        $path = '';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testGetBasenameDotFile()
+    {
+        $path = '/etc/.htaccess';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEquals('.htaccess', $result);
+    }
+
+    public function testGetBasenameWindowsPath()
+    {
+        $path = 'C:\\Users\\test\\file.txt';
+        $result = Dj_App_File_Util::getBasename($path);
+        $this->assertEquals('file.txt', $result);
+    }
 }

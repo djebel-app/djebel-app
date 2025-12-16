@@ -272,6 +272,59 @@ class Dj_App_File_Util {
 
         return $result;
     }
+
+    /**
+     * Get file extension (lowercase)
+     * Dj_App_File_Util::getExt();
+     *
+     * Examples:
+     *   getExt('file.MD') => 'md'
+     *   getExt('/path/to/file.PHP') => 'php'
+     *   getExt('file.tar.gz') => 'gz'
+     *   getExt('file') => ''
+     *   getExt('.htaccess') => 'htaccess'
+     *
+     * @param string $path
+     * @return string
+     */
+    public static function getExt($path)
+    {
+        if (empty($path)) {
+            return '';
+        }
+
+        $path = (string) $path;
+        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        $ext = strtolower($ext);
+
+        return $ext;
+    }
+
+    /**
+     * Get basename (filename without directory)
+     * Dj_App_File_Util::getBasename();
+     *
+     * Examples:
+     *   getBasename('/path/to/file.php') => 'file.php'
+     *   getBasename('file.md') => 'file.md'
+     *   getBasename('C:\\Users\\test\\file.txt') => 'file.txt'
+     *   getBasename('/path/to/') => 'to'
+     *   getBasename('') => ''
+     *
+     * @param string $path
+     * @return string
+     */
+    public static function getBasename($path)
+    {
+        if (empty($path)) {
+            return '';
+        }
+
+        $path = self::normalizePath($path);
+        $basename = basename($path);
+
+        return $basename;
+    }
 }
 
 class Dj_App_File_Util_Exception extends Dj_App_Exception {}
