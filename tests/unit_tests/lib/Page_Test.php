@@ -8,26 +8,11 @@ class Page_Test extends TestCase {
 
     public function setUp(): void {
         $this->page_obj = Dj_App_Page::getInstance();
-        // Clear any existing data for clean tests
-        $this->clearPageData();
-        // Clear hook test data
         self::$hook_test_data = [];
     }
 
     public function tearDown(): void {
-        // Clean up after each test
-        $this->clearPageData();
-    }
-
-    /**
-     * Clear the page data for clean tests
-     */
-    private function clearPageData() {
-        // Use reflection to access the private data property
-        $reflection = new ReflectionClass($this->page_obj);
-        $data_property = $reflection->getProperty('data');
-        $data_property->setAccessible(true);
-        $data_property->setValue($this->page_obj, []);
+        $this->page_obj->clear();
     }
 
     /**
