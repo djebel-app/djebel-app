@@ -497,4 +497,46 @@ class File_Util_Test extends TestCase {
         $result = Dj_App_File_Util::getBasename($path);
         $this->assertEquals('file.txt', $result);
     }
+
+    public function testNormalizeExtJpeg()
+    {
+        $ext = 'jpeg';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEquals('jpg', $result);
+    }
+
+    public function testNormalizeExtJpegUppercase()
+    {
+        $ext = 'JPEG';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEquals('jpg', $result);
+    }
+
+    public function testNormalizeExtJpg()
+    {
+        $ext = 'jpg';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEquals('jpg', $result);
+    }
+
+    public function testNormalizeExtOther()
+    {
+        $ext = 'png';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEquals('png', $result);
+    }
+
+    public function testNormalizeExtEmpty()
+    {
+        $ext = '';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizeExtMixedCase()
+    {
+        $ext = 'JpEg';
+        $result = Dj_App_File_Util::normalizeExt($ext);
+        $this->assertEquals('jpg', $result);
+    }
 }

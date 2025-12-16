@@ -301,6 +301,36 @@ class Dj_App_File_Util {
     }
 
     /**
+     * Normalize file extension to canonical form
+     * Dj_App_File_Util::normalizeExt();
+     *
+     * Examples:
+     *   normalizeExt('jpeg') => 'jpg'
+     *   normalizeExt('JPEG') => 'jpg'
+     *   normalizeExt('jpg') => 'jpg'
+     *   normalizeExt('png') => 'png'
+     *
+     * @param string $ext
+     * @return string
+     */
+    public static function normalizeExt($ext)
+    {
+        if (empty($ext)) {
+            return '';
+        }
+
+        $ext = (string) $ext;
+        $ext = strtolower($ext);
+
+        // Cheap first-char check before string compare
+        if ($ext[0] === 'j' && $ext === 'jpeg') {
+            return 'jpg';
+        }
+
+        return $ext;
+    }
+
+    /**
      * Get basename (filename without directory)
      * Dj_App_File_Util::getBasename();
      *
