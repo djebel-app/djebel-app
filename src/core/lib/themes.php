@@ -335,6 +335,15 @@ class Dj_App_Themes {
             }
 
             if (!file_exists($file)) {
+                // Fallback to templates system (traverses path hierarchy, falls back to index.php)
+                $template_result = $this->findTemplate($page_fmt, $ctx);
+
+                if (!empty($template_result['file'])) {
+                    $file = $template_result['file'];
+                }
+            }
+
+            if (!file_exists($file)) {
                 // Allow plugins to intercept and provide content for missing pages
                 $not_found_ctx = $ctx;
                 $not_found_ctx['page'] = $page;
