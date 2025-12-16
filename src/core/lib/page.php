@@ -346,5 +346,56 @@ class Dj_App_Page {
         $is_home = empty($page) || $page == '/';
         return $is_home;
     }
+
+    /**
+     * Set page content
+     * @param string $content
+     * @param array $meta Optional metadata about the content
+     * @return void
+     */
+    public function setContent($content, $meta = [])
+    {
+        $ctx = [
+            'content' => $content,
+            'meta' => $meta,
+        ];
+
+        $content = Dj_App_Hooks::applyFilter('app.page.set_content', $content, $ctx);
+        $this->data['site_content'] = $content;
+
+        if (!empty($meta)) {
+            $this->data['site_content_meta'] = $meta;
+        }
+    }
+
+    /**
+     * Get page content (set by plugins like site_content)
+     * @return string
+     */
+    public function getContent()
+    {
+        $content = empty($this->data['site_content']) ? '' : $this->data['site_content'];
+        $content = Dj_App_Hooks::applyFilter('app.page.get_content', $content);
+
+        return $content;
+    }
+
+    /**
+     * Get content metadata or a specific key from metadata
+     * @param string $key Optional specific key to retrieve
+     * @return mixed Array of all meta if no key, specific value if key provided, empty string if not found
+     */
+    public function getContentMeta($key = '')
+    {
+        $meta = empty($this->data['site_content_meta']) ? [] : $this->data['site_content_meta'];
+
+        if (empty($key)) {
+            return $meta;
+        }
+
+        $val = empty($meta[$key]) ? '' : $meta[$key];
+
+        return $val;
+    }
 }
 
