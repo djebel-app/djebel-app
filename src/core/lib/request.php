@@ -1504,7 +1504,8 @@ CLEAR_AND_REDIRECT_HTML;
 
         // the site url should contain the web path too
         $req_obj = Dj_App_Request::getInstance();
-        $web_path = $req_obj->getWebPath();
+        $web_path_ctx = [ 'context' => 'site_url', ];
+        $web_path = $req_obj->getWebPath($web_path_ctx);
 
         if (strlen($web_path)) {
             $site_url .= $web_path;
