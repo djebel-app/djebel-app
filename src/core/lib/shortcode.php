@@ -43,15 +43,28 @@ class Dj_App_Shortcode {
     }
 
     /**
-     * replaces [djebel_page_content] shortcode with whatever we have defined in app.ini in the nav
+     * Replaces [djebel_page_content] shortcode with page content
+     * First checks if content was loaded by plugin (site_content), then falls back to theme
+     *
      * @param array $params
      * @return string
      */
-    public function renderContent($params = []) {
-        ob_start();
-        Dj_App_Hooks::doAction('app.page.content.render', $params);
-        $buff = ob_get_clean();
+    public function renderContent($params = [])
+    {
+        $page_obj = Dj_App_Page::getInstance();
+
+        // Check if content already loaded by plugin (e.g., site_content)
+        if ($page_obj->hasContent()) {
+            $buff = $page_obj->getContent();
+        } else {
+            // Fall back to theme's content rendering
+            ob_start();
+            Dj_App_Hooks::doAction('app.page.content.render', $params);
+            $buff = ob_get_clean();
+        }
+
         $buff = $this->replaceShortCodes($buff);
+
         return $buff;
     }
 
