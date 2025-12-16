@@ -10,6 +10,7 @@
 class Dj_App_Hooks {
     const HOOK_RUN = 2;
     const HOOK_PROCESSED = 4;
+    const DEFAULT_PRIORITY = 20;
 
     private static $actions = [];
     private static $filters = [];
@@ -201,16 +202,16 @@ class Dj_App_Hooks {
      *     echo 'both init and admin_init'; 
      * });
      * 
-     * // With priority (default: 10)
-     * Dj_App_Hooks::addAction('init', function() { echo 'later'; }, 20);
+     * // With priority (default: 20)
+     * Dj_App_Hooks::addAction('init', function() { echo 'later'; }, 30);
      * ```
-     * 
+     *
      * @param string|array $hook_name Single hook name or array of hook names
      * @param callable $callback Function to execute
-     * @param int $priority Execution priority (default: 10)
+     * @param int $priority Execution priority (default: 20)
      * @throws Exception For invalid hook names or callbacks
      */
-    public static function addAction($hook_name, $callback, $priority = 10) {
+    public static function addAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
         $check_ctx = [];
         $check_ctx['hook_name'] = $hook_name;
         $check_ctx['callback'] = $callback;
@@ -453,10 +454,10 @@ class Dj_App_Hooks {
      * 
      * @param string|array $hook_name Single hook name or array of hook names
      * @param callable|string $callback Function to execute or predefined return value
-     * @param int $priority Execution priority (default: 10)
+     * @param int $priority Execution priority (default: 20)
      * @throws Dj_App_Exception For invalid hook names or callbacks
      */
-    public static function addFilter($hook_name, $callback, $priority = 10) {
+    public static function addFilter($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
         $check_ctx = [];
         $check_ctx['type'] = 'filter';
         $check_ctx['callback'] = $callback;
@@ -519,7 +520,7 @@ class Dj_App_Hooks {
      * @return bool True if removed, false if not found
      * @throws Dj_App_Hooks_Exception For invalid hook names
      */
-    public static function removeAction($hook_name, $callback, $priority = 10) {
+    public static function removeAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
         if (!is_scalar($hook_name) && !is_array($hook_name)) {
             throw new Dj_App_Hooks_Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.", [
                 'hook_name' => $hook_name,
@@ -569,7 +570,7 @@ class Dj_App_Hooks {
      * @return bool True if removed, false if not found
      * @throws Dj_App_Hooks_Exception For invalid filter names
      */
-    public static function removeFilter($hook_name, $callback, $priority = 10) {
+    public static function removeFilter($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
         if (!is_scalar($hook_name) && !is_array($hook_name)) {
             throw new Dj_App_Hooks_Exception("Invalid filter name. We're expecting a scalar or an array, something else was given.", [
                 'hook_name' => $hook_name,
