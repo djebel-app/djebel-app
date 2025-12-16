@@ -490,6 +490,70 @@ public function __toString() {
     }
     ```
 
+21. **One method, not variants** - Never create `doSomething()` AND `doSomethingWithFilters()`. One clear, performant method:
+    - ❌ WRONG: `findTemplate()` + `findTemplateWithFilters()`
+    - ❌ WRONG: `loadContent()` + `loadContentCached()`
+    - ✅ CORRECT: One method that handles all cases efficiently
+    - If filters/options needed, pass as parameter - don't duplicate methods
+
+22. **Cheap checks first, lazy expensive operations** - Order matters for performance:
+    ```php
+    // ✅ CORRECT - empty() is cheap, is_dir() is filesystem call
+    if (empty($path)) {
+        return [];
+    }
+
+    // Direct file check first (most common case)
+    foreach ($extensions as $ext) {
+        $file_path = $dir . '/' . $path . '.' . $ext;
+        if (file_exists($file_path)) {
+            return $file_path;
+        }
+    }
+
+    // is_dir() only called if direct file not found (lazy)
+    if (is_dir($dir . '/' . $path)) {
+        // check index files...
+    }
+    ```
+
+23. **Consistent return types** - Always return same type from a function:
+    - ❌ WRONG: Return `[]` on success, `''` on failure (mixed types!)
+    - ❌ WRONG: Return `array` on success, `false` on failure
+    - ✅ CORRECT: Always return `[]` (empty array = failure, populated = success)
+    - ✅ CORRECT: Always return `Dj_App_Result` object
+
+24. **Use existing utilities** - Don't create new methods when utilities exist:
+    - ❌ WRONG: Creating `normalizeExtension()` to trim dots
+    - ✅ CORRECT: `Dj_App_String_Util::trim($extensions, '.')` - already handles arrays + extra chars
+    - Always check `lib/string_util.php`, `lib/util.php` before creating new helpers
+
+25. **Required files don't need file_exists()** - Skip checks for required files:
+    ```php
+    // Theme index.php is REQUIRED - don't waste a file_exists() call
+    $result = [
+        'file' => $theme_dir . '/index.php',
+        'ext' => 'php',
+    ];
+    ```
+
+26. **Cache computed values in properties** - Avoid recomputing:
+    ```php
+    private $site_content_dir = '';
+    private $content_extensions = [];
+
+    private function getSiteContentDir() {
+        if (!empty($this->site_content_dir)) {
+            return $this->site_content_dir;  // Cached
+        }
+        // Compute once...
+    }
+    ```
+
+27. **One loop, not build-then-iterate** - Don't build arrays just to loop again:
+    - ❌ WRONG: Build `$candidates[]` array, then `foreach ($candidates)`
+    - ✅ CORRECT: Check `file_exists()` immediately in the loop, return on first match
+
 ### Target: 1,000,000 Sites
 
 When code runs on 1,000,000 sites:
