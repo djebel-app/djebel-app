@@ -91,9 +91,8 @@ if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
         $path_info = parse_url($request_uri, PHP_URL_PATH);
 
         if (!empty($path_info)) {
-            $extension = pathinfo($path_info, PATHINFO_EXTENSION);
-            $extension = strtolower($extension);
-            $static_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'css', 'js', 'ico', 'woff', 'woff2', 'ttf', 'eot',];
+            $extension = Dj_App_File_Util::getExt($path_info);
+            $static_extensions = [ 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'css', 'js', 'ico', 'woff', 'woff2', 'ttf', 'eot', ];
 
             if (in_array($extension, $static_extensions, true)) {
                 http_response_code(404);
