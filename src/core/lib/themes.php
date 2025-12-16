@@ -54,16 +54,28 @@ class Dj_App_Themes {
     }
 
     /**
-    // checks the app.ini if it has 'theme' or 'theme_id' in [site], [theme] sections
+     * Get current theme based on config and filters
+     * Checks app.ini for 'theme' or 'theme_id' in [site], [theme] sections
+     *
+     * @param array $ctx Context with page info for conditional theme switching
      * @return string
      */
-    public function getCurrentTheme()
+    public function getCurrentTheme($ctx = [])
     {
         $options_obj = Dj_App_Options::getInstance();
         $current_theme = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme', 'default');
-
         $current_theme = $this->formatId($current_theme);
-        $current_theme = Dj_App_Hooks::applyFilter( 'app.themes.current_theme', $current_theme );
+
+        // Build context for filter if not provided
+        if (empty($ctx)) {
+            $page_obj = Dj_App_Page::getInstance();
+            $ctx = [
+                'page' => $page_obj->page,
+                'full_page' => $page_obj->full_page,
+            ];
+        }
+
+        $current_theme = Dj_App_Hooks::applyFilter('app.themes.current_theme', $current_theme, $ctx);
 
         return $current_theme;
     }
@@ -84,7 +96,7 @@ class Dj_App_Themes {
             $ctx['full_page'] = $page_obj->full_page;
 
             $site_section = Dj_App_Options::getInstance()->site;
-            $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme() : $inp_params['theme'];
+            $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme($ctx) : $inp_params['theme'];
             $current_theme = $this->formatId($current_theme);
             $this->current_theme = $current_theme;
             $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
@@ -219,6 +231,30 @@ class Dj_App_Themes {
         }
 
         $page_obj = Dj_App_Page::getInstance();
+
+        // Check if content already loaded by plugin (e.g., site_content)
+        $content = $page_obj->getContent();
+
+        if (!empty($content)) {
+            // Find template to wrap content
+            $full_page = $page_obj->get('full_page');
+            $page_fmt = $page_obj->formatFullPageSlug($full_page);
+
+            $template_ctx = [
+                'theme_dir' => $current_theme_dir,
+            ];
+
+            $template_result = $this->findTemplate($page_fmt, $template_ctx);
+
+            if (!empty($template_result['file'])) {
+                include $template_result['file'];
+            } else {
+                echo $content;
+            }
+
+            return;
+        }
+
         $options_obj = Dj_App_Options::getInstance();
 
         $pages_dir = $current_theme_dir . '/pages';
@@ -253,6 +289,7 @@ class Dj_App_Themes {
         $page_fmt = Dj_App_Hooks::applyFilter('app.themes.current_page', $page_fmt, $ctx);
         $page_fmt = $page_obj->formatFullPageSlug($page_fmt); // jic
 
+        // @todo allow filterable $pages_dir so we can use for multi-lang
         $page_file_candiates = [
             $file = $pages_dir . "/$page_fmt.php",
         ];
@@ -317,12 +354,127 @@ class Dj_App_Themes {
         $local_ctx['page'] = $page;
         $local_ctx['file'] = $file;
 
-        ob_start();
-        include_once $file;
-        $buff = ob_get_clean();
-        $buff = Dj_App_Hooks::applyFilter( 'app.page.content', $buff, $local_ctx );
+        // Determine file extension
+        $ext = Dj_App_File_Util::getExt($file);
+        $local_ctx['ext'] = $ext;
+
+        // Load content based on file type
+        if ($ext === 'php') {
+            ob_start();
+            include_once $file;
+            $buff = ob_get_clean();
+        } else {
+            $buff = file_get_contents($file);
+        }
+
+        // Delegate processing to plugins (e.g., markdown conversion)
+        $buff = Dj_App_Hooks::applyFilter('app.page.content', $buff, $local_ctx);
 
         echo $buff;
+    }
+
+    private $template_cache = [];
+
+    /**
+     * Find theme template for a page
+     *
+     * Priority order:
+     *   1. {templates_dir}/{page_fmt}.php (exact match)
+     *   2. {templates_dir}/{parent}.php (traverse up path hierarchy)
+     *   3. {templates_dir}/home.php (for home page)
+     *   4. {theme_dir}/index.php (fallback)
+     *
+     * Example: page_fmt = "services/web-monitoring/wordpress"
+     *   Checks: services/web-monitoring/wordpress.php
+     *           services/web-monitoring.php
+     *           services.php
+     *           index.php (fallback)
+     *
+     * @param string $page_fmt Page path (e.g., "contact" or "docs/intro"), empty for home
+     * @param array $ctx Context with theme_dir key
+     * @return array ['file' => path, 'ext' => extension] or empty array if none found
+     */
+    public function findTemplate($page_fmt, $ctx = [])
+    {
+        $theme_dir = empty($ctx['theme_dir']) ? $this->current_theme_dir : $ctx['theme_dir'];
+
+        if (empty($theme_dir)) {
+            return [];
+        }
+
+        $cache_key = $theme_dir . '|' . $page_fmt;
+
+        if (isset($this->template_cache[$cache_key])) {
+            return $this->template_cache[$cache_key];
+        }
+
+        $templates_dir = $theme_dir . '/templates';
+        $theme_index = $theme_dir . '/index.php';
+
+        // Cheap check first: if no templates dir, skip to fallback
+        if (!is_dir($templates_dir)) {
+            $result = [];
+
+            if (file_exists($theme_index)) {
+                $result = [
+                    'file' => $theme_index,
+                    'ext' => 'php',
+                ];
+            }
+
+            $this->template_cache[$cache_key] = $result;
+
+            return $result;
+        }
+
+        // Home page: check templates/home.php
+        $is_home = empty($page_fmt) || $page_fmt === '/';
+
+        if ($is_home) {
+            $home_template = $templates_dir . '/home.php';
+
+            if (file_exists($home_template)) {
+                $result = [
+                    'file' => $home_template,
+                    'ext' => 'php',
+                ];
+
+                $this->template_cache[$cache_key] = $result;
+
+                return $result;
+            }
+        } else {
+            // Traverse path hierarchy: exact match, then parent, grandparent, etc.
+            // e.g. services/web-monitoring/wordpress -> services/web-monitoring -> services
+            $check_path = $page_fmt;
+
+            while (!empty($check_path) && $check_path !== '.') {
+                $file_path = $templates_dir . '/' . $check_path . '.php';
+
+                if (file_exists($file_path)) {
+                    $result = [
+                        'file' => $file_path,
+                        'ext' => 'php',
+                    ];
+
+                    $this->template_cache[$cache_key] = $result;
+
+                    return $result;
+                }
+
+                $check_path = dirname($check_path);
+            }
+        }
+
+        // Fallback to theme index.php (required file - always exists)
+        $result = [
+            'file' => $theme_index,
+            'ext' => 'php',
+        ];
+
+        $this->template_cache[$cache_key] = $result;
+
+        return $result;
     }
 
     /**
