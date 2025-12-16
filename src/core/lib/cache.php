@@ -82,6 +82,59 @@ class Dj_App_Cache
     }
 
     /**
+     * Delete all cache files in a directory (e.g., all plugin cache)
+     * Dj_App_Cache::removeAll();
+     *
+     * @param array $params Parameters (plugin, etc)
+     * @return bool
+     */
+    public static function removeAll($params = [])
+    {
+        $cache_dir = self::getCacheDir($params);
+
+        if (empty($cache_dir)) {
+            return false;
+        }
+
+        if (!is_dir($cache_dir)) {
+            return true;
+        }
+
+        $ctx = ['params' => $params];
+        Dj_App_Hooks::doAction('app.cache.pre_remove_all', $ctx);
+
+        $scan_result = scandir($cache_dir);
+        $exclude_items = [ '.', '..', ];
+        $files = array_diff($scan_result, $exclude_items);
+
+        $deleted_count = 0;
+
+        foreach ($files as $file) {
+            $file_path = $cache_dir . '/' . $file;
+
+            if (!is_file($file_path)) {
+                continue;
+            }
+
+            $ext = pathinfo($file, PATHINFO_EXTENSION);
+
+            if ($ext !== 'php') {
+                continue;
+            }
+
+            $delete_result = self::delete($file_path);
+
+            if ($delete_result) {
+                $deleted_count++;
+            }
+        }
+
+        Dj_App_Hooks::doAction('app.cache.post_remove_all', $ctx);
+
+        return true;
+    }
+
+    /**
      * Get cache file path from key
      * Dj_App_Cache::getCacheFile();
      *
