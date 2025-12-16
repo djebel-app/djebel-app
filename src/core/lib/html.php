@@ -254,10 +254,11 @@ class Djebel_App_HTML {
 	 * Renders a page with content - ONE method for all cases
 	 * Djebel_App_HTML::renderPage($content, $title, $options);
 	 */
-	public static function renderPage($content, $title = 'Djebel CMS', $options = []) {
+	public static function renderPage($content, $title = '', $options = []) {
 		// Auto-detect error pages and set appropriate styling
+        $title = empty($title) ? Dj_App::NAME : $title;
 		$is_error_page = !empty($options['status_code']) && $options['status_code'] >= 400;
-		
+
 		if ($is_error_page) {
 			$bg_gradient = empty($options['bg_gradient']) ? 'linear-gradient(135deg, #008080 0%, #20b2aa 100%)' : $options['bg_gradient'];
 			$container_class = empty($options['container_class']) ? 'djebel-app-error-container' : $options['container_class'];

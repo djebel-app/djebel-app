@@ -432,7 +432,7 @@ class Dj_App_Bootstrap {
             'status_code' => 500,
         ];
         
-        Djebel_App_HTML::renderPage($content, 'Error - Djebel CMS', $options);
+        Djebel_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
     }
 
     /**
@@ -440,8 +440,12 @@ class Dj_App_Bootstrap {
      */
     public static function handleFatalError() {
         $error = error_get_last();
+
+        if (empty($error['type']) || !is_array($error)) {
+            return;
+        }
         
-        if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
             $is_dev = Dj_App_Config::cfg('app.debug', false);
             
             $content = '<h1 class="djebel-app-error-title">Fatal Error</h1>';
@@ -460,7 +464,7 @@ class Dj_App_Bootstrap {
                 'status_code' => 500,
             ];
             
-            Djebel_App_HTML::renderPage($content, 'Fatal Error - Djebel CMS', $options);
+            Djebel_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
         }
     }
 
