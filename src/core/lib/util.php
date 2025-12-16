@@ -494,7 +494,7 @@ class Dj_App_Util {
             return '';
         }
 
-        $dir .= '/cache';
+        $dir .= '/data/cache';
 
         $ctx = [];
         $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_dir', $dir, $ctx);
@@ -522,7 +522,7 @@ class Dj_App_Util {
             return '';
         }
 
-        $dir .= '/tmp';
+        $dir .= '/data/tmp';
 
         $ctx = [];
         $dir = Dj_App_Hooks::applyFilter('app.config.djebel_temp_dir', $dir, $ctx);
