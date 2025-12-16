@@ -116,7 +116,7 @@ class Dj_App_Cache
                 continue;
             }
 
-            $ext = pathinfo($file, PATHINFO_EXTENSION);
+            $ext = Dj_App_File_Util::getExt($file);
 
             if ($ext !== 'php') {
                 continue;
