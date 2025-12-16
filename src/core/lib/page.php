@@ -392,6 +392,16 @@ class Dj_App_Page {
     }
 
     /**
+     * Clear all page data
+     * @return void
+     */
+    public function clear()
+    {
+        $this->data = [];
+        $this->has_content = false;
+    }
+
+    /**
      * Get page content (set by plugins like site_content)
      * @return string
      */
