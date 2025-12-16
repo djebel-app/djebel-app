@@ -178,7 +178,7 @@ class Dj_App_Cache
             return '';
         }
 
-        $dir .= '/cache';
+        $dir .= '/data/cache';
 
         $ctx = ['params' => $params];
         $dir = Dj_App_Hooks::applyFilter('app.config.djebel_cache_dir', $dir, $ctx);
