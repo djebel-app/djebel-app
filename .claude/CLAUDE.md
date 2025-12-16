@@ -554,6 +554,26 @@ public function __toString() {
     - ❌ WRONG: Build `$candidates[]` array, then `foreach ($candidates)`
     - ✅ CORRECT: Check `file_exists()` immediately in the loop, return on first match
 
+28. **NEVER use closures** - Always use class methods for callbacks:
+    - ❌ WRONG: `Dj_App_Hooks::addFilter('hook', function($v) { return $v; });`
+    - ❌ WRONG: `array_filter($items, fn($x) => $x !== 'php');`
+    - ❌ WRONG: `array_map('trim', $items);` - use `Dj_App_String_Util::trim($items)` instead!
+    - ✅ CORRECT: `Dj_App_Hooks::addFilter('hook', [ $obj, 'methodName', ]);`
+    - ✅ CORRECT: `$items = Dj_App_String_Util::trim($items);` - handles arrays natively!
+    - Closures are hard to debug, test, and audit. Class methods are traceable.
+    - Always check if framework utilities handle arrays before using array_map/array_filter.
+
+29. **Loose plugin coupling** - Plugins should NOT know about each other tightly:
+    - ❌ WRONG: `Dj_App_Hooks::applyFilter('app.plugins.markdown.convert_markdown', $content);`
+    - ✅ CORRECT: `Dj_App_Hooks::applyFilter('app.page.content', $content, $ctx);`
+    - Use generic filters with context (e.g., `$ctx['ext']`). Any plugin can hook in and check context.
+    - This allows plugins to work independently - markdown plugin hooks into `app.page.content` and checks `$ctx['ext'] === 'md'`
+
+30. **Don't modify files without authorization** - ALWAYS ask before touching files outside the current task scope:
+    - If asked to add feature X to plugin A, don't touch plugin B
+    - Ask: "Should I update plugin B to support this?"
+    - Core files, other plugins, and shared libraries need explicit permission
+
 ### Target: 1,000,000 Sites
 
 When code runs on 1,000,000 sites:
