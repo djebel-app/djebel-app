@@ -593,12 +593,11 @@ class Dj_App_Options implements ArrayAccess, Countable {
         $bracket_pos = strpos($key, '[');
 
         if ($bracket_pos !== false) {
-            // Handle slashes in bracket keys first
-            $has_slash = strpos($key, '/');
-
-            if ($has_slash !== false) {
-                $key = str_replace('/', '__SLASH__', $key);
-            }
+            // Escape special chars only in bracket content (not the prefix)
+            $key_prefix = substr($key, 0, $bracket_pos);
+            $bracket_content = substr($key, $bracket_pos);
+            $bracket_content = $this->escapeKey($bracket_content);
+            $key = $key_prefix . $bracket_content;
 
             // Check for auto-increment: var[]
             $empty_bracket_pos = strpos($key, '[]');
@@ -636,11 +635,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
             if (count($keys) >= 2) {
                 foreach ($keys as $i => $k) {
-                    if (strpos($k, '__SLASH__') !== false) {
-                        $keys[$i] = str_replace('__SLASH__', '/', $k);
-                    } else {
-                        $keys[$i] = Dj_App_String_Util::formatKey($k);
-                    }
+                    $keys[$i] = $this->unescapeKey($k);
                 }
 
                 // Prepend section to keys if present
@@ -690,6 +685,99 @@ class Dj_App_Options implements ArrayAccess, Countable {
         }
 
         return $data;
+    }
+
+    /**
+     * Escape special characters in key for safe parsing
+     * Encodes chars that would be stripped by sanitization
+     * @param string $key
+     * @return string
+     */
+    private function escapeKey($key)
+    {
+        // Quick check - skip if no special chars present
+        $special_chars = '/#^()+\\$*?.{}';
+        $has_special = strpbrk($key, $special_chars) !== false;
+
+        if (!$has_special) {
+            return $key;
+        }
+
+        $escape_map = [
+            '/' => '__SLASH__',
+            '#' => '__HASH__',
+            '^' => '__CARET__',
+            '(' => '__LPAREN__',
+            ')' => '__RPAREN__',
+            '+' => '__PLUS__',
+            '\\' => '__BSLASH__',
+            '$' => '__DOLLAR__',
+            '*' => '__STAR__',
+            '?' => '__QUEST__',
+            '.' => '__DOT__',
+            '{' => '__LBRACE__',
+            '}' => '__RBRACE__',
+        ];
+
+        foreach ($escape_map as $char => $placeholder) {
+            $has_char = strpos($key, $char) !== false;
+
+            if (!$has_char) {
+                continue;
+            }
+
+            $key = str_replace($char, $placeholder, $key);
+        }
+
+        return $key;
+    }
+
+    /**
+     * Unescape encoded special characters in key
+     * Reverses encoding done during key parsing
+     * @param string $key
+     * @return string
+     */
+    private function unescapeKey($key)
+    {
+        // Quick length check - shortest placeholder is __PLUS__ (8 chars)
+        $key_len = strlen($key);
+
+        if ($key_len < 8) {
+            $key = Dj_App_String_Util::formatKey($key);
+
+            return $key;
+        }
+
+        $has_encoded = strpos($key, '__') !== false;
+
+        if (!$has_encoded) {
+            $key = Dj_App_String_Util::formatKey($key);
+
+            return $key;
+        }
+
+        $restore_map = [
+            '__SLASH__' => '/',
+            '__HASH__' => '#',
+            '__CARET__' => '^',
+            '__LPAREN__' => '(',
+            '__RPAREN__' => ')',
+            '__PLUS__' => '+',
+            '__BSLASH__' => '\\',
+            '__DOLLAR__' => '$',
+            '__STAR__' => '*',
+            '__QUEST__' => '?',
+            '__DOT__' => '.',
+            '__LBRACE__' => '{',
+            '__RBRACE__' => '}',
+        ];
+
+        $restore_keys = array_keys($restore_map);
+        $restore_vals = array_values($restore_map);
+        $key = str_replace($restore_keys, $restore_vals, $key);
+
+        return $key;
     }
 
     /**
