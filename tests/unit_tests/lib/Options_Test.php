@@ -835,6 +835,129 @@ EOT;
         $this->assertEquals('Test Site', $site_section->site_title);
     }
 
+    public function testRedirectPluginFormat()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Test redirect plugin INI format with pipe separator and spaces
+        $options_buff = <<<EOT
+[plugins]
+djebel-redirect.url_match[/old-page] = "/new-page"
+djebel-redirect.url_match[/legacy] = "/modern|code=302"
+djebel-redirect.url_match[/temp] = "/other|code=302&log=1"
+djebel-redirect.url_match[/spaced] = "  /trimmed  "
+djebel-redirect.url_starts_with[/docs/v1/] = "/docs/latest/"
+djebel-redirect.url_contains[/old-section/] = "/new-section/"
+djebel-redirect.url_regex[#^/blog/(\d+)#] = "/posts/\$1|code=301"
+EOT;
+
+        $cfg = $options_obj->parseBuffer($options_buff);
+        $options_obj->setData($cfg);
+
+        // Test basic structure
+        $this->assertArrayHasKey('plugins', $cfg);
+        $this->assertArrayHasKey('djebel_redirect', $cfg['plugins']);
+
+        // Test url_match rules
+        $url_match = $cfg['plugins']['djebel_redirect']['url_match'];
+        $this->assertArrayHasKey('/old-page', $url_match);
+        $this->assertArrayHasKey('/legacy', $url_match);
+        $this->assertArrayHasKey('/temp', $url_match);
+        $this->assertArrayHasKey('/spaced', $url_match);
+
+        // Test simple redirect (no pipe)
+        $this->assertEquals('/new-page', $url_match['/old-page']);
+
+        // Test redirect with code (pipe format)
+        $this->assertEquals('/modern|code=302', $url_match['/legacy']);
+
+        // Test redirect with multiple params
+        $this->assertEquals('/other|code=302&log=1', $url_match['/temp']);
+
+        // Test spaces around value (parser trims automatically)
+        $this->assertEquals('/trimmed', $url_match['/spaced']);
+
+        // Test get() method access
+        $url_match_via_get = $options_obj->get('plugins.djebel-redirect.url_match', []);
+        $this->assertIsArray($url_match_via_get);
+        $this->assertArrayHasKey('/old-page', $url_match_via_get);
+        $this->assertArrayHasKey('/legacy', $url_match_via_get);
+
+        // Test parsing pipe format (like redirect plugin does)
+        $target = $url_match_via_get['/legacy'];
+        $has_pipe = strpos($target, '|') !== false;
+        $this->assertTrue($has_pipe, 'Should detect pipe in value');
+
+        $parts = explode('|', $target, 2);
+        $this->assertEquals('/modern', $parts[0]);
+        $this->assertEquals('code=302', $parts[1]);
+
+        // Parse params
+        parse_str($parts[1], $params);
+        $this->assertEquals('302', $params['code']);
+
+        // Test url_starts_with
+        $url_starts = $options_obj->get('plugins.djebel-redirect.url_starts_with', []);
+        $this->assertArrayHasKey('/docs/v1/', $url_starts);
+        $this->assertEquals('/docs/latest/', $url_starts['/docs/v1/']);
+
+        // Test url_regex - note: complex regex patterns may be mangled by INI parser
+        // For complex regex, consider storing pattern in a different format
+        $url_regex = $options_obj->get('plugins.djebel-redirect.url_regex', []);
+        $this->assertNotEmpty($url_regex, 'url_regex should have entries');
+
+        // Verify regex pattern was preserved
+        $this->assertArrayHasKey('#^/blog/(\d+)#', $url_regex);
+        $this->assertEquals('/posts/$1|code=301', $url_regex['#^/blog/(\d+)#']);
+    }
+
+    public function testRegexPatternEscaping()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // Test various regex patterns with special chars: . * ? ( ) + ^ $ / \ #
+        $options_buff = <<<'EOT'
+[redirect]
+; Dot and star
+url_regex[#^/files/.*\.pdf$#] = "/downloads/$0"
+; Non-greedy quantifier
+url_regex[#^/api/(.*?)/list#] = "/v2/api/$1/items"
+; Question mark optional
+url_regex[#^/pages?/(\d+)#] = "/page/$1"
+; Plus quantifier
+url_regex[#^/tags/(\w+)#] = "/category/$1"
+; Complex pattern
+url_regex[#^/archive/(\d{4})/(\d{2})/?$#] = "/blog/$1-$2"
+EOT;
+
+        $cfg = $options_obj->parseBuffer($options_buff);
+        $options_obj->setData($cfg);
+
+        $url_regex = $options_obj->get('redirect.url_regex', []);
+
+        // Test dot and star preserved
+        $this->assertArrayHasKey('#^/files/.*\.pdf$#', $url_regex);
+        $this->assertEquals('/downloads/$0', $url_regex['#^/files/.*\.pdf$#']);
+
+        // Test non-greedy (.*?) preserved
+        $this->assertArrayHasKey('#^/api/(.*?)/list#', $url_regex);
+        $this->assertEquals('/v2/api/$1/items', $url_regex['#^/api/(.*?)/list#']);
+
+        // Test question mark preserved
+        $this->assertArrayHasKey('#^/pages?/(\d+)#', $url_regex);
+        $this->assertEquals('/page/$1', $url_regex['#^/pages?/(\d+)#']);
+
+        // Test plus quantifier preserved
+        $this->assertArrayHasKey('#^/tags/(\w+)#', $url_regex);
+        $this->assertEquals('/category/$1', $url_regex['#^/tags/(\w+)#']);
+
+        // Test complex pattern with multiple special chars
+        $this->assertArrayHasKey('#^/archive/(\d{4})/(\d{2})/?$#', $url_regex);
+        $this->assertEquals('/blog/$1-$2', $url_regex['#^/archive/(\d{4})/(\d{2})/?$#']);
+    }
+
     public function testCommaSeparatedFallbackKeys()
     {
         $ini_content = <<<EOT
