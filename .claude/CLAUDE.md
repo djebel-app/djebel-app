@@ -315,6 +315,16 @@ if ($condition){
     - File operations follow natural flow: file → data → options
     - The last parameter should be an optional array for flexibility
 
+11c. **NEVER pass default parameter values** - If a function has a default, don't pass it:
+    - ❌ WRONG: `$hash_id = $this->parseHashId([]);` (passing default value)
+    - ❌ WRONG: `$result = $this->process('', []);` (passing empty defaults)
+    - ✅ CORRECT: `$hash_id = $this->parseHashId();` (use the default)
+    - ✅ CORRECT: `$result = $this->process();` (use the defaults)
+    - If `$params = []` is the default, calling `func([])` is redundant waste
+    - Only pass a value when it differs from the default
+    - **Methods MUST have smart defaults** - design functions so callers only pass core/essential arguments
+    - Optional params should have sensible defaults that work for 90% of cases
+
 12. **Prefer str_replace over regex** - Use `str_replace()` instead of `preg_replace()` for simple character replacements:
     - ❌ WRONG: `preg_replace('#[\s:\.]+#si', '/', $str)` (regex overhead)
     - ✅ CORRECT: `str_replace([' ', "\t", "\n", "\r", ':', '.'], '/', $str)` (faster)
