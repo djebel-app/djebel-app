@@ -533,10 +533,15 @@ public function __toString() {
     - ✅ CORRECT: Always return `[]` (empty array = failure, populated = success)
     - ✅ CORRECT: Always return `Dj_App_Result` object
 
-24. **Use existing utilities** - Don't create new methods when utilities exist:
+24. **ALWAYS reuse existing code** - NEVER create new methods when utilities exist:
     - ❌ WRONG: Creating `normalizeExtension()` to trim dots
+    - ❌ WRONG: Creating wrapper `isDisabled()` method that just calls `Dj_App_Util::isDisabled()`
+    - ❌ WRONG: Creating local helper when core lib has the same functionality
     - ✅ CORRECT: `Dj_App_String_Util::trim($extensions, '.')` - already handles arrays + extra chars
-    - Always check `lib/string_util.php`, `lib/util.php` before creating new helpers
+    - ✅ CORRECT: `Dj_App_Util::isDisabled($val)` - checks 0, false, 'no', 'off', 'disabled'
+    - ✅ CORRECT: `Dj_App_Util::isEnabled($val)` - checks 1, true, 'yes', 'on', 'enabled'
+    - **BEFORE writing ANY new method**, search `src/core/lib/*` files first!
+    - Call utilities directly - NO wrapper methods!
 
 25. **Required files don't need file_exists()** - Skip checks for required files:
     ```php
