@@ -788,8 +788,129 @@ class Hooks_Test extends TestCase {
             Dj_App_Hooks::formatHookName('my@@@hook###test'));
     }
 
-    public function sampleAction()
-    {
+    public function testIsHookBasicMatching() {
+        // Test exact match
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('my_hook', 'my_hook'));
+
+        // Test non-matching hooks
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core/init', 'app/core/shutdown'));
+        $this->assertFalse(Dj_App_Hooks::isHook('my_hook', 'other_hook'));
+    }
+
+    public function testIsHookDifferentFormats() {
+        // Test that different formats normalize to the same hook
+        // Dots become slashes
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', 'app.core.init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app.core.init', 'app/core/init'));
+
+        // Colons become slashes
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', 'app:core:init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app:core:init', 'app.core.init'));
+
+        // Spaces become slashes
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', 'app core init'));
+
+        // Mixed formats
+        $this->assertTrue(Dj_App_Hooks::isHook('app.core:init', 'app/core/init'));
+    }
+
+    public function testIsHookCaseInsensitive() {
+        // Test case insensitivity
+        $this->assertTrue(Dj_App_Hooks::isHook('APP/CORE/INIT', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', 'APP/CORE/INIT'));
+        $this->assertTrue(Dj_App_Hooks::isHook('App.Core.Init', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('MY_HOOK', 'my_hook'));
+    }
+
+    public function testIsHookWithPluralization() {
+        // Test pluralization normalization: plugins -> plugin, themes -> theme
+        $this->assertTrue(Dj_App_Hooks::isHook('app/plugins/test', 'app.plugin.test'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app.plugin.test', 'app/plugins/test'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app/themes/setup', 'app.theme.setup'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app.pages.render', 'app/page/render'));
+    }
+
+    public function testIsHookEmptyValues() {
+        // Test empty hook returns false
+        $this->assertFalse(Dj_App_Hooks::isHook('', 'app/core/init'));
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core/init', ''));
+        $this->assertFalse(Dj_App_Hooks::isHook('', ''));
+
+        // Test null values return false
+        $this->assertFalse(Dj_App_Hooks::isHook(null, 'app/core/init'));
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core/init', null));
+        $this->assertFalse(Dj_App_Hooks::isHook(null, null));
+    }
+
+    public function testIsHookWithLeadingTrailingJunk() {
+        // Test that leading/trailing junk is stripped before comparison
+        $this->assertTrue(Dj_App_Hooks::isHook('  app/core/init  ', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', '___app/core/init___'));
+        $this->assertTrue(Dj_App_Hooks::isHook('123app/core/init456', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('---app/core/init---', 'app/core/init'));
+    }
+
+    public function testIsHookWithSpecialCharacters() {
+        // Test hooks with dashes (converted to underscores)
+        $this->assertTrue(Dj_App_Hooks::isHook('my-hook-name', 'my_hook_name'));
+        $this->assertTrue(Dj_App_Hooks::isHook('app.plugins.my-plugin.action', 'app/plugin/my_plugin/action'));
+    }
+
+    public function testIsHookRealWorldExamples() {
+        // Test real-world hook comparison scenarios (like the original use case)
+        $hook = 'qs_app/chats/messages/action/insert';
+        $expected = 'qs_app/chats/messages/action/insert';
+
+        $this->assertTrue(Dj_App_Hooks::isHook($hook, $expected));
+
+        // Test with dot notation expected hook
+        $this->assertTrue(Dj_App_Hooks::isHook($hook, 'qs_app.chats.messages.action.insert'));
+
+        // Test with different hooks
+        $this->assertFalse(Dj_App_Hooks::isHook($hook, 'qs_app/chats/messages/action/update'));
+        $this->assertFalse(Dj_App_Hooks::isHook($hook, 'qs_app/chats/messages/action/delete'));
+
+        // Test plugin hooks
+        $this->assertTrue(Dj_App_Hooks::isHook(
+            'app/plugin/static_content/post_loaded',
+            'app.plugins.static-content.post-loaded'
+        ));
+
+        // Test theme hooks
+        $this->assertTrue(Dj_App_Hooks::isHook(
+            'app/theme/my_theme/setup',
+            'app.themes.my-theme.setup'
+        ));
+    }
+
+    public function testIsHookCallbackScenario() {
+        // Simulate the callback scenario where $hook is passed as parameter
+        $callback_hook = 'app/plugin/test/action';
+
+        // Check if we're in the right hook
+        $this->assertTrue(Dj_App_Hooks::isHook($callback_hook, 'app.plugin.test.action'));
+
+        // Check we're not in a different hook
+        $this->assertFalse(Dj_App_Hooks::isHook($callback_hook, 'app.plugin.other.action'));
+    }
+
+    public function testIsHookEdgeCases() {
+        // Test hooks that are similar but different
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core', 'app/core/init'));
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core/init', 'app/core'));
+        $this->assertFalse(Dj_App_Hooks::isHook('app/core/init/extra', 'app/core/init'));
+
+        // Test single word hooks
+        $this->assertTrue(Dj_App_Hooks::isHook('init', 'init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('INIT', 'init'));
+        $this->assertFalse(Dj_App_Hooks::isHook('init', 'shutdown'));
+
+        // Test numeric components
+        $this->assertTrue(Dj_App_Hooks::isHook('app/v2/api', 'app.v2.api'));
+    }
+
+    public function sampleAction() {
 
     }
 

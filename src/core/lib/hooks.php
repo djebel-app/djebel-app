@@ -112,12 +112,48 @@ class Dj_App_Hooks {
 
     /**
      * Check if a hook (action or filter) has been registered.
-     * 
+     *
      * @param string $hook_name The hook name
      * @return bool True if the hook has been registered (as action or filter)
      */
     public static function hasHook($hook_name) {
         return self::hasAction($hook_name) || self::hasFilter($hook_name);
+    }
+
+    /**
+     * Check if a hook matches a given hook name after formatting both
+     *
+     * This is useful for comparing hooks in callbacks where you need to verify
+     * the current hook matches an expected hook name.
+     *
+     * Example:
+     * ```php
+     * // Instead of:
+     * if ($hook != Dj_App_Hooks::formatHookName('qs_app/chats/messages/action/insert')) {
+     *     return;
+     * }
+     *
+     * // Use:
+     * if (!Dj_App_Hooks::isHook($hook, 'qs_app/chats/messages/action/insert')) {
+     *     return;
+     * }
+     * ```
+     *
+     * @param string $hook The hook to check (e.g., the current hook passed to callback)
+     * @param string $expected_hook The expected hook name to compare against
+     * @return bool True if the hooks match after formatting
+     */
+    public static function isHook($hook, $expected_hook) {
+        if (empty($hook) || empty($expected_hook)) {
+            return false;
+        }
+
+        $hook_fmt = self::formatHookName($hook);
+        $expected_hook_fmt = self::formatHookName($expected_hook);
+
+        $is_match = $hook_fmt === $expected_hook_fmt;
+
+        return $is_match;
     }
 
     /**
