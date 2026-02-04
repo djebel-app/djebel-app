@@ -104,10 +104,13 @@ class Dj_App_Request {
 
         // We want to skip the web path and then get the segments
         $trimmed_url = $req_url;
-        $prefix_position = strpos($trimmed_url, $web_path);
-        
-        if ($prefix_position !== false) {
-            $trimmed_url = substr($req_url, $prefix_position + strlen($web_path));
+
+        if (!empty($web_path)) {
+            $prefix_position = strpos($trimmed_url, $web_path);
+
+            if ($prefix_position !== false) {
+                $trimmed_url = substr($req_url, $prefix_position + strlen($web_path));
+            }
         }
 
         $trimmed_url = Dj_App_Util::removeSlash($trimmed_url);
