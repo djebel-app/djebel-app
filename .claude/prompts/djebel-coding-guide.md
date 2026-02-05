@@ -24,10 +24,28 @@ djebel/
 │   │   ├── plugins/            # Site plugins (MOST functionality)
 │   │   ├── themes/             # Site themes
 │   │   └── data/               # Public markdown files
-│   └── .ht_djebel/             # Private site data
+│   └── .ht_djebel/             # Private site data (auto-detected, see below)
 └── tests/                      # PHPUnit tests
     └── unit_tests/lib/         # Unit tests for core lib
 ```
+
+### Private Directory (`.ht_djebel`)
+
+The private directory stores configuration, logs, and data outside the public web root.
+
+**Contains:** `conf/` (app.ini, .env), `logs/`, `data/`, `cache/`
+
+**Location detection** (`Dj_App_Util::getCorePrivateDir()`):
+1. `DJEBEL_APP_PRIVATE_DIR` env var (explicit override)
+2. Auto-scan from `SCRIPT_FILENAME` dir upward (handles symlinks):
+   - Script dir itself, one level up (site root), two levels up
+3. Fallback: `getSiteRootDir()/.ht_djebel`
+
+**Configuration:**
+- Dir name configurable via `DJEBEL_APP_CORE_PRIVATE_DIR_NAME` env var (default: `.ht_djebel`)
+- Paths with `$HOME`, `${HOME}`, `~/` are resolved via `Dj_App_File_Util::resolvePath()`
+- Symlinks and relative paths are resolved via `realpath()`
+- Filter hook: `app.config.djebel_private_dir`
 
 ### Architecture Philosophy
 
