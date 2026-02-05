@@ -432,11 +432,10 @@ class Dj_App_Util {
     }
 
     /**
-     * This folder is supposed to reside outside of the public html folder for security reasons.
-     * it can have these folders
-     * .ht_djebel/conf
-     * .ht_djebel/logs
-     * .ht_djebel/data
+     * Private dir outside public web root. Contains: conf/, logs/, data/, cache/
+     * Detection: env DJEBEL_APP_PRIVATE_DIR > auto-scan from SCRIPT_FILENAME up > fallback to getSiteRootDir()
+     * Dir name configurable via env DJEBEL_APP_CORE_PRIVATE_DIR_NAME (default: .ht_djebel)
+     * Paths resolved via Dj_App_File_Util::resolvePath() ($HOME, ~/, symlinks, relative)
      * Dj_App_Util::getCorePrivateDir();
      * @param array $params
      * @return string
