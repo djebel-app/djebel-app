@@ -125,9 +125,14 @@ if ($condition){
 
 ### Variable Naming Standards
 
-4. **Use descriptive variable names from examples**:
+4. **Use descriptive variable names that reflect what the variable holds**:
+   - ✅ CORRECT: `$private_dir` for a private directory path
    - ✅ CORRECT: `$matches` for preg_match results
-   - ❌ WRONG: `$m`, `$result`, or other shortcuts
+   - ✅ CORRECT: `$redirect_url` for a URL used in a redirect
+   - ❌ WRONG: `$found_dir` - too generic, doesn't say what was found
+   - ❌ WRONG: `$m`, `$result`, `$data`, `$tmp` - vague, non-descriptive
+   - ❌ WRONG: `$found`, `$value`, `$item` - generic names that don't convey meaning
+   - Name the variable after **what it represents**, not how it was obtained
    - When shown an example, use EXACTLY that variable name
 
 5. **Consistent naming**: Follow existing codebase patterns religiously
@@ -503,8 +508,11 @@ public function __toString() {
 21. **One method, not variants** - Never create `doSomething()` AND `doSomethingWithFilters()`. One clear, performant method:
     - ❌ WRONG: `findTemplate()` + `findTemplateWithFilters()`
     - ❌ WRONG: `loadContent()` + `loadContentCached()`
+    - ❌ WRONG: Creating `detectPrivateBaseDir()` when `getCorePrivateDir()` already exists and can be enhanced
     - ✅ CORRECT: One method that handles all cases efficiently
+    - ✅ CORRECT: Enhance the existing method with the new logic instead of creating a helper
     - If filters/options needed, pass as parameter - don't duplicate methods
+    - **ALWAYS flag partially-done functions** - if an existing function already does 80% of what's needed, tell the user and enhance it instead of creating a new one
 
 22. **Cheap checks first, lazy expensive operations** - Order matters for performance:
     ```php
@@ -537,11 +545,15 @@ public function __toString() {
     - ❌ WRONG: Creating `normalizeExtension()` to trim dots
     - ❌ WRONG: Creating wrapper `isDisabled()` method that just calls `Dj_App_Util::isDisabled()`
     - ❌ WRONG: Creating local helper when core lib has the same functionality
+    - ❌ WRONG: Creating a new function when an existing one can be enhanced with a few lines
     - ✅ CORRECT: `Dj_App_String_Util::trim($extensions, '.')` - already handles arrays + extra chars
     - ✅ CORRECT: `Dj_App_Util::isDisabled($val)` - checks 0, false, 'no', 'off', 'disabled'
     - ✅ CORRECT: `Dj_App_Util::isEnabled($val)` - checks 1, true, 'yes', 'on', 'enabled'
+    - ✅ CORRECT: Folding scan logic into `getCorePrivateDir()` instead of creating `detectPrivateBaseDir()`
     - **BEFORE writing ANY new method**, search `src/core/lib/*` files first!
+    - **BEFORE creating a new function**, check if an existing function already partially does the job — enhance it instead
     - Call utilities directly - NO wrapper methods!
+    - Goal: LEAST possible code, secure and fast
 
 25. **Required files don't need file_exists()** - Skip checks for required files:
     ```php
