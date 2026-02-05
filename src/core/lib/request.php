@@ -771,6 +771,7 @@ class Dj_App_Request {
 CLEAR_AND_REDIRECT_HTML;
         } else {
             $redir_code = 302;
+            header("X-Djebel-Redirect: $url");
             header("Location: $url", 302, $redir_code);
         }
 
