@@ -355,6 +355,50 @@ class Dj_App_File_Util {
 
         return $basename;
     }
+    /**
+     * Resolve home directory placeholders in a path
+     * Supports $HOME, ${HOME}, and ~/
+     * Returns the path with placeholders replaced by the actual home directory
+     *
+     * Dj_App_File_Util::resolvePath('$HOME/site/htdocs')
+     * Dj_App_File_Util::resolvePath('${HOME}/site/htdocs')
+     * Dj_App_File_Util::resolvePath('~/site/htdocs')
+     *
+     * @param string $path
+     * @return string Resolved path (unchanged if no placeholders or HOME not set)
+     */
+    public static function resolvePath($path) {
+        if (empty($path)) {
+            return '';
+        }
+
+        // Normalize ~/ to $HOME/ so one str_replace handles all cases
+        if (strpos($path, '~/') === 0) {
+            $path = '$HOME' . substr($path, 1);
+        }
+
+        // Expand $HOME and ${HOME} placeholders
+        if (strpos($path, '$') !== false) {
+            $home_dir = getenv('HOME');
+
+            if (!empty($home_dir)) {
+                $path = str_replace([ '${HOME}', '$HOME', ], $home_dir, $path);
+            }
+        }
+
+        // Only resolve if relative path or symlink (skip for absolute non-symlinks)
+        $path_first_char = substr($path, 0, 1);
+
+        if ($path_first_char !== '/' || is_link($path)) {
+            $resolved_path = realpath($path);
+
+            if (!empty($resolved_path)) {
+                return $resolved_path;
+            }
+        }
+
+        return $path;
+    }
 }
 
 class Dj_App_File_Util_Exception extends Dj_App_Exception {}
