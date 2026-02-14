@@ -161,6 +161,16 @@ $req_obj = Dj_App_Request::getInstance();
 try {
     $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
     $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
+
+    // No theme configured in options = don't load theme
+    if ($load_theme) {
+        $theme_id = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme');
+
+        if (empty($theme_id)) {
+            $load_theme = false;
+        }
+    }
+
     $load_theme = Dj_App_Hooks::applyFilter('app.core.theme.load_theme', $load_theme);
 
     if ($load_theme) {
@@ -168,7 +178,7 @@ try {
         $themes_obj = Dj_App_Themes::getInstance();
         $themes_obj->installHooks();
         $themes_obj->loadTheme();
-    } elseif (0) {
+    } else {
         ob_start();
         Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
         Dj_App_Hooks::doAction( 'app.page.content.render' );
