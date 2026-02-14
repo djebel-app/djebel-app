@@ -63,7 +63,7 @@ class Dj_App_Themes {
     public function getCurrentTheme($ctx = [])
     {
         $options_obj = Dj_App_Options::getInstance();
-        $current_theme = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme', 'default');
+        $current_theme = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme');
         $current_theme = $this->formatId($current_theme);
 
         // Build context for filter if not provided
