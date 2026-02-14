@@ -432,7 +432,9 @@ class Dj_App_Util {
     }
 
     /**
-     * Private dir outside public web root. Contains: conf/, logs/, data/, cache/
+     * Private djebel dir [e.g. .ht_djebel] for config, logs, data, cache. Can be in doc root but recommended outside.
+     * Example: /home/user/mysite/.ht_djebel/ (contains conf/, logs/, data/, cache/)
+     * On dev can be at same level as public/ e.g. /mysite/public/ and /mysite/.ht_djebel/
      * Detection: env DJEBEL_APP_PRIVATE_DIR > auto-scan from SCRIPT_FILENAME up > fallback to getSiteRootDir()
      * Dir name configurable via env DJEBEL_APP_CORE_PRIVATE_DIR_NAME (default: .ht_djebel)
      * Paths resolved via Dj_App_File_Util::resolvePath() ($HOME, ~/, symlinks, relative)
