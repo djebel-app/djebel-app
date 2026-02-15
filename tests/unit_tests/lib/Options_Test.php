@@ -1020,39 +1020,39 @@ EOT;
 
         // Enabled values should match
         putenv('DJ_TEST_DEV_ENV=1');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEquals('0', $result, 'DEV_ENV=1 should match (enabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         putenv('DJ_TEST_DEV_ENV=true');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEquals('0', $result, 'DEV_ENV=true should match (enabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         putenv('DJ_TEST_DEV_ENV=yes');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEquals('0', $result, 'DEV_ENV=yes should match (enabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         // Disabled values should NOT match
         putenv('DJ_TEST_DEV_ENV=0');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEmpty($result, 'DEV_ENV=0 should not match (disabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         putenv('DJ_TEST_DEV_ENV=false');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEmpty($result, 'DEV_ENV=false should not match (disabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         putenv('DJ_TEST_DEV_ENV=no');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEmpty($result, 'DEV_ENV=no should not match (disabled)');
         putenv('DJ_TEST_DEV_ENV');
 
         // Unset env var should NOT match
         putenv('DJ_TEST_DEV_ENV');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV:0');
         $this->assertEmpty($result, 'Unset env var should not match');
     }
 
@@ -1064,11 +1064,11 @@ EOT;
         putenv('DJ_TEST_APP_ENV=dev');
 
         // Exact match: APP_ENV=dev → returns "0"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=dev:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=dev:0');
         $this->assertEquals('0', $result, 'Should return result on exact match');
 
         // No match: APP_ENV=live → returns ""
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=live:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=live:0');
         $this->assertEmpty($result, 'Should return empty on no match');
 
         putenv('DJ_TEST_APP_ENV');
@@ -1082,11 +1082,11 @@ EOT;
         putenv('DJ_TEST_APP_ENV=development');
 
         // Starts with: dev* matches "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=dev*:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=dev*:0');
         $this->assertEquals('0', $result, 'dev* should match development');
 
         // Starts with: prod* does NOT match "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=prod*:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=prod*:0');
         $this->assertEmpty($result, 'prod* should not match development');
 
         putenv('DJ_TEST_APP_ENV');
@@ -1100,11 +1100,11 @@ EOT;
         putenv('DJ_TEST_APP_ENV=development');
 
         // Ends with: *ment matches "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=*ment:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=*ment:0');
         $this->assertEquals('0', $result, '*ment should match development');
 
         // Ends with: *tion does NOT match "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=*tion:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=*tion:0');
         $this->assertEmpty($result, '*tion should not match development');
 
         putenv('DJ_TEST_APP_ENV');
@@ -1118,11 +1118,11 @@ EOT;
         putenv('DJ_TEST_APP_ENV=development');
 
         // Contains: *vel* matches "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=*vel*:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=*vel*:0');
         $this->assertEquals('0', $result, '*vel* should match development');
 
         // Contains: *stag* does NOT match "development"
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=*stag*:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=*stag*:0');
         $this->assertEmpty($result, '*stag* should not match development');
 
         putenv('DJ_TEST_APP_ENV');
@@ -1136,13 +1136,23 @@ EOT;
         putenv('DJ_TEST_DEV_ENV=1');
 
         // Malformed: missing result part
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV');
         $this->assertEmpty($result, 'Malformed directive (no result) should return empty');
 
         // Empty condition
-        $result = $options_obj->evaluateEnvCondition('@if_env::somevalue');
+        $result = $options_obj->evaluateCondition('@dj_if env.:somevalue');
         $this->assertEmpty($result, 'Empty condition should return empty');
 
+        // Double equals typo: == normalized to =
+        putenv('DJ_TEST_APP_ENV=dev');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV==dev:0');
+        $this->assertEquals('0', $result, '== should be normalized to = and match');
+
+        // Double equals with negation: !== normalized to !=
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!==dev:1');
+        $this->assertEmpty($result, '!== should be normalized to != (dev == dev → no match)');
+
+        putenv('DJ_TEST_APP_ENV');
         putenv('DJ_TEST_DEV_ENV');
     }
 
@@ -1153,43 +1163,43 @@ EOT;
 
         // != exact: APP_ENV!=dev when APP_ENV=live → should match
         putenv('DJ_TEST_APP_ENV=live');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev:1');
         $this->assertEquals('1', $result, 'APP_ENV=live != dev should match');
         putenv('DJ_TEST_APP_ENV');
 
         // != exact: APP_ENV!=dev when APP_ENV=dev → should NOT match
         putenv('DJ_TEST_APP_ENV=dev');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev:1');
         $this->assertEmpty($result, 'APP_ENV=dev != dev should not match');
         putenv('DJ_TEST_APP_ENV');
 
         // != with wildcard: APP_ENV!=dev* when APP_ENV=production → should match
         putenv('DJ_TEST_APP_ENV=production');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev*:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev*:1');
         $this->assertEquals('1', $result, 'APP_ENV=production != dev* should match');
         putenv('DJ_TEST_APP_ENV');
 
         // != with wildcard: APP_ENV!=dev* when APP_ENV=development → should NOT match
         putenv('DJ_TEST_APP_ENV=development');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev*:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev*:1');
         $this->assertEmpty($result, 'APP_ENV=development != dev* should not match');
         putenv('DJ_TEST_APP_ENV');
 
         // != with pipe: APP_ENV!=dev|staging when APP_ENV=production → should match
         putenv('DJ_TEST_APP_ENV=production');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev|staging:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev|staging:1');
         $this->assertEquals('1', $result, 'APP_ENV=production != dev|staging should match');
         putenv('DJ_TEST_APP_ENV');
 
         // != with pipe: APP_ENV!=dev|staging when APP_ENV=staging → should NOT match
         putenv('DJ_TEST_APP_ENV=staging');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev|staging:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev|staging:1');
         $this->assertEmpty($result, 'APP_ENV=staging != dev|staging should not match');
         putenv('DJ_TEST_APP_ENV');
 
         // != when env var is unset → should match (unset != anything)
         putenv('DJ_TEST_APP_ENV');
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV!=dev:1');
         $this->assertEquals('1', $result, 'Unset env var != dev should match');
     }
 
@@ -1201,25 +1211,25 @@ EOT;
         putenv('DJ_TEST_APP_ENV=dev');
 
         // Spaces around =
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV = dev:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV = dev:0');
         $this->assertEquals('0', $result, 'Spaces around = should work');
 
         // Spaces around !=
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV != dev:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV != dev:0');
         $this->assertEmpty($result, 'Spaces around != should work (dev == dev → no match)');
 
         putenv('DJ_TEST_APP_ENV=live');
 
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV != dev:1');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV != dev:1');
         $this->assertEquals('1', $result, 'Spaces around != should work (live != dev → match)');
 
         // Spaces around colon separators (already trimmed by explode logic)
-        $result = $options_obj->evaluateEnvCondition('@if_env: DJ_TEST_APP_ENV = live : 1');
+        $result = $options_obj->evaluateCondition('@dj_if env. DJ_TEST_APP_ENV = live : 1');
         $this->assertEquals('1', $result, 'Spaces around colons should work');
 
-        // Space between @if_env and first colon
-        $result = $options_obj->evaluateEnvCondition('@if_env : DJ_TEST_APP_ENV = live : 1');
-        $this->assertEquals('1', $result, 'Space between @if_env and colon should work');
+        // Extra spaces around @dj_if and env namespace
+        $result = $options_obj->evaluateCondition('@dj_if  env . DJ_TEST_APP_ENV = live : 1');
+        $this->assertEquals('1', $result, 'Extra spaces around @dj_if and env. should work');
 
         putenv('DJ_TEST_APP_ENV');
     }
@@ -1232,7 +1242,7 @@ EOT;
         putenv('DJ_TEST_DEV_ENV=1');
 
         // Result contains colons (URL): should preserve everything after second colon
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV=1:http://localhost:8080');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_DEV_ENV=1:http://localhost:8080');
         $this->assertEquals('http://localhost:8080', $result, 'Result with colons should be preserved');
 
         putenv('DJ_TEST_DEV_ENV');
@@ -1247,7 +1257,7 @@ EOT;
         putenv('DJ_TEST_MISSING_VAR');
 
         // When env var doesn't exist, = check should return empty
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_MISSING_VAR=dev:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_MISSING_VAR=dev:0');
         $this->assertEmpty($result, 'Should return empty when env var does not exist');
     }
 
@@ -1263,11 +1273,11 @@ EOT;
         $data = [
             'theme' => [
                 'theme_id' => 'djebel',
-                'load_theme' => '@if_env:DJ_TEST_DEV_ENV=1:0',
+                'load_theme' => '@dj_if env.DJ_TEST_DEV_ENV=1:0',
             ],
             'site' => [
                 'site_title' => 'My Site',
-                'debug' => '@if_env:DJ_TEST_APP_ENV=dev:1',
+                'debug' => '@dj_if env.DJ_TEST_APP_ENV=dev:1',
             ],
         ];
 
@@ -1300,7 +1310,7 @@ EOT;
         $data = [
             'theme' => [
                 'theme_id' => 'djebel',
-                'load_theme' => '@if_env:DJ_TEST_DEV_ENV=1:0',
+                'load_theme' => '@dj_if env.DJ_TEST_DEV_ENV=1:0',
             ],
         ];
 
@@ -1386,12 +1396,12 @@ EOT;
         putenv('DJ_TEST_APP_ENV=staging');
 
         // Pipe OR in full directive
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=dev|staging:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=dev|staging:0');
         $this->assertEquals('0', $result, 'Pipe should match staging');
 
         putenv('DJ_TEST_APP_ENV=production');
 
-        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV=dev|staging:0');
+        $result = $options_obj->evaluateCondition('@dj_if env.DJ_TEST_APP_ENV=dev|staging:0');
         $this->assertEmpty($result, 'Pipe should not match production');
 
         putenv('DJ_TEST_APP_ENV');

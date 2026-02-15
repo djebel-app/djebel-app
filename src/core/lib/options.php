@@ -40,7 +40,8 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
     /**
      * Process conditional values in parsed INI data
-     * Finds values starting with @if_env: and evaluates them
+     * Finds values starting with @dj_if and evaluates them
+     * Supports namespaced conditions: env.VAR, req.VAR (future)
      *
      * @param array $data Parsed INI data (flat 2-level array from parse_ini_file)
      * @return array Data with conditional values resolved
@@ -59,11 +60,11 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
                 $value = trim($value);
 
-                if (strpos($value, '@if_env') !== 0) {
+                if (strpos($value, '@dj_if') !== 0) {
                     continue;
                 }
 
-                $data[$section_key][$key] = $this->evaluateEnvCondition($value);
+                $data[$section_key][$key] = $this->evaluateCondition($value);
             }
         }
 
@@ -71,28 +72,71 @@ class Dj_App_Options implements ArrayAccess, Countable {
     }
 
     /**
-     * Evaluate a single @if_env:CONDITION:RESULT directive
+     * Evaluate a @dj_if directive
+     * Format: @dj_if env.CONDITION:RESULT
      *
-     * @param string $value The full @if_env:... string
+     * @param string $value The full @dj_if ... string
      * @return string The result value if condition matches, empty string otherwise
      */
-    public function evaluateEnvCondition($value)
+    public function evaluateCondition($value)
     {
-        // @if_env:CONDITION:RESULT
-        $parts = explode(':', $value, 3);
+        // @dj_if env.CONDITION:RESULT
+        $prefix_len = 6; // strlen('@dj_if')
+        $remainder = substr($value, $prefix_len);
+        $remainder = trim($remainder);
 
-        // Need 3 parts: @if_env, condition, result
+        // Split namespace.condition from result
+        $parts = explode(':', $remainder, 2);
+
         $parts_cnt = count($parts);
 
-        if ($parts_cnt < 3) {
+        if ($parts_cnt < 2) {
             return '';
         }
 
-        $condition = trim($parts[1]);
-        $result = trim($parts[2]);
+        $ns_condition = trim($parts[0]);
+        $result = trim($parts[1]);
+
+        if (empty($ns_condition)) {
+            return '';
+        }
+
+        // Split namespace from condition: env.VAR_NAME
+        $dot_pos = strpos($ns_condition, '.');
+
+        if ($dot_pos === false) {
+            return '';
+        }
+
+        $ns = substr($ns_condition, 0, $dot_pos);
+        $ns = trim($ns);
+        $condition = substr($ns_condition, $dot_pos + 1);
+        $condition = trim($condition);
 
         if (empty($condition)) {
             return '';
+        }
+
+        // Dispatch based on namespace
+        if ($ns === 'env') {
+            return $this->evaluateEnvCondition($condition, $result);
+        }
+
+        return '';
+    }
+
+    /**
+     * Evaluate an env condition: VAR, VAR=value, VAR!=value
+     *
+     * @param string $condition The condition part (e.g. DEV_ENV, APP_ENV=dev)
+     * @param string $result The result value if condition matches
+     * @return string The result value if condition matches, empty string otherwise
+     */
+    public function evaluateEnvCondition($condition, $result)
+    {
+        // Normalize == to = (common typo)
+        if (strpos($condition, '==') !== false) {
+            $condition = str_replace('==', '=', $condition);
         }
 
         // Check for match operator: VAR=expected or VAR!=expected
@@ -101,6 +145,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // No =, check if env var has an enabled value (1, true, yes, on)
         if ($eq_pos === false) {
             $env_val = Dj_App_Env::getEnv($condition);
+
             return Dj_App_Util::isEnabled($env_val) ? $result : '';
         }
 
