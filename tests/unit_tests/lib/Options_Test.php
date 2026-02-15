@@ -1193,6 +1193,37 @@ EOT;
         $this->assertEquals('1', $result, 'Unset env var != dev should match');
     }
 
+    public function testEvaluateEnvConditionForgivingSpaces()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        putenv('DJ_TEST_APP_ENV=dev');
+
+        // Spaces around =
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV = dev:0');
+        $this->assertEquals('0', $result, 'Spaces around = should work');
+
+        // Spaces around !=
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV != dev:0');
+        $this->assertEmpty($result, 'Spaces around != should work (dev == dev → no match)');
+
+        putenv('DJ_TEST_APP_ENV=live');
+
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV != dev:1');
+        $this->assertEquals('1', $result, 'Spaces around != should work (live != dev → match)');
+
+        // Spaces around colon separators (already trimmed by explode logic)
+        $result = $options_obj->evaluateEnvCondition('@if_env: DJ_TEST_APP_ENV = live : 1');
+        $this->assertEquals('1', $result, 'Spaces around colons should work');
+
+        // Space between @if_env and first colon
+        $result = $options_obj->evaluateEnvCondition('@if_env : DJ_TEST_APP_ENV = live : 1');
+        $this->assertEquals('1', $result, 'Space between @if_env and colon should work');
+
+        putenv('DJ_TEST_APP_ENV');
+    }
+
     public function testEvaluateEnvConditionResultWithColons()
     {
         $options_obj = Dj_App_Options::getInstance();

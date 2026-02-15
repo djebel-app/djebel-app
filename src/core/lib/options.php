@@ -47,8 +47,6 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function processConditionalValues($data)
     {
-        $prefix = '@if_env:';
-
         foreach ($data as $section_key => $section_data) {
             if (!is_array($section_data)) {
                 continue;
@@ -61,7 +59,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
                 $value = trim($value);
 
-                if (strpos($value, $prefix) !== 0) {
+                if (strpos($value, '@if_env') !== 0) {
                     continue;
                 }
 
@@ -100,36 +98,33 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // Check for match operator: VAR=expected or VAR!=expected
         $eq_pos = strpos($condition, '=');
 
-        if ($eq_pos !== false) {
-            // Check prev char for negation
-            $negate = ($eq_pos > 0 && $condition[$eq_pos - 1] === '!');
-            $var_end = $negate ? $eq_pos - 1 : $eq_pos;
-            $env_var = substr($condition, 0, $var_end);
-            $expected = substr($condition, $eq_pos + 1);
-            $env_val = Dj_App_Env::getEnv($env_var);
-
-            // Unset env var: != matches (not equal to anything), = doesn't
-            if (empty($env_val)) {
-                return $negate ? $result : '';
-            }
-
-            $matched = $this->matchEnvValue($env_val, $expected);
-
-            if ($negate) {
-                return $matched ? '' : $result;
-            }
-
-            return $matched ? $result : '';
-        }
-
         // No =, check if env var has an enabled value (1, true, yes, on)
-        $env_val = Dj_App_Env::getEnv($condition);
-
-        if (!Dj_App_Util::isEnabled($env_val)) {
-            return '';
+        if ($eq_pos === false) {
+            $env_val = Dj_App_Env::getEnv($condition);
+            return Dj_App_Util::isEnabled($env_val) ? $result : '';
         }
 
-        return $result;
+        // Check prev char for negation
+        $negate = ($eq_pos > 0 && $condition[$eq_pos - 1] === '!');
+        $var_end = $negate ? $eq_pos - 1 : $eq_pos;
+        $env_var = substr($condition, 0, $var_end);
+        $env_var = trim($env_var);
+        $expected = substr($condition, $eq_pos + 1);
+        $expected = trim($expected);
+        $env_val = Dj_App_Env::getEnv($env_var);
+
+        // Unset env var: != matches (not equal to anything), = doesn't
+        if (empty($env_val)) {
+            return $negate ? $result : '';
+        }
+
+        $matched = $this->matchEnvValue($env_val, $expected);
+
+        if ($negate) {
+            return $matched ? '' : $result;
+        }
+
+        return $matched ? $result : '';
     }
 
     /**
