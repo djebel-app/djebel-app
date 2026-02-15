@@ -1227,9 +1227,9 @@ EOT;
         $result = $options_obj->evaluateCondition('@dj_if env. DJ_TEST_APP_ENV = live : 1');
         $this->assertEquals('1', $result, 'Spaces around colons should work');
 
-        // Extra spaces around @dj_if and env namespace
+        // Extra spaces around @dj_if
         $result = $options_obj->evaluateCondition('@dj_if  env . DJ_TEST_APP_ENV = live : 1');
-        $this->assertEquals('1', $result, 'Extra spaces around @dj_if and env. should work');
+        $this->assertEquals('1', $result, 'Extra spaces around @dj_if should work');
 
         putenv('DJ_TEST_APP_ENV');
     }
