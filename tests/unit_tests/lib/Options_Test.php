@@ -1146,6 +1146,53 @@ EOT;
         putenv('DJ_TEST_DEV_ENV');
     }
 
+    public function testEvaluateEnvConditionNegativeMatch()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+
+        // != exact: APP_ENV!=dev when APP_ENV=live → should match
+        putenv('DJ_TEST_APP_ENV=live');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $this->assertEquals('1', $result, 'APP_ENV=live != dev should match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != exact: APP_ENV!=dev when APP_ENV=dev → should NOT match
+        putenv('DJ_TEST_APP_ENV=dev');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $this->assertEmpty($result, 'APP_ENV=dev != dev should not match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != with wildcard: APP_ENV!=dev* when APP_ENV=production → should match
+        putenv('DJ_TEST_APP_ENV=production');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev*:1');
+        $this->assertEquals('1', $result, 'APP_ENV=production != dev* should match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != with wildcard: APP_ENV!=dev* when APP_ENV=development → should NOT match
+        putenv('DJ_TEST_APP_ENV=development');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev*:1');
+        $this->assertEmpty($result, 'APP_ENV=development != dev* should not match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != with pipe: APP_ENV!=dev|staging when APP_ENV=production → should match
+        putenv('DJ_TEST_APP_ENV=production');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev|staging:1');
+        $this->assertEquals('1', $result, 'APP_ENV=production != dev|staging should match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != with pipe: APP_ENV!=dev|staging when APP_ENV=staging → should NOT match
+        putenv('DJ_TEST_APP_ENV=staging');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev|staging:1');
+        $this->assertEmpty($result, 'APP_ENV=staging != dev|staging should not match');
+        putenv('DJ_TEST_APP_ENV');
+
+        // != when env var is unset → should match (unset != anything)
+        putenv('DJ_TEST_APP_ENV');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_APP_ENV!=dev:1');
+        $this->assertEquals('1', $result, 'Unset env var != dev should match');
+    }
+
     public function testEvaluateEnvConditionResultWithColons()
     {
         $options_obj = Dj_App_Options::getInstance();
