@@ -97,24 +97,31 @@ class Dj_App_Options implements ArrayAccess, Countable {
             return '';
         }
 
-        // Require match operator: VAR=expected
+        // Check for match operator: VAR=expected
         $eq_pos = strpos($condition, '=');
 
-        if ($eq_pos === false) {
+        if ($eq_pos !== false) {
+            $env_var = substr($condition, 0, $eq_pos);
+            $expected = substr($condition, $eq_pos + 1);
+            $env_val = Dj_App_Env::getEnv($env_var);
+
+            if (empty($env_val)) {
+                return '';
+            }
+
+            $matched = $this->matchEnvValue($env_val, $expected);
+
+            return $matched ? $result : '';
+        }
+
+        // No =, check if env var has an enabled value (1, true, yes, on)
+        $env_val = Dj_App_Env::getEnv($condition);
+
+        if (!Dj_App_Util::isEnabled($env_val)) {
             return '';
         }
 
-        $env_var = substr($condition, 0, $eq_pos);
-        $expected = substr($condition, $eq_pos + 1);
-        $env_val = Dj_App_Env::getEnv($env_var);
-
-        if (empty($env_val)) {
-            return '';
-        }
-
-        $matched = $this->matchEnvValue($env_val, $expected);
-
-        return $matched ? $result : '';
+        return $result;
     }
 
     /**

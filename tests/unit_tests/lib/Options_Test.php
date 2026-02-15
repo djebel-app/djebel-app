@@ -1013,18 +1013,47 @@ EOT;
         $this->assertEquals('', $result, 'Should return empty string when no default provided');
     }
 
-    public function testEvaluateEnvConditionNoEqualsReturnsEmpty()
+    public function testEvaluateEnvConditionNoEqualsChecksIsEnabled()
     {
         $options_obj = Dj_App_Options::getInstance();
         $options_obj->clear();
 
+        // Enabled values should match
         putenv('DJ_TEST_DEV_ENV=1');
-
-        // No = in condition → returns empty (must use VAR=value form)
         $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
-        $this->assertEmpty($result, 'Condition without = should return empty');
-
+        $this->assertEquals('0', $result, 'DEV_ENV=1 should match (enabled)');
         putenv('DJ_TEST_DEV_ENV');
+
+        putenv('DJ_TEST_DEV_ENV=true');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEquals('0', $result, 'DEV_ENV=true should match (enabled)');
+        putenv('DJ_TEST_DEV_ENV');
+
+        putenv('DJ_TEST_DEV_ENV=yes');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEquals('0', $result, 'DEV_ENV=yes should match (enabled)');
+        putenv('DJ_TEST_DEV_ENV');
+
+        // Disabled values should NOT match
+        putenv('DJ_TEST_DEV_ENV=0');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEmpty($result, 'DEV_ENV=0 should not match (disabled)');
+        putenv('DJ_TEST_DEV_ENV');
+
+        putenv('DJ_TEST_DEV_ENV=false');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEmpty($result, 'DEV_ENV=false should not match (disabled)');
+        putenv('DJ_TEST_DEV_ENV');
+
+        putenv('DJ_TEST_DEV_ENV=no');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEmpty($result, 'DEV_ENV=no should not match (disabled)');
+        putenv('DJ_TEST_DEV_ENV');
+
+        // Unset env var should NOT match
+        putenv('DJ_TEST_DEV_ENV');
+        $result = $options_obj->evaluateEnvCondition('@if_env:DJ_TEST_DEV_ENV:0');
+        $this->assertEmpty($result, 'Unset env var should not match');
     }
 
     public function testEvaluateEnvConditionExactMatch()
