@@ -46,6 +46,12 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 - Test dependencies are managed in `tests/composer.json`
 - Install test dependencies: `cd tests && composer install`
 
+### Git Rules
+
+- **NEVER** add `Co-Authored-By` or any attribution/signature line to commits
+- **ALWAYS ask before committing** — show the diff/status and proposed commit message, then wait for user approval. User MUST review every commit before it happens
+- Use `git mv` (not plain `mv`) for tracked files
+
 ## Coding Standards (10x PHP Developer Rules)
 
 Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Every line is optimized for performance, readability, and security.
