@@ -32,9 +32,151 @@ class Dj_App_Options implements ArrayAccess, Countable {
             return [];
         }
 
+        $data = $this->processConditionalValues($data);
         $normalized_data = $this->normalizeKeys($data);
 
         return $normalized_data;
+    }
+
+    /**
+     * Process conditional values in parsed INI data
+     * Finds values starting with @if_env: and evaluates them
+     *
+     * @param array $data Parsed INI data (flat 2-level array from parse_ini_file)
+     * @return array Data with conditional values resolved
+     */
+    public function processConditionalValues($data)
+    {
+        $prefix = '@if_env:';
+
+        foreach ($data as $section_key => $section_data) {
+            if (!is_array($section_data)) {
+                continue;
+            }
+
+            foreach ($section_data as $key => $value) {
+                if (!is_string($value)) {
+                    continue;
+                }
+
+                $value = trim($value);
+
+                if (strpos($value, $prefix) !== 0) {
+                    continue;
+                }
+
+                $data[$section_key][$key] = $this->evaluateEnvCondition($value);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Evaluate a single @if_env:CONDITION:RESULT directive
+     *
+     * @param string $value The full @if_env:... string
+     * @return string The result value if condition matches, empty string otherwise
+     */
+    public function evaluateEnvCondition($value)
+    {
+        // @if_env:CONDITION:RESULT
+        $parts = explode(':', $value, 3);
+
+        // Need 3 parts: @if_env, condition, result
+        $parts_cnt = count($parts);
+
+        if ($parts_cnt < 3) {
+            return '';
+        }
+
+        $condition = trim($parts[1]);
+        $result = trim($parts[2]);
+
+        if (empty($condition)) {
+            return '';
+        }
+
+        // Require match operator: VAR=expected
+        $eq_pos = strpos($condition, '=');
+
+        if ($eq_pos === false) {
+            return '';
+        }
+
+        $env_var = substr($condition, 0, $eq_pos);
+        $expected = substr($condition, $eq_pos + 1);
+        $env_val = Dj_App_Env::getEnv($env_var);
+
+        if (empty($env_val)) {
+            return '';
+        }
+
+        $matched = $this->matchEnvValue($env_val, $expected);
+
+        return $matched ? $result : '';
+    }
+
+    /**
+     * Match an environment variable value against an expected pattern
+     * Supports exact match, starts with (val*), ends with (*val), contains (*val*), pipe OR (val1|val2)
+     *
+     * @param string $env_val Actual env var value
+     * @param string $expected Expected value/pattern
+     * @return bool Whether the value matches
+     */
+    public function matchEnvValue($env_val, $expected)
+    {
+        // Pipe = OR matching: dev|staging checks each alternative
+        $has_pipe = strpos($expected, '|') !== false;
+
+        if ($has_pipe) {
+            $alternatives = explode('|', $expected);
+            $alternatives = Dj_App_String_Util::trim($alternatives);
+
+            foreach ($alternatives as $alt) {
+                $matched = $this->matchEnvValue($env_val, $alt);
+
+                if ($matched) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $has_leading_star = strpos($expected, '*') === 0;
+        $last_char = substr($expected, -1);
+        $has_trailing_star = $last_char === '*';
+
+        // No wildcards = exact match
+        if (!$has_leading_star && !$has_trailing_star) {
+            $matched = ($env_val === $expected);
+
+            return $matched;
+        }
+
+        $pattern = trim($expected, '*');
+
+        // *val* = contains
+        if ($has_leading_star && $has_trailing_star) {
+            $matched = strpos($env_val, $pattern) !== false;
+
+            return $matched;
+        }
+
+        // val* = starts with
+        if ($has_trailing_star) {
+            $matched = strpos($env_val, $pattern) === 0;
+
+            return $matched;
+        }
+
+        // *val = ends with
+        $pattern_len = strlen($pattern);
+        $matched = substr($env_val, -$pattern_len) === $pattern;
+
+        return $matched;
     }
 
     /**
