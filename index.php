@@ -162,6 +162,15 @@ try {
     $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
     $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
 
+    // Check if theme loading is disabled in app.ini [theme] section
+    if ($load_theme) {
+        $load_theme_opt = $options_obj->get('theme.load_theme');
+
+        if (Dj_App_Util::isDisabled($load_theme_opt)) {
+            $load_theme = false;
+        }
+    }
+
     // No theme configured in options = don't load theme
     if ($load_theme) {
         $theme_id = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme');
