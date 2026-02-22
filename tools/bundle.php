@@ -35,15 +35,15 @@ foreach ($args as $arg) {
         echo "  --dir=VALUE                    Site directory to bundle (required)\n";
         echo "                                 Can be site name from app/sites/ or full path\n";
         echo "  --target_dir=VALUE             Output directory for bundle (optional)\n";
-        echo "                                 Overrides DJEBEL_TOOL_BUNDLE_TARGET_DIR env var\n";
+        echo "                                 Overrides DJEBEL_APP_TOOL_BUNDLE_TARGET_DIR env var\n";
         echo "  --compression_level=VALUE      ZIP compression level 0-9 (optional, default: 9)\n";
         echo "                                 0 = no compression, 9 = maximum compression\n";
-        echo "                                 Overrides DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL env var\n";
+        echo "                                 Overrides DJEBEL_APP_TOOL_BUNDLE_COMPRESSION_LEVEL env var\n";
         echo "\n";
         echo "Environment Variables:\n";
-        echo "  DJEBEL_TOOL_BUNDLE_TARGET_DIR        Custom output directory (default: build/bundles/)\n";
-        echo "  DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
-        echo "  DJEBEL_TOOL_BUNDLE_VERBOSE            Enable verbose error output\n";
+        echo "  DJEBEL_APP_TOOL_BUNDLE_TARGET_DIR        Custom output directory (default: build/bundles/)\n";
+        echo "  DJEBEL_APP_TOOL_BUNDLE_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
+        echo "  DJEBEL_APP_TOOL_BUNDLE_VERBOSE            Enable verbose error output\n";
         echo "\n";
         echo "Examples:\n";
         echo "  php $tool_name --bundle_id=simple-blog --bundle_description='Complete blog setup' --bundle_ver=1.0.0 --dir=djebel-live\n";
@@ -104,7 +104,7 @@ try {
     if (!empty($target_dir_param)) {
         $target_dir = $target_dir_param;
     } else {
-        $target_dir_env = getenv('DJEBEL_TOOL_BUNDLE_TARGET_DIR');
+        $target_dir_env = getenv('DJEBEL_APP_TOOL_BUNDLE_TARGET_DIR');
         $target_dir = empty($target_dir_env) ? "$app_dir/build/bundles" : $target_dir_env;
     }
 
@@ -112,7 +112,7 @@ try {
     if (!empty($compression_level_param)) {
         $compression_level = $compression_level_param;
     } else {
-        $compression_level_env = getenv('DJEBEL_TOOL_BUNDLE_COMPRESSION_LEVEL');
+        $compression_level_env = getenv('DJEBEL_APP_TOOL_BUNDLE_COMPRESSION_LEVEL');
         $compression_level = empty($compression_level_env) ? 9 : $compression_level_env;
     }
 
@@ -391,7 +391,7 @@ try {
     $phar_header = file_get_contents($latest_phar, false, null, 0, 1024);
     $djebel_app_git_commit = '';
 
-    if (preg_match('/DJEBEL_TOOL_PKG_PHAR_BUILD_GIT_COMMIT.+[\'"]([a-f0-9]{7,40})[\'"]/', $phar_header, $commit_matches)) {
+    if (preg_match('/DJEBEL_APP_TOOL_PKG_PHAR_BUILD_GIT_COMMIT.+[\'"]([a-f0-9]{7,40})[\'"]/', $phar_header, $commit_matches)) {
         $djebel_app_git_commit = $commit_matches[1];
         $short_hash = substr($djebel_app_git_commit, 0, 12);
         echo "PHAR commit: $short_hash\n";
@@ -453,7 +453,7 @@ try {
     }
 
     // Provide stack trace in verbose mode
-    if (!empty(getenv('DJEBEL_TOOL_BUNDLE_VERBOSE'))) {
+    if (!empty(getenv('DJEBEL_APP_TOOL_BUNDLE_VERBOSE'))) {
         Dj_Cli_Util::stderr("Stack trace:");
         Dj_Cli_Util::stderr($e->getTraceAsString());
     }

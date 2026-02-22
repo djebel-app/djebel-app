@@ -33,12 +33,12 @@ foreach ($args as $arg) {
         echo "  --zip                       Create source distribution ZIP only (excludes tools/, .git/, tests/)\n";
         echo "  --compression_level=VALUE   ZIP compression level 0-9 (optional, default: 9)\n";
         echo "                              0 = no compression, 9 = maximum compression\n";
-        echo "                              Overrides DJEBEL_TOOL_PKG_COMPRESSION_LEVEL env var\n";
+        echo "                              Overrides DJEBEL_APP_TOOL_PKG_COMPRESSION_LEVEL env var\n";
         echo "\n";
         echo "Environment Variables:\n";
-        echo "  DJEBEL_TOOL_PKG_BUILD_DIR        Custom build directory (default: build/)\n";
-        echo "  DJEBEL_TOOL_PKG_PHAR_NAME        Custom PHAR filename\n";
-        echo "  DJEBEL_TOOL_PKG_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
+        echo "  DJEBEL_APP_TOOL_PKG_BUILD_DIR        Custom build directory (default: build/)\n";
+        echo "  DJEBEL_APP_TOOL_PKG_PHAR_NAME        Custom PHAR filename\n";
+        echo "  DJEBEL_APP_TOOL_PKG_COMPRESSION_LEVEL ZIP compression level 0-9 (default: 9)\n";
         echo "\n";
         echo "Examples:\n";
         echo "  php $tool_name                           # Build both PHAR and source ZIP (default)\n";
@@ -70,7 +70,7 @@ try {
     }
 
     // Allow override via environment variable (with validation)
-    $phar_name = getenv('DJEBEL_TOOL_PKG_PHAR_NAME');
+    $phar_name = getenv('DJEBEL_APP_TOOL_PKG_PHAR_NAME');
 
     // Validate phar_name if provided (security: prevent path traversal)
     if (!empty($phar_name)) {
@@ -88,10 +88,10 @@ try {
     }
 
     // The file's extension must end in .phar
-    define('DJEBEL_TOOL_PKG_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
+    define('DJEBEL_APP_TOOL_PKG_PHAR_NAME', empty($phar_name) ? "djebel-app-{$version}.phar" : $phar_name);
 
     // Allow build directory override via environment variable
-    $build_dir_env = getenv('DJEBEL_TOOL_PKG_BUILD_DIR');
+    $build_dir_env = getenv('DJEBEL_APP_TOOL_PKG_BUILD_DIR');
     $build_dir = empty($build_dir_env) ? "$app_dir/build" : $build_dir_env;
 
     // Parse command-line parameters with defaults
@@ -106,7 +106,7 @@ try {
     if (!empty($compression_level_param)) {
         $compression_level = $compression_level_param;
     } else {
-        $compression_level_env = getenv('DJEBEL_TOOL_PKG_COMPRESSION_LEVEL');
+        $compression_level_env = getenv('DJEBEL_APP_TOOL_PKG_COMPRESSION_LEVEL');
         $compression_level = empty($compression_level_env) ? 9 : $compression_level_env;
     }
 
@@ -198,7 +198,7 @@ try {
 
     $dir = __DIR__;
     $src_root = "$app_dir/src";
-    $phar_file = $build_dir . '/' . DJEBEL_TOOL_PKG_PHAR_NAME;
+    $phar_file = $build_dir . '/' . DJEBEL_APP_TOOL_PKG_PHAR_NAME;
     $source_zip_file = $build_dir . "/djebel-app-{$version}.zip";
     
     // Ensure build directory exists
@@ -242,7 +242,7 @@ try {
 
         $phar = new Phar($phar_file,
             FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::KEY_AS_FILENAME,
-            basename(DJEBEL_TOOL_PKG_PHAR_NAME)
+            basename(DJEBEL_APP_TOOL_PKG_PHAR_NAME)
         );
 
         // start buffering. Mandatory to modify stub to add shebang
@@ -321,13 +321,13 @@ try {
         // $stub .= "#!/usr/bin/env php\n"; // commented out for web usage
 
         $php_header_rows = [];
-        $php_header_rows[] = "define('DJEBEL_TOOL_PKG_PHAR_BUILD_DATE', '$built_date');";
+        $php_header_rows[] = "define('DJEBEL_APP_TOOL_PKG_PHAR_BUILD_DATE', '$built_date');";
 
         $git_output = function_exists('shell_exec') ? shell_exec("git rev-list -1 HEAD") : '';
         $git_commit = empty($git_output) ? '' : trim($git_output);
 
         if (!empty($git_commit)) {
-            $php_header_rows[] = "define('DJEBEL_TOOL_PKG_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
+            $php_header_rows[] = "define('DJEBEL_APP_TOOL_PKG_PHAR_BUILD_GIT_COMMIT', '$git_commit');";
         }
 
         if (!empty($php_header_rows)) {
@@ -492,7 +492,7 @@ try {
     }
 
     // Provide stack trace in verbose mode (can be enabled via environment variable)
-    if (!empty(getenv('DJEBEL_TOOL_PKG_VERBOSE'))) {
+    if (!empty(getenv('DJEBEL_APP_TOOL_PKG_VERBOSE'))) {
         Dj_Cli_Util::stderr("Stack trace:");
         Dj_Cli_Util::stderr($e->getTraceAsString());
     }
