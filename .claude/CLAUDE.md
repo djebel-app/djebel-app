@@ -46,6 +46,27 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 - Test dependencies are managed in `tests/composer.json`
 - Install test dependencies: `cd tests && composer install`
 
+### CLI Tools (`tools/`)
+
+Three CLI tools live in `tools/`:
+- **pkg.php** — Builds PHAR and/or source ZIP of djebel-app (uses PHP ZipArchive)
+- **bundle.php** — Creates site bundles with plugins, themes, PHAR, and manifest
+- **release.php** — Fast ozip-based packaging for djebel-app, plugins, and themes
+
+#### Environment Variable Prefix Convention
+
+All tool env vars use the `DJEBEL_APP_TOOL_` prefix followed by the tool name:
+
+| Tool | Prefix | Examples |
+|------|--------|----------|
+| pkg.php | `DJEBEL_APP_TOOL_PKG_` | `DJEBEL_APP_TOOL_PKG_BUILD_DIR`, `DJEBEL_APP_TOOL_PKG_PHAR_NAME`, `DJEBEL_APP_TOOL_PKG_COMPRESSION_LEVEL`, `DJEBEL_APP_TOOL_PKG_VERBOSE` |
+| bundle.php | `DJEBEL_APP_TOOL_BUNDLE_` | `DJEBEL_APP_TOOL_BUNDLE_TARGET_DIR`, `DJEBEL_APP_TOOL_BUNDLE_COMPRESSION_LEVEL`, `DJEBEL_APP_TOOL_BUNDLE_VERBOSE` |
+| release.php | `DJEBEL_APP_TOOL_RELEASE_` | `DJEBEL_APP_TOOL_RELEASE_PLUGIN_DIR`, `DJEBEL_APP_TOOL_RELEASE_THEME_DIR`, `DJEBEL_APP_TOOL_RELEASE_BUILD_DIR`, `DJEBEL_APP_TOOL_RELEASE_DRY_RUN` |
+
+Pattern: `DJEBEL_APP_TOOL_{TOOL_NAME}_{VARIABLE}`
+
+CLI args always take priority over env vars. Internal PHP constants (embedded in PHAR stubs) also use this prefix: `DJEBEL_APP_TOOL_PKG_PHAR_BUILD_DATE`, `DJEBEL_APP_TOOL_PKG_PHAR_BUILD_GIT_COMMIT`.
+
 ### Git Rules
 
 - **NEVER** add `Co-Authored-By` or any attribution/signature line to commits
