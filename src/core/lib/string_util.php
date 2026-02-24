@@ -451,4 +451,210 @@ class Dj_App_String_Util
 
         return $str;
     }
+
+    /**
+     * Generate a deterministic auth salt for code generation
+     * Dj_App_String_Util::generateAuthSalt();
+     *
+     * @param array $params Options:
+     *   'prefix' => string (default: 'dj_auth_')
+     *   'context' => string (extra entropy, e.g., __FILE__)
+     * @return string
+     */
+    public static function generateAuthSalt($params = [])
+    {
+        $prefix = empty($params['prefix']) ? 'dj_auth_' : $params['prefix'];
+        $context = empty($params['context']) ? '' : $params['context'];
+
+        $req_obj = Dj_App_Request::getInstance();
+        $site_url = $req_obj->getSiteUrl();
+
+        $raw = $site_url . $context;
+        $hash = sha1($raw);
+        $salt = $prefix . $hash;
+
+        return $salt;
+    }
+
+    /**
+     * Generate a deterministic numeric auth code valid for a time window
+     * Dj_App_String_Util::generateAuthCode();
+     *
+     * Code is deterministic: same email + same time window + same salt = same code.
+     * No storage needed for codes.
+     *
+     * Example:
+     *   $params = [ 'email' => 'user@example.com', 'salt' => 'my_salt_abc', ];
+     *   $code = Dj_App_String_Util::generateAuthCode($params);
+     *   // Returns: '4829' (4-digit numeric string)
+     *
+     * @param array $params Options:
+     *   'email' => string (required)
+     *   'salt' => string (required - use generateAuthSalt())
+     *   'action' => string (default: 'verify')
+     *   'length' => int (default: 4, code digit count)
+     *   'expiration' => int (default: 86400, time window in seconds)
+     *   'timestamp' => int (default: time(), override for testing)
+     * @return string N-digit numeric code or empty string on failure
+     */
+    public static function generateAuthCode($params = [])
+    {
+        $email = empty($params['email']) ? '' : $params['email'];
+
+        if (empty($email)) {
+            return '';
+        }
+
+        $salt = empty($params['salt']) ? '' : $params['salt'];
+
+        if (empty($salt)) {
+            return '';
+        }
+
+        $action = empty($params['action']) ? 'verify' : $params['action'];
+
+        $length = empty($params['length']) ? 4 : $params['length'];
+        $length = (int) $length;
+
+        $expiration = empty($params['expiration']) ? 86400 : $params['expiration'];
+        $expiration = (int) $expiration;
+
+        $timestamp = empty($params['timestamp']) ? time() : $params['timestamp'];
+        $timestamp = (int) $timestamp;
+
+        // Deterministic time window
+        $time_window = ceil($timestamp / $expiration);
+
+        $raw_data = $email . $action . $time_window . $salt;
+        $hash = sha1($raw_data);
+
+        // Convert hex portion to decimal for numeric code
+        $hex_part = substr($hash, 0, $length);
+        $numeric = base_convert($hex_part, 16, 10);
+        $code = substr($numeric, 0, $length);
+        $code = str_pad($code, $length, '0', STR_PAD_LEFT);
+
+        return $code;
+    }
+
+    /**
+     * Verify a deterministic auth code against adjacent time windows
+     * Dj_App_String_Util::verifyAuthCode();
+     *
+     * Checks current, previous, and next time windows to handle edge cases
+     * where a code is generated near a window boundary.
+     *
+     * @param array $params Options:
+     *   'email' => string (required)
+     *   'code' => string (required, submitted code)
+     *   'salt' => string (required)
+     *   'action' => string (default: 'verify')
+     *   'length' => int (default: 4)
+     *   'expiration' => int (default: 86400)
+     * @return bool
+     */
+    public static function verifyAuthCode($params = [])
+    {
+        $email = empty($params['email']) ? '' : $params['email'];
+        $submitted_code = empty($params['code']) ? '' : $params['code'];
+
+        if (empty($email) || empty($submitted_code)) {
+            return false;
+        }
+
+        // Strip non-digits (spaces, dashes from formatted codes)
+        $clean_params = [ 'code' => $submitted_code, ];
+        $submitted_code = Dj_App_String_Util::cleanAuthCode($clean_params);
+
+        if (empty($submitted_code)) {
+            return false;
+        }
+
+        $salt = empty($params['salt']) ? '' : $params['salt'];
+
+        if (empty($salt)) {
+            return false;
+        }
+
+        $expiration = empty($params['expiration']) ? 86400 : $params['expiration'];
+        $expiration = (int) $expiration;
+
+        $timestamp = time();
+        $current_window = ceil($timestamp / $expiration);
+
+        // Check 3 consecutive windows: previous, current, next
+        $windows = [
+            $current_window - 1,
+            $current_window,
+            $current_window + 1,
+        ];
+
+        foreach ($windows as $window) {
+            $test_timestamp = $window * $expiration;
+            $gen_params = $params;
+            $gen_params['timestamp'] = $test_timestamp;
+
+            // Remove submitted code from gen params so it doesn't interfere
+            unset($gen_params['code']);
+
+            $generated = Dj_App_String_Util::generateAuthCode($gen_params);
+
+            if ($generated === $submitted_code) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Format an auth code with spaces for readability
+     * Dj_App_String_Util::formatAuthCode();
+     *
+     * Example: '4829' => '48 29'
+     *
+     * @param array $params Options:
+     *   'code' => string (required)
+     *   'chunk_size' => int (default: 2)
+     * @return string
+     */
+    public static function formatAuthCode($params = [])
+    {
+        $code = empty($params['code']) ? '' : $params['code'];
+
+        if (empty($code)) {
+            return '';
+        }
+
+        $chunk_size = empty($params['chunk_size']) ? 2 : $params['chunk_size'];
+        $chunk_size = (int) $chunk_size;
+
+        $formatted = chunk_split($code, $chunk_size, ' ');
+        $formatted = Dj_App_String_Util::trim($formatted);
+
+        return $formatted;
+    }
+
+    /**
+     * Clean an auth code - remove everything that's not a digit
+     * Dj_App_String_Util::cleanAuthCode();
+     *
+     * Example: '48 29' => '4829', '48-29' => '4829'
+     *
+     * @param array $params Options:
+     *   'code' => string (required)
+     * @return string digits only
+     */
+    public static function cleanAuthCode($params = [])
+    {
+        $code = empty($params['code']) ? '' : $params['code'];
+
+        if (empty($code)) {
+            return '';
+        }
+
+        $cleaned = preg_replace('#[^\d]#', '', $code);
+
+        return $cleaned;
+    }
 }

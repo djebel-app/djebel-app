@@ -610,4 +610,243 @@ class String_Util_Test extends TestCase {
         $result = Dj_App_String_Util::singlefy('a/b_c/d_e', ['/', '_']);
         $this->assertEquals('a/b_c/d_e', $result);
     }
+
+    // --- Auth Code Tests (adapted from QS_Site_App_String_Util tests) ---
+
+    public function testGenerateAuthSalt()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+        $this->assertIsString($salt);
+        $this->assertStringStartsWith('dj_auth_', $salt);
+        $this->assertNotEmpty($salt);
+    }
+
+    public function testGenerateAuthSaltWithCustomPrefix()
+    {
+        $params = [ 'prefix' => 'my_plugin_', ];
+        $salt = Dj_App_String_Util::generateAuthSalt($params);
+        $this->assertStringStartsWith('my_plugin_', $salt);
+    }
+
+    public function testGenerateAuthSaltWithContext()
+    {
+        $salt_a = Dj_App_String_Util::generateAuthSalt([ 'context' => 'plugin_a', ]);
+        $salt_b = Dj_App_String_Util::generateAuthSalt([ 'context' => 'plugin_b', ]);
+        $this->assertNotEquals($salt_a, $salt_b);
+    }
+
+    public function testGenerateAuthCode()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        $params = [
+            'email' => 'test@example.com',
+            'salt' => $salt,
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($params);
+        $this->assertIsString($code);
+        $this->assertEquals(4, strlen($code));
+        $this->assertMatchesRegularExpression('/^\d{4}$/', $code);
+    }
+
+    public function testGenerateAuthCodeDeterministic()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+        $fixed_ts = 1700000000;
+
+        $params = [
+            'email' => 'test@example.com',
+            'salt' => $salt,
+            'timestamp' => $fixed_ts,
+        ];
+
+        // Same inputs = same code
+        $code_1 = Dj_App_String_Util::generateAuthCode($params);
+        $code_2 = Dj_App_String_Util::generateAuthCode($params);
+        $this->assertEquals($code_1, $code_2);
+    }
+
+    public function testGenerateAuthCodeDifferentEmails()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+        $fixed_ts = 1700000000;
+
+        $code_a = Dj_App_String_Util::generateAuthCode([
+            'email' => 'alice@example.com',
+            'salt' => $salt,
+            'timestamp' => $fixed_ts,
+        ]);
+
+        $code_b = Dj_App_String_Util::generateAuthCode([
+            'email' => 'bob@example.com',
+            'salt' => $salt,
+            'timestamp' => $fixed_ts,
+        ]);
+
+        $this->assertNotEquals($code_a, $code_b);
+    }
+
+    public function testGenerateAuthCodeEmptyEmail()
+    {
+        $params = [
+            'email' => '',
+            'salt' => 'some_salt',
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($params);
+        $this->assertEmpty($code);
+    }
+
+    public function testGenerateAuthCodeEmptySalt()
+    {
+        $params = [
+            'email' => 'test@example.com',
+            'salt' => '',
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($params);
+        $this->assertEmpty($code);
+    }
+
+    public function testGenerateAuthCodeCustomLength()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        $params = [
+            'email' => 'test@example.com',
+            'salt' => $salt,
+            'length' => 6,
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($params);
+        $this->assertEquals(6, strlen($code));
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $code);
+    }
+
+    public function testVerifyAuthCode()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        $gen_params = [
+            'email' => 'test@example.com',
+            'salt' => $salt,
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($gen_params);
+
+        // Valid code should verify
+        $verify_params = [
+            'email' => 'test@example.com',
+            'code' => $code,
+            'salt' => $salt,
+        ];
+
+        $result = Dj_App_String_Util::verifyAuthCode($verify_params);
+        $this->assertTrue($result);
+    }
+
+    public function testVerifyAuthCodeInvalid()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        $verify_params = [
+            'email' => 'test@example.com',
+            'code' => '0000',
+            'salt' => $salt,
+        ];
+
+        $result = Dj_App_String_Util::verifyAuthCode($verify_params);
+        $this->assertFalse($result);
+    }
+
+    public function testVerifyAuthCodeMissing()
+    {
+        $this->assertFalse(Dj_App_String_Util::verifyAuthCode([]));
+
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        // Missing code
+        $this->assertFalse(Dj_App_String_Util::verifyAuthCode([
+            'email' => 'test@example.com',
+            'salt' => $salt,
+        ]));
+
+        // Missing email
+        $this->assertFalse(Dj_App_String_Util::verifyAuthCode([
+            'code' => '1234',
+            'salt' => $salt,
+        ]));
+    }
+
+    public function testVerifyAuthCodeStripsSpaces()
+    {
+        $salt = Dj_App_String_Util::generateAuthSalt();
+
+        $gen_params = [
+            'email' => 'test@example.com',
+            'salt' => $salt,
+        ];
+
+        $code = Dj_App_String_Util::generateAuthCode($gen_params);
+
+        // Format with spaces and verify it still works
+        $format_params = [ 'code' => $code, ];
+        $code_formatted = Dj_App_String_Util::formatAuthCode($format_params);
+
+        $verify_params = [
+            'email' => 'test@example.com',
+            'code' => $code_formatted,
+            'salt' => $salt,
+        ];
+
+        $result = Dj_App_String_Util::verifyAuthCode($verify_params);
+        $this->assertTrue($result);
+    }
+
+    public function testFormatAuthCode()
+    {
+        $params = [ 'code' => '4829', ];
+        $result = Dj_App_String_Util::formatAuthCode($params);
+        $this->assertEquals('48 29', $result);
+    }
+
+    public function testFormatAuthCodeSixDigit()
+    {
+        $params = [
+            'code' => '482913',
+            'chunk_size' => 3,
+        ];
+
+        $result = Dj_App_String_Util::formatAuthCode($params);
+        $this->assertEquals('482 913', $result);
+    }
+
+    public function testFormatAuthCodeEmpty()
+    {
+        $params = [ 'code' => '', ];
+        $result = Dj_App_String_Util::formatAuthCode($params);
+        $this->assertEmpty($result);
+    }
+
+    public function testCleanAuthCode()
+    {
+        $params = [ 'code' => '48 29', ];
+        $result = Dj_App_String_Util::cleanAuthCode($params);
+        $this->assertEquals('4829', $result);
+    }
+
+    public function testCleanAuthCodeWithDashes()
+    {
+        $params = [ 'code' => '48-29', ];
+        $result = Dj_App_String_Util::cleanAuthCode($params);
+        $this->assertEquals('4829', $result);
+    }
+
+    public function testCleanAuthCodeEmpty()
+    {
+        $params = [ 'code' => '', ];
+        $result = Dj_App_String_Util::cleanAuthCode($params);
+        $this->assertEmpty($result);
+    }
 }
