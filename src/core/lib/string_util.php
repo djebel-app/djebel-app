@@ -39,6 +39,33 @@ class Dj_App_String_Util
     }
 
     /**
+     * Check if a string contains a substring (case-insensitive).
+     * Uses str_contains() when available (PHP 8+), falls back to strpos().
+     * Dj_App_String_Util::contains();
+     *
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    public static function contains($haystack, $needle) {
+        if (empty($haystack) || empty($needle)) {
+            return false;
+        }
+
+        $needle = strtolower($needle);
+        $haystack = strtolower($haystack);
+
+        if (function_exists('str_contains')) {
+            $result = str_contains($haystack, $needle);
+            return $result;
+        }
+
+        $result = strpos($haystack, $needle) !== false;
+
+        return $result;
+    }
+
+    /**
      * Format a string to camelCase
      * Dj_App_String_Util::toCamelCase();
      */

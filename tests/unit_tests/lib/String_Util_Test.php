@@ -4,6 +4,36 @@ use PHPUnit\Framework\TestCase;
 
 class String_Util_Test extends TestCase {
 
+    public function testContainsCaseInsensitive()
+    {
+        $this->assertTrue(Dj_App_String_Util::contains('Hello World', 'hello'));
+        $this->assertTrue(Dj_App_String_Util::contains('Hello World', 'WORLD'));
+        $this->assertTrue(Dj_App_String_Util::contains('Hello World', 'lo Wo'));
+        $this->assertTrue(Dj_App_String_Util::contains('Hello World', 'Hello'));
+        $this->assertFalse(Dj_App_String_Util::contains('Hello World', 'xyz'));
+    }
+
+    public function testContainsEmptyValues()
+    {
+        $this->assertFalse(Dj_App_String_Util::contains('', 'test'));
+        $this->assertFalse(Dj_App_String_Util::contains('test', ''));
+        $this->assertFalse(Dj_App_String_Util::contains('', ''));
+        $this->assertFalse(Dj_App_String_Util::contains(null, 'test'));
+    }
+
+    public function testContainsRealWorldPatterns()
+    {
+        // HTML attribute checking (like stripos in html.php)
+        $attr = "class='btn' id='submit_btn' checked";
+        $this->assertTrue(Dj_App_String_Util::contains($attr, 'id='));
+        $this->assertTrue(Dj_App_String_Util::contains($attr, 'checked'));
+        $this->assertFalse(Dj_App_String_Util::contains($attr, 'disabled'));
+
+        // Hook name checking
+        $this->assertTrue(Dj_App_String_Util::contains('app/plugins/test', 's/'));
+        $this->assertFalse(Dj_App_String_Util::contains('app/plugin/test', 's/'));
+    }
+
     public function testGetFirstCharWithNormalString()
     {
         $result = Dj_App_String_Util::getFirstChar('hello');
@@ -611,7 +641,49 @@ class String_Util_Test extends TestCase {
         $this->assertEquals('a/b_c/d_e', $result);
     }
 
-    // --- Auth Code Tests (adapted from QS_Site_App_String_Util tests) ---
+    public function testSinglefyWithScalarMultiCharString()
+    {
+        // Multi-char string gets str_split into individual chars
+        $result = Dj_App_String_Util::singlefy('app///core___hook', '/_');
+        $this->assertEquals('app/core_hook', $result);
+    }
+
+    public function testSinglefyScalarVsArraySameResult()
+    {
+        $input = 'test///value___name---end';
+
+        // String arg
+        $result_str = Dj_App_String_Util::singlefy($input, '/_-');
+
+        // Array arg
+        $result_arr = Dj_App_String_Util::singlefy($input, [ '/', '_', '-', ]);
+
+        $this->assertEquals($result_arr, $result_str);
+        $this->assertEquals('test/value_name-end', $result_str);
+    }
+
+    public function testSinglefyScalarTwoChars()
+    {
+        // Underscore + dash as string
+        $result = Dj_App_String_Util::singlefy('my___cool---plugin', '_-');
+        $this->assertEquals('my_cool-plugin', $result);
+    }
+
+    public function testSinglefyScalarPageSlugPattern()
+    {
+        // Real-world: page slug cleanup with underscore + dash
+        $result = Dj_App_String_Util::singlefy('my___page---slug', '_-');
+        $this->assertEquals('my_page-slug', $result);
+    }
+
+    public function testSinglefyScalarHookPattern()
+    {
+        // Real-world: hook name cleanup with slash + underscore
+        $result = Dj_App_String_Util::singlefy('app///core___hook//test', '/_');
+        $this->assertEquals('app/core_hook/test', $result);
+    }
+
+    // --- Auth Code Tests ---
 
     public function testGenerateAuthSalt()
     {
