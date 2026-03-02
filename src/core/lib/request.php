@@ -122,7 +122,7 @@ class Dj_App_Request {
         // ensure the segments are good alphanumeric strings
         foreach ($segments as $idx => $segment) {
             $segment = urldecode($segment);
-            $segment = $this->formatPageSlug($segment);
+            $segment = Dj_App_String_Util::formatPageSlug($segment);
             $segments[$idx] = $segment;
         }
 
@@ -135,25 +135,6 @@ class Dj_App_Request {
         $this->request_data = $data;
 
         return $data;
-    }
-
-    /**
-     * @param string $page
-     * @return string
-     */
-    public function formatPageSlug($page)
-    {
-        // loop through the page and remove non alpha numeric and dash
-        $page = substr($page, 0, 100);
-
-        if (!Dj_App_String_Util::isAlphaNumericExt($page)) {
-            $page = preg_replace('/[^\w\-]/si', '_', $page);
-        }
-
-        $page = Dj_App_String_Util::singlefy($page, '_');
-        $page = Dj_App_String_Util::trim($page, '_');
-
-        return $page;
     }
 
     /**
