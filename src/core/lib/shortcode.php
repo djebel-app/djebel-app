@@ -109,9 +109,9 @@ class Dj_App_Shortcode {
     public function formatShortCode($code)
     {
         $code = preg_replace('#[^\w]+#si', '_', $code);
-        $code = preg_replace( '#_+#si', '_', $code );
+        $code = Dj_App_String_Util::singlefy($code, '_');
+        $code = Dj_App_String_Util::trim($code, '_');
         $code = strtolower($code);
-        $code = trim($code, '_');
         return $code;
     }
 
