@@ -154,8 +154,8 @@ class Djebel_App_HTML {
 		} elseif ( stripos( $attr, 'id=' ) === false ) { // ID not in the attrib list so we'll add it
 			$id = $name . '_' . $cur_val;
 			$id = preg_replace( '#[^\w\-]#si', '_', $id );
-			$id = preg_replace( '#\_+#si', '_', $id );
-			$id = trim( $id, '_' );
+			$id = Dj_App_String_Util::singlefy($id, '_');
+			$id = Dj_App_String_Util::trim($id, '_');
 			$attr .= " id='$id' ";
 		} elseif ( preg_match( '#id=[\'"]*([\w-]+)[\'"]*#si', $attr, $matches ) ) { // parse for ID
 			$id = $matches[1];
@@ -203,8 +203,8 @@ class Djebel_App_HTML {
 		} elseif ( stripos( $attr, 'id=' ) === false ) { // ID not in the attrib list so we'll add it
 			$id = $name;
 			$id = preg_replace( '#[^\w\-]#si', '_', $id );
-			$id = preg_replace( '#\_+#si', '_', $id );
-			$id = trim( $id, '_' );
+			$id = Dj_App_String_Util::singlefy($id, '_');
+			$id = Dj_App_String_Util::trim($id, '_');
 			$attr .= " id='$id' ";
 		} elseif ( preg_match( '#id=[\'"]*([\w-]+)[\'"]*#si', $attr, $matches ) ) { // parse for ID
 			$id = $matches[1];
