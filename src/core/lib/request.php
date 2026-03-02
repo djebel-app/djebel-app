@@ -145,7 +145,11 @@ class Dj_App_Request {
     {
         // loop through the page and remove non alpha numeric and dash
         $page = substr($page, 0, 100);
-        $page = preg_replace('/[^\w\-]/si', '_', $page);
+
+        if (!Dj_App_String_Util::isAlphaNumericExt($page)) {
+            $page = preg_replace('/[^\w\-]/si', '_', $page);
+        }
+
         $page = Dj_App_String_Util::singlefy($page, '_');
         $page = Dj_App_String_Util::trim($page, '_');
 
