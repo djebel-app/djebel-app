@@ -319,8 +319,8 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
 
         // let's put an underscore before each uppercase letter
         $key_fmt = preg_replace('#([A-Z])#s', '_${1}', $key_fmt);
-        $key_fmt = trim($key_fmt, '_'); // rm trailing
-        $key_fmt = preg_replace('#\_+#s', '_', $key_fmt); // single
+        $key_fmt = Dj_App_String_Util::trim($key_fmt, '_'); // rm trailing
+        $key_fmt = Dj_App_String_Util::singlefy($key_fmt, '_'); // single
         $key_fmt = strtolower($key_fmt);
 
         return $key_fmt;
