@@ -144,10 +144,10 @@ class Dj_App_Request {
     public function formatPageSlug($page)
     {
         // loop through the page and remove non alpha numeric and dash
-        $page = preg_replace('/[^\w\-]/si', '_', $page);
-        $page = preg_replace('/_+/si', '_', $page);
         $page = substr($page, 0, 100);
-        $page = trim($page, '_');
+        $page = preg_replace('/[^\w\-]/si', '_', $page);
+        $page = Dj_App_String_Util::singlefy($page, '_');
+        $page = Dj_App_String_Util::trim($page, '_');
 
         return $page;
     }
