@@ -279,6 +279,31 @@ class Dj_App_String_Util
     }
 
     /**
+     * Format a page slug segment - removes non-alphanumeric chars, collapses duplicates, and trims.
+     * Dj_App_String_Util::formatPageSlug();
+     *
+     * @param string $page
+     * @return string
+     */
+    public static function formatPageSlug($page)
+    {
+        if (empty($page) || $page == '/') {
+            return '';
+        }
+
+        $page = substr($page, 0, 100);
+
+        if (!Dj_App_String_Util::isAlphaNumericExt($page)) {
+            $page = preg_replace('/[^\w\-]/si', '_', $page);
+        }
+
+        $page = Dj_App_String_Util::singlefy($page, '_-');
+        $page = Dj_App_String_Util::trim($page, '_-');
+
+        return $page;
+    }
+
+    /**
      * Dj_App_String_Util::jsonEncode();
      *
      * @param array|object $thing
