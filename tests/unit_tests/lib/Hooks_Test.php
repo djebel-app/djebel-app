@@ -646,32 +646,32 @@ class Hooks_Test extends TestCase {
 
     public function testFormatHookNameLeadingTrailingJunk()
     {
-        // Test leading junk removal (spaces, tabs, newlines, numbers, special chars)
+        // Test leading junk removal (spaces, tabs, newlines, special chars)
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('   my_hook'));
-        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('123my_hook'));
+        $this->assertEquals('123my_hook', Dj_App_Hooks::formatHookName('123my_hook'));
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('___my_hook'));
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('---my_hook'));
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName(':::my_hook'));
 
         // Test trailing junk removal
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook   '));
-        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook123'));
+        $this->assertEquals('my_hook123', Dj_App_Hooks::formatHookName('my_hook123'));
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook___'));
         $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my_hook---'));
 
-        // Test both leading and trailing
-        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('123___my_hook___456'));
+        // Test both leading and trailing (digits preserved)
+        $this->assertEquals('123_my_hook_456', Dj_App_Hooks::formatHookName('123___my_hook___456'));
     }
 
     public function testFormatHookNameSeparatorNormalization()
     {
-        // Test spaces, colons, dots -> forward slash
+        // Spaces, colons, dots all normalize to /
         $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app core hook'));
         $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app:core:hook'));
         $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app.core.hook'));
         $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app : core . hook'));
 
-        // Test mixed separators
+        // Mixed separators
         $this->assertEquals('app/core/test/hook', Dj_App_Hooks::formatHookName('app.core:test hook'));
     }
 
@@ -731,8 +731,8 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('', Dj_App_Hooks::formatHookName('!!!@@@###'));
         $this->assertEquals('', Dj_App_Hooks::formatHookName('...:::///'));
 
-        // Test only numbers
-        $this->assertEquals('', Dj_App_Hooks::formatHookName('123456'));
+        // Test only numbers (digits are preserved as valid hook content)
+        $this->assertEquals('123456', Dj_App_Hooks::formatHookName('123456'));
 
         // Test single character
         $this->assertEquals('a', Dj_App_Hooks::formatHookName('a'));
@@ -777,7 +777,7 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('app/plugin/my_plugin/filter/pre_set_property',
             Dj_App_Hooks::formatHookName('app.plugins.my-plugin.filter.pre_set_property'));
 
-        $this->assertEquals('app/page/full_content',
+        $this->assertEquals('123app/page/full_content',
             Dj_App_Hooks::formatHookName('  123app.page.full_content___  '));
 
         $this->assertEquals('app/theme/current_theme_dir',
@@ -847,7 +847,8 @@ class Hooks_Test extends TestCase {
         // Test that leading/trailing junk is stripped before comparison
         $this->assertTrue(Dj_App_Hooks::isHook('  app/core/init  ', 'app/core/init'));
         $this->assertTrue(Dj_App_Hooks::isHook('app/core/init', '___app/core/init___'));
-        $this->assertTrue(Dj_App_Hooks::isHook('123app/core/init456', 'app/core/init'));
+        $this->assertFalse(Dj_App_Hooks::isHook('123app/core/init456', 'app/core/init'));
+        $this->assertTrue(Dj_App_Hooks::isHook('123app/core/init456', '123app/core/init456'));
         $this->assertTrue(Dj_App_Hooks::isHook('---app/core/init---', 'app/core/init'));
     }
 
@@ -908,6 +909,235 @@ class Hooks_Test extends TestCase {
 
         // Test numeric components
         $this->assertTrue(Dj_App_Hooks::isHook('app/v2/api', 'app.v2.api'));
+    }
+
+    public function testFormatHookNameSlashSeparator()
+    {
+        // Forward slash is a valid separator and passes through unchanged
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app/plugin/test'));
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('app/core/init'));
+
+        // Double slashes collapse to single
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app//plugin//test'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app///core///hook'));
+
+        // Leading and trailing slashes are trimmed
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('/app/core/init'));
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('app/core/init/'));
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('/app/core/init/'));
+        $this->assertEquals('app/core/init', Dj_App_Hooks::formatHookName('///app/core/init///'));
+    }
+
+    public function testFormatHookNameDotSeparator()
+    {
+        // Dots normalize to /
+        $this->assertEquals('app/plugin/simple_newsletter/verify_form_end',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.verify_form_end'));
+
+        $this->assertEquals('app/plugin/simple_newsletter/verify_form_start',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.verify_form_start'));
+
+        $this->assertEquals('app/plugin/simple_newsletter/form_start',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.form_start'));
+
+        $this->assertEquals('app/plugin/simple_newsletter/form_end',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.form_end'));
+
+        $this->assertEquals('app/plugin/simple_newsletter/data',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.data'));
+
+        $this->assertEquals('app/plugin/simple_newsletter/verification_email',
+            Dj_App_Hooks::formatHookName('app.plugin.simple_newsletter.verification_email'));
+    }
+
+    public function testFormatHookNameMixedSeparators()
+    {
+        // All separator styles produce the same canonical / output
+        $this->assertEquals('app/plugin/test/action',
+            Dj_App_Hooks::formatHookName('app.plugin.test.action'));
+
+        $this->assertEquals('app/plugin/test/action',
+            Dj_App_Hooks::formatHookName('app/plugin/test/action'));
+
+        $this->assertEquals('app/plugin/test/action',
+            Dj_App_Hooks::formatHookName('app.plugin/test.action'));
+
+        $this->assertEquals('app/plugin/test/action',
+            Dj_App_Hooks::formatHookName('app/plugin.test/action'));
+
+        // Slash + dot adjacent normalizes properly
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('app/.plugin./test'));
+    }
+
+    public function testFormatHookNameSpacesAroundSeparators()
+    {
+        // Spaces around slashes
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app / plugin / test'));
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app /plugin/ test'));
+
+        // Spaces around dots
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app . plugin . test'));
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('app .plugin. test'));
+
+        // Leading and trailing spaces
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('  app/plugin/test  '));
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName('  app.plugin.test  '));
+
+        // Tabs and newlines around separators
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName("app\t.\tplugin\t.\ttest"));
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName("app\n.\nplugin\n.\ntest"));
+
+        // Mixed spaces and separators
+        $this->assertEquals('app/plugin/simple_newsletter/data',
+            Dj_App_Hooks::formatHookName(' app . plugin . simple_newsletter . data '));
+    }
+
+    public function testHookRegistrationWithSlashNames()
+    {
+        // Register with / separator
+        Dj_App_Hooks::addFilter('app/plugin/slash_test', 'Hooks_Test::staticTestMethod');
+        $this->assertTrue(Dj_App_Hooks::hasFilter('app/plugin/slash_test'));
+
+        // Same hook accessed via dot notation
+        $this->assertTrue(Dj_App_Hooks::hasFilter('app.plugin.slash_test'));
+
+        $res = Dj_App_Hooks::applyFilter('app.plugin.slash_test', 'hello');
+        $this->assertEquals('hello_processed', $res);
+
+        Dj_App_Hooks::removeFilter('app/plugin/slash_test', 'Hooks_Test::staticTestMethod');
+    }
+
+    public function testHookRegistrationWithDotNames()
+    {
+        // Register with . separator
+        Dj_App_Hooks::addFilter('app.plugin.dot_test', 'Hooks_Test::staticTestMethod');
+        $this->assertTrue(Dj_App_Hooks::hasFilter('app.plugin.dot_test'));
+
+        // Same hook accessed via slash notation
+        $this->assertTrue(Dj_App_Hooks::hasFilter('app/plugin/dot_test'));
+
+        $res = Dj_App_Hooks::applyFilter('app/plugin/dot_test', 'world');
+        $this->assertEquals('world_processed', $res);
+
+        Dj_App_Hooks::removeFilter('app.plugin.dot_test', 'Hooks_Test::staticTestMethod');
+    }
+
+    public function testFormatHookNameMessyInput()
+    {
+        // Messy slashes
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('/ // / app / plugin / test ///'));
+
+        // Leading/trailing dots
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('...app.plugin.test...'));
+
+        // Double dots
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('app..plugin..test'));
+
+        // Mixed dots and slashes junk
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('...///app...plugin///test...///'));
+
+        // Spaces + slashes + dots mixed
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('  / . app . / plugin / . test .  /  '));
+
+        // Tabs and newlines with slashes
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName("\t/\tapp\t/\tplugin\t/\ttest\t/\t"));
+
+        // Just dots and slashes = empty
+        $this->assertEquals('',
+            Dj_App_Hooks::formatHookName('...///...'));
+
+        // Realistic messy newsletter hook
+        $this->assertEquals('app/plugin/simple_newsletter/data',
+            Dj_App_Hooks::formatHookName('  /app.plugin.simple_newsletter.data/  '));
+
+        // Colons mixed with dots and slashes
+        $this->assertEquals('app/plugin/test',
+            Dj_App_Hooks::formatHookName('::.app::plugin..:test.::'));
+
+        // Digits preserved with separators
+        $this->assertEquals('123/app/plugin/test/456',
+            Dj_App_Hooks::formatHookName('123/app.plugin.test/456'));
+
+        // Dashes between segments become underscores
+        $this->assertEquals('app/plugin/my_cool_plugin/action',
+            Dj_App_Hooks::formatHookName('app.plugin.my-cool-plugin.action'));
+    }
+
+    public function testFormatHookNameDigitsPreserved()
+    {
+        // Digits at edges are preserved
+        $this->assertEquals('123/app/plugin/test', Dj_App_Hooks::formatHookName('123.app.plugin.test'));
+        $this->assertEquals('app/plugin/test/456', Dj_App_Hooks::formatHookName('app.plugin.test.456'));
+        $this->assertEquals('app/v2/api', Dj_App_Hooks::formatHookName('app.v2.api'));
+        $this->assertEquals('app/error/404', Dj_App_Hooks::formatHookName('app.error.404'));
+        $this->assertEquals('app/plugin/test/2', Dj_App_Hooks::formatHookName('app/plugin/test/2'));
+
+        // Pure numbers
+        $this->assertEquals('123', Dj_App_Hooks::formatHookName('123'));
+        $this->assertEquals('42', Dj_App_Hooks::formatHookName('  42  '));
+    }
+
+    public function testFormatHookNameColonHandling()
+    {
+        // Colons normalize to / and trim from edges
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName(':::app:core:hook:::'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName(':app:core:hook:'));
+
+        // Colons mixed with dots and slashes
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app:core.hook'));
+        $this->assertEquals('app/core/hook', Dj_App_Hooks::formatHookName('app:core/hook'));
+    }
+
+    public function testFormatHookNameDashHandling()
+    {
+        // Dashes become underscores (non-word char)
+        $this->assertEquals('my_cool_plugin', Dj_App_Hooks::formatHookName('my-cool-plugin'));
+        $this->assertEquals('app/plugin/my_theme/setup', Dj_App_Hooks::formatHookName('app.plugin.my-theme.setup'));
+
+        // Leading/trailing dashes trimmed
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('---my_hook---'));
+
+        // Multiple dashes collapse
+        $this->assertEquals('my_hook', Dj_App_Hooks::formatHookName('my---hook'));
+    }
+
+    public function testFormatHookNameSpecialCharCombinations()
+    {
+        // @ # $ % ^ & * all become _
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app@hook'));
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app#hook'));
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app$hook'));
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app%hook'));
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app^hook'));
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app&hook'));
+
+        // Multiple special chars collapse to single _
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app@#$%hook'));
+
+        // Special chars at edges get trimmed
+        $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('!!!app_hook!!!'));
+    }
+
+    public function testFormatHookNameWhitespaceVariations()
+    {
+        // Tabs
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName("\tapp\tplugin\ttest\t"));
+
+        // Newlines
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName("\napp\nplugin\ntest\n"));
+
+        // Carriage returns
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName("\rapp\rplugin\rtest\r"));
+
+        // Mixed whitespace
+        $this->assertEquals('app/plugin/test', Dj_App_Hooks::formatHookName(" \t\n app \t\n plugin \t\n test \t\n "));
     }
 
     public function sampleAction() {
