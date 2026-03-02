@@ -299,7 +299,7 @@ class Dj_App_Hooks {
         $hook_name = substr($hook_name, 0, 100);
 
         // Normalize separators: spaces, tabs, newlines, colons, dots -> /
-        $separator_chars = [' ', "\t", "\n", "\r", ':', ];
+        $separator_chars = [' ', "\t", "\n", "\r", ':', '.', ];
         $separator_chars_str = implode('', $separator_chars);
 
         if (strpbrk($hook_name, $separator_chars_str) !== false) {
@@ -307,9 +307,9 @@ class Dj_App_Hooks {
         }
 
         // Convert remaining non-word chars to _, singlefy, trim
-        $hook_name = preg_replace('#[^\w/.]+#si', '_', $hook_name);
-        $hook_name = Dj_App_String_Util::singlefy($hook_name, ['_', '-', '/', '.']);
-        $hook_name = Dj_App_String_Util::trim($hook_name, '_/-.');
+        $hook_name = preg_replace('#[^\w/]+#si', '_', $hook_name);
+        $hook_name = Dj_App_String_Util::singlefy($hook_name, ['_', '-', '/', ]);
+        $hook_name = Dj_App_String_Util::trim($hook_name, '_/-');
         $hook_name = strtolower($hook_name);
 
         // if we have app/plugins/my_plugin/action -> app/plugin/my_plugin/action
