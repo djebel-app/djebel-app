@@ -683,6 +683,229 @@ class String_Util_Test extends TestCase {
         $this->assertEquals('app/core_hook/test', $result);
     }
 
+    // --- formatPageSlug Tests ---
+
+    public function testFormatPageSlugBasic()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('about');
+        $this->assertEquals('about', $result);
+    }
+
+    public function testFormatPageSlugWithDashes()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my-page');
+        $this->assertEquals('my-page', $result);
+    }
+
+    public function testFormatPageSlugWithUnderscores()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my_page');
+        $this->assertEquals('my_page', $result);
+    }
+
+    public function testFormatPageSlugEmpty()
+    {
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug(''));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('/'));
+    }
+
+    public function testFormatPageSlugSpecialChars()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my page!@#test');
+        $this->assertEquals('my_page_test', $result);
+    }
+
+    public function testFormatPageSlugConsecutiveSeparators()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my___page---test');
+        $this->assertEquals('my_page-test', $result);
+    }
+
+    public function testFormatPageSlugLeadingTrailingSeparators()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('__my_page__');
+        $this->assertEquals('my_page', $result);
+    }
+
+    public function testFormatPageSlugAlphaNumericFastPath()
+    {
+        // Already clean - isAlphaNumericExt fast-path
+        $result = Dj_App_String_Util::formatPageSlug('contact-us');
+        $this->assertEquals('contact-us', $result);
+    }
+
+    public function testFormatPageSlugMaxLength()
+    {
+        $long_page = str_repeat('a', 200);
+        $result = Dj_App_String_Util::formatPageSlug($long_page);
+        $this->assertEquals(100, strlen($result));
+    }
+
+    public function testFormatPageSlugWithNumbers()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('page123');
+        $this->assertEquals('page123', $result);
+    }
+
+    public function testFormatPageSlugWithDots()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my.page.test');
+        $this->assertEquals('my_page_test', $result);
+    }
+
+    public function testFormatPageSlugWithSpaces()
+    {
+        $result = Dj_App_String_Util::formatPageSlug('my page test');
+        $this->assertEquals('my_page_test', $result);
+    }
+
+    public function testFormatPageSlugMixedCase()
+    {
+        // preserves case
+        $result = Dj_App_String_Util::formatPageSlug('MyPage');
+        $this->assertEquals('MyPage', $result);
+    }
+
+    public function testFormatPageSlugWeirdInputs()
+    {
+        // slashes get converted to _ then trimmed/singified
+        $this->assertEquals('page1_subpage1', Dj_App_String_Util::formatPageSlug('/page1/subpage1/'));
+        $this->assertEquals('page1', Dj_App_String_Util::formatPageSlug('/page1/'));
+        $this->assertEquals('page1_subpage1_deep', Dj_App_String_Util::formatPageSlug('/page1/subpage1/deep'));
+        $this->assertEquals('page1', Dj_App_String_Util::formatPageSlug('///page1///'));
+
+        // multiple slashes only
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('///'));
+
+        // dots and mixed separators
+        $this->assertEquals('page_v2_test', Dj_App_String_Util::formatPageSlug('page.v2.test'));
+        $this->assertEquals('my_page_here', Dj_App_String_Util::formatPageSlug('my...page...here'));
+
+        // spaces and tabs
+        $this->assertEquals('hello_world', Dj_App_String_Util::formatPageSlug('  hello   world  '));
+        $this->assertEquals('tab_separated', Dj_App_String_Util::formatPageSlug("\ttab\tseparated\t"));
+
+        // special chars galore
+        $this->assertEquals('page', Dj_App_String_Util::formatPageSlug('!!!page!!!'));
+        $this->assertEquals('a_b_c', Dj_App_String_Util::formatPageSlug('@a#b$c%'));
+        $this->assertEquals('test_page_1', Dj_App_String_Util::formatPageSlug('test&page=1'));
+
+        // unicode / non-ascii
+        $this->assertEquals('caf', Dj_App_String_Util::formatPageSlug('café'));
+        $this->assertEquals('ber-uns', Dj_App_String_Util::formatPageSlug('über-uns'));
+
+        // only special chars → empty after trim
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('!!!@@@###'));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('...'));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('   '));
+
+        // dashes and underscores mixed
+        $this->assertEquals('my-page_test', Dj_App_String_Util::formatPageSlug('--my-page__test--'));
+        $this->assertEquals('a-b_c', Dj_App_String_Util::formatPageSlug('---a---b___c---'));
+
+        // query string style
+        $this->assertEquals('page_id_5_sort_name', Dj_App_String_Util::formatPageSlug('page?id=5&sort=name'));
+
+        // null byte and control chars
+        $this->assertEquals('page_test', Dj_App_String_Util::formatPageSlug("page\0test"));
+
+        // single char
+        $this->assertEquals('a', Dj_App_String_Util::formatPageSlug('a'));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('.'));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('_'));
+        $this->assertEmpty(Dj_App_String_Util::formatPageSlug('-'));
+    }
+
+    public function testFormatPageSlugDeepDirPaths()
+    {
+        // deep directory-style paths → flattened to one string
+        $this->assertEquals('en_blog_my-post_comments', Dj_App_String_Util::formatPageSlug('/en/blog/my-post/comments'));
+        $this->assertEquals('a_b_c_d_e_f', Dj_App_String_Util::formatPageSlug('/a/b/c/d/e/f'));
+        $this->assertEquals('users_123_profile_settings', Dj_App_String_Util::formatPageSlug('/users/123/profile/settings'));
+        $this->assertEquals('app_v2_api_endpoint', Dj_App_String_Util::formatPageSlug('/app/v2/api/endpoint/'));
+        $this->assertEquals('2024_03_my-article', Dj_App_String_Util::formatPageSlug('/2024/03/my-article'));
+        $this->assertEquals('en_products_shoes_nike-air', Dj_App_String_Util::formatPageSlug('en/products/shoes/nike-air/'));
+        $this->assertEquals('blog_category_sub_cat_post-title', Dj_App_String_Util::formatPageSlug('blog/category/sub_cat/post-title'));
+
+        // deep with trailing/leading slashes and doubles
+        $this->assertEquals('a_b_c', Dj_App_String_Util::formatPageSlug('///a///b///c///'));
+        $this->assertEquals('one_two_three', Dj_App_String_Util::formatPageSlug('//one//two//three//'));
+    }
+
+    public function testFormatPageSlugDotsInPaths()
+    {
+        // dots as separators (like file extensions or domain-style)
+        $this->assertEquals('index_html', Dj_App_String_Util::formatPageSlug('index.html'));
+        $this->assertEquals('page_php', Dj_App_String_Util::formatPageSlug('page.php'));
+        $this->assertEquals('archive_tar_gz', Dj_App_String_Util::formatPageSlug('archive.tar.gz'));
+        $this->assertEquals('my_site_com_about', Dj_App_String_Util::formatPageSlug('my.site.com/about'));
+        $this->assertEquals('v1_2_3', Dj_App_String_Util::formatPageSlug('v1.2.3'));
+        $this->assertEquals('config_backup_2024_01_15', Dj_App_String_Util::formatPageSlug('config.backup.2024.01.15'));
+
+        // dots + slashes mixed
+        $this->assertEquals('en_blog_post_v2_draft', Dj_App_String_Util::formatPageSlug('/en/blog/post.v2.draft'));
+        $this->assertEquals('api_v1_users_list_json', Dj_App_String_Util::formatPageSlug('/api/v1/users/list.json'));
+        $this->assertEquals('assets_css_main_min_css', Dj_App_String_Util::formatPageSlug('/assets/css/main.min.css'));
+
+        // dots + dashes + slashes all together
+        $this->assertEquals('my-app_v2_api_user-profile_settings', Dj_App_String_Util::formatPageSlug('/my-app/v2.api/user-profile/settings'));
+        $this->assertEquals('blog_2024_my-post_final_v3', Dj_App_String_Util::formatPageSlug('blog/2024/my-post.final.v3'));
+
+        // consecutive dots in paths
+        $this->assertEquals('path_to_file', Dj_App_String_Util::formatPageSlug('/path/../to/./file'));
+        $this->assertEquals('a_b_c', Dj_App_String_Util::formatPageSlug('a...b...c'));
+    }
+
+    public function testFormatPageSlugSpecialCharsAggressive()
+    {
+        // HTML tags
+        $this->assertEquals('b_hello_b', Dj_App_String_Util::formatPageSlug('<b>hello</b>'));
+        $this->assertEquals('script_alert_1_script', Dj_App_String_Util::formatPageSlug('<script>alert(1)</script>'));
+        $this->assertEquals('a_href_x_click_a', Dj_App_String_Util::formatPageSlug('<a href="x">click</a>'));
+        $this->assertEquals('img_src_x_onerror_alert_1', Dj_App_String_Util::formatPageSlug('<img src=x onerror=alert(1)>'));
+
+        // URL-encoded strings
+        $this->assertEquals('hello_20world', Dj_App_String_Util::formatPageSlug('hello%20world'));
+        $this->assertEquals('path_2Fto_2Fpage', Dj_App_String_Util::formatPageSlug('path%2Fto%2Fpage'));
+        $this->assertEquals('3Cscript_3E', Dj_App_String_Util::formatPageSlug('%3Cscript%3E'));
+
+        // SQL injection style
+        $this->assertEquals('1_OR_1_1', Dj_App_String_Util::formatPageSlug("1' OR '1'='1"));
+        $this->assertEquals('DROP_TABLE_users', Dj_App_String_Util::formatPageSlug("'; DROP TABLE users; --"));
+        $this->assertEquals('UNION_SELECT_FROM_users', Dj_App_String_Util::formatPageSlug("UNION SELECT * FROM users"));
+
+        // backticks, quotes, brackets
+        $this->assertEquals('page', Dj_App_String_Util::formatPageSlug('`page`'));
+        $this->assertEquals('page', Dj_App_String_Util::formatPageSlug('"page"'));
+        $this->assertEquals('page', Dj_App_String_Util::formatPageSlug("'page'"));
+        $this->assertEquals('arr_0', Dj_App_String_Util::formatPageSlug('arr[0]'));
+        $this->assertEquals('obj_key', Dj_App_String_Util::formatPageSlug('{obj}{key}'));
+
+        // newlines, carriage returns in paths
+        $this->assertEquals('line1_line2', Dj_App_String_Util::formatPageSlug("line1\nline2"));
+        $this->assertEquals('line1_line2', Dj_App_String_Util::formatPageSlug("line1\r\nline2"));
+        $this->assertEquals('a_b_c', Dj_App_String_Util::formatPageSlug("a\n\n\nb\r\r\rc"));
+
+        // emoji and multibyte
+        $this->assertNotEmpty(Dj_App_String_Util::formatPageSlug('page-👍-test'));
+        $this->assertEquals('page-_-test', Dj_App_String_Util::formatPageSlug('page-★-test'));
+        $this->assertEquals('page-_-test', Dj_App_String_Util::formatPageSlug('page-→-test'));
+
+        // path traversal attempts — leading dots/underscores get trimmed
+        $this->assertEquals('etc_passwd', Dj_App_String_Util::formatPageSlug('../../../../etc/passwd'));
+        $this->assertEquals('windows_system32', Dj_App_String_Util::formatPageSlug('..\\..\\windows\\system32'));
+        $this->assertEquals('etc_shadow', Dj_App_String_Util::formatPageSlug('/./../../etc/shadow'));
+
+        // protocol/scheme attempts
+        $this->assertEquals('javascript_alert_1', Dj_App_String_Util::formatPageSlug('javascript:alert(1)'));
+        $this->assertEquals('data_text_html_b_xss_b', Dj_App_String_Util::formatPageSlug('data:text/html,<b>xss</b>'));
+        $this->assertEquals('file_etc_passwd', Dj_App_String_Util::formatPageSlug('file:///etc/passwd'));
+
+        // mixed chaos
+        $this->assertEquals('p_ge_wi_h_ll-s_rts', Dj_App_String_Util::formatPageSlug('<p@ge/wi%h/àll-sörts!>'));
+        $this->assertEquals('x_y', Dj_App_String_Util::formatPageSlug('  ///x...///...y///  '));
+    }
+
     // --- Auth Code Tests ---
 
     public function testGenerateAuthSalt()
