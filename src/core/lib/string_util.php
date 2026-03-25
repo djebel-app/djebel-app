@@ -505,6 +505,42 @@ class Dj_App_String_Util
     }
 
     /**
+     * Escape shortcode-like brackets in a string.
+     * Only escapes [ when followed by a letter (shortcode pattern).
+     * Leaves array syntax [0], [$var], etc. untouched.
+     * Dj_App_String_Util::escapeShortcodeBrackets($str);
+     *
+     * @param string $str
+     * @return string
+     */
+    public static function escapeShortcodeBrackets($str)
+    {
+        if (strpos($str, '[') === false) {
+            return $str;
+        }
+
+        $len = strlen($str);
+        $result = '';
+
+        for ($i = 0; $i < $len; $i++) {
+            $char = $str[$i];
+
+            if ($char === '[') {
+                $next_char = ($i + 1 < $len) ? $str[$i + 1] : '';
+
+                if (ctype_alpha($next_char)) {
+                    $result .= '&#91;';
+                    continue;
+                }
+            }
+
+            $result .= $char;
+        }
+
+        return $result;
+    }
+
+    /**
      * Generate a deterministic auth salt for code generation
      * Dj_App_String_Util::generateAuthSalt();
      *
