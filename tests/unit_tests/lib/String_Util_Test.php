@@ -34,6 +34,43 @@ class String_Util_Test extends TestCase {
         $this->assertFalse(Dj_App_String_Util::contains('app/plugin/test', 's/'));
     }
 
+    public function testReplaceMergeTags()
+    {
+        $template = '%title% | %site_title%';
+        $replace_map = [
+            '%title%' => 'Hosting',
+            '%site_title%' => 'fsite.net',
+        ];
+
+        $result = Dj_App_String_Util::replaceMergeTags($template, $replace_map);
+
+        $this->assertEquals('Hosting | fsite.net', $result);
+    }
+
+    public function testReplaceMergeTagsWithNoTags()
+    {
+        $template = 'Hosting title';
+        $replace_map = [
+            '%title%' => 'Ignored',
+        ];
+
+        $result = Dj_App_String_Util::replaceMergeTags($template, $replace_map);
+
+        $this->assertEquals('Hosting title', $result);
+    }
+
+    public function testReplaceMergeTagsWithEmptyTemplate()
+    {
+        $template = '';
+        $replace_map = [
+            '%title%' => 'Hosting',
+        ];
+
+        $result = Dj_App_String_Util::replaceMergeTags($template, $replace_map);
+
+        $this->assertEquals('', $result);
+    }
+
     public function testGetFirstCharWithNormalString()
     {
         $result = Dj_App_String_Util::getFirstChar('hello');
