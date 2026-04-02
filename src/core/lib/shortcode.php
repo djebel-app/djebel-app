@@ -151,6 +151,9 @@ class Dj_App_Shortcode {
             }
         }
 
+        // Escape shortcode brackets inside <pre> and <code> blocks before processing
+        $content = $this->escapeShortcodesInCodeBlocks($content);
+
         // Normalize shortcode dashes to underscores
         $content = $this->prepareShortcodes($content);
 
@@ -361,6 +364,104 @@ class Dj_App_Shortcode {
         }
 
         return $params;
+    }
+
+    /**
+     * Escapes shortcode-like brackets inside <pre> and <code> blocks
+     * so the shortcode engine doesn't process them.
+     * Uses Dj_App_String_Util::escapeShortcodeBrackets() which converts [ to &#91;
+     * only when followed by a letter (actual shortcode pattern).
+     *
+     * @param string $content
+     * @return string
+     */
+    public function escapeShortcodesInCodeBlocks($content)
+    {
+        if (empty($content)) {
+            return '';
+        }
+
+        // Quick check — no brackets means nothing to escape
+        if (strpos($content, '[') === false) {
+            return $content;
+        }
+
+        // Quick check — no code blocks means nothing to do
+        if (stripos($content, '<code') === false && stripos($content, '<pre') === false) {
+            return $content;
+        }
+
+        // Process <pre> first (catches <pre><code>...</code></pre> too),
+        // then standalone <code> outside <pre>
+        $code_tags = [ 'pre', 'code', ];
+
+        foreach ($code_tags as $tag) {
+            $content = $this->escapeShortcodesInTag($content, $tag);
+        }
+
+        return $content;
+    }
+
+    /**
+     * Escapes shortcode brackets inside all instances of a specific HTML tag.
+     * Walks through the content with strpos, finds each open/close tag pair,
+     * and escapes brackets in the inner content.
+     *
+     * @param string $content
+     * @param string $tag HTML tag name (e.g. 'pre', 'code')
+     * @return string
+     */
+    public function escapeShortcodesInTag($content, $tag)
+    {
+        $open_tag = '<' . $tag;
+        $close_tag = '</' . $tag . '>';
+        $close_tag_len = strlen($close_tag);
+        $search_pos = 0;
+
+        while (($open_pos = stripos($content, $open_tag, $search_pos)) !== false) {
+            // Find end of opening tag (handles attributes like <pre class="...">)
+            $open_tag_end = strpos($content, '>', $open_pos);
+
+            if ($open_tag_end === false) {
+                break;
+            }
+
+            $content_start = $open_tag_end + 1;
+
+            // Find closing tag
+            $close_pos = stripos($content, $close_tag, $content_start);
+
+            if ($close_pos === false) {
+                break;
+            }
+
+            $inner_len = $close_pos - $content_start;
+            $inner = substr($content, $content_start, $inner_len);
+
+            // Only escape if there are brackets inside
+            if (strpos($inner, '[') === false) {
+                $search_pos = $close_pos + $close_tag_len;
+                continue;
+            }
+
+            $escaped = Dj_App_String_Util::escapeShortcodeBrackets($inner);
+
+            // Only rebuild the string if something actually changed
+            if ($escaped === $inner) {
+                $search_pos = $close_pos + $close_tag_len;
+                continue;
+            }
+
+            $before = substr($content, 0, $content_start);
+            $after = substr($content, $close_pos);
+            $content = $before . $escaped . $after;
+
+            // Adjust search position for the length difference
+            $len_diff = strlen($escaped) - $inner_len;
+            $search_pos = $close_pos + $close_tag_len + $len_diff;
+        }
+
+        return $content;
     }
 
     /**
