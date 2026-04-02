@@ -554,4 +554,231 @@ class Shortcode_Test extends TestCase
         // Should still find and process the shortcode
         $this->assertStringContainsString('SIMPLE_SHORTCODE_OUTPUT', $result);
     }
+
+    // =============================================
+    // escapeShortcodesInCodeBlocks tests
+    // =============================================
+
+    /**
+     * Test shortcodes inside <pre> blocks are escaped
+     */
+    public function testEscapeShortcodesInPreBlock()
+    {
+        $content = '<p>Hello</p><pre>[test_simple]</pre><p>World</p>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('&#91;test_simple]', $result);
+        $this->assertStringContainsString('<p>Hello</p>', $result);
+        $this->assertStringContainsString('<p>World</p>', $result);
+    }
+
+    /**
+     * Test shortcodes inside <code> blocks are escaped
+     */
+    public function testEscapeShortcodesInCodeBlock()
+    {
+        $content = '<p>Use <code>[test_simple]</code> to render output</p>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('&#91;test_simple]', $result);
+        $this->assertStringContainsString('<p>Use', $result);
+    }
+
+    /**
+     * Test shortcodes inside nested <pre><code> blocks are escaped
+     */
+    public function testEscapeShortcodesInNestedPreCode()
+    {
+        $content = '<pre><code>[test_simple] [test_with_params name="foo"]</code></pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringNotContainsString('[test_simple]', $result);
+        $this->assertStringNotContainsString('[test_with_params', $result);
+        $this->assertStringContainsString('&#91;test_simple]', $result);
+        $this->assertStringContainsString('&#91;test_with_params', $result);
+    }
+
+    /**
+     * Test shortcodes outside code blocks are NOT escaped
+     */
+    public function testEscapeShortcodesLeavesNonCodeContent()
+    {
+        $content = '<p>[test_simple]</p><pre>[test_simple]</pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        // The one outside <pre> should remain untouched
+        $this->assertStringContainsString('<p>[test_simple]</p>', $result);
+        // The one inside <pre> should be escaped
+        $this->assertStringContainsString('<pre>&#91;test_simple]</pre>', $result);
+    }
+
+    /**
+     * Test multiple code blocks in same content
+     */
+    public function testEscapeShortcodesMultipleCodeBlocks()
+    {
+        $content = '<pre>[test_simple]</pre><p>text</p><pre>[test_with_params]</pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('<pre>&#91;test_simple]</pre>', $result);
+        $this->assertStringContainsString('<pre>&#91;test_with_params]</pre>', $result);
+        $this->assertStringContainsString('<p>text</p>', $result);
+    }
+
+    /**
+     * Test code blocks with attributes (e.g. <pre class="language-php">)
+     */
+    public function testEscapeShortcodesInCodeBlockWithAttributes()
+    {
+        $content = '<pre class="language-php"><code>[test_simple]</code></pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('&#91;test_simple]', $result);
+        $this->assertStringContainsString('class="language-php"', $result);
+    }
+
+    /**
+     * Test content with no code blocks passes through unchanged
+     */
+    public function testEscapeShortcodesNoCodeBlocks()
+    {
+        $content = '<p>[test_simple] is a shortcode</p>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertEquals($content, $result);
+    }
+
+    /**
+     * Test content with no brackets passes through unchanged
+     */
+    public function testEscapeShortcodesNoBrackets()
+    {
+        $content = '<pre>just plain text</pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertEquals($content, $result);
+    }
+
+    /**
+     * Test empty content
+     */
+    public function testEscapeShortcodesEmptyContent()
+    {
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks('');
+
+        $this->assertEmpty($result);
+    }
+
+    /**
+     * Test array syntax inside code blocks is NOT escaped
+     * escapeShortcodeBrackets only escapes [ followed by a letter
+     */
+    public function testEscapeShortcodesPreservesArraySyntax()
+    {
+        $content = '<pre>$items[0] = "test"; $data[$key] = 123;</pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('$items[0]', $result);
+        $this->assertStringContainsString('$data[$key]', $result);
+    }
+
+    /**
+     * Test that full replaceShortCodes skips shortcodes inside <pre> blocks
+     */
+    public function testReplaceShortCodesSkipsCodeBlocks()
+    {
+        $html = '<html><body><p>[test_simple]</p><pre>[test_simple]</pre></body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        // Shortcode outside <pre> should be replaced
+        $this->assertStringContainsString('<p>SIMPLE_SHORTCODE_OUTPUT</p>', $result);
+        // Shortcode inside <pre> should be escaped, not replaced
+        $this->assertStringContainsString('<pre>&#91;test_simple]</pre>', $result);
+        $this->assertStringNotContainsString('<pre>SIMPLE_SHORTCODE_OUTPUT</pre>', $result);
+    }
+
+    /**
+     * Test that full replaceShortCodes skips shortcodes inside <code> blocks
+     */
+    public function testReplaceShortCodesSkipsInlineCode()
+    {
+        $html = '<html><body>Use <code>[test_simple]</code> for output: [test_simple]</body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        // Inline code should be escaped
+        $this->assertStringContainsString('<code>&#91;test_simple]</code>', $result);
+        // The one outside code should be replaced
+        $this->assertStringContainsString('for output: SIMPLE_SHORTCODE_OUTPUT', $result);
+    }
+
+    /**
+     * Test kebab-case shortcodes inside code blocks are also escaped
+     */
+    public function testEscapeShortcodesKebabCaseInCodeBlock()
+    {
+        $content = '<pre>[test-with-params name="foo"]</pre>';
+        $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
+
+        $this->assertStringContainsString('&#91;test-with-params', $result);
+    }
+
+    // =============================================
+    // escapeShortcodesInTag tests
+    // =============================================
+
+    /**
+     * Test escaping in a single tag
+     */
+    public function testEscapeShortcodesInTagSingleOccurrence()
+    {
+        $content = '<pre>[shortcode_name]</pre>';
+        $result = $this->shortcode->escapeShortcodesInTag($content, 'pre');
+
+        $this->assertEquals('<pre>&#91;shortcode_name]</pre>', $result);
+    }
+
+    /**
+     * Test escaping multiple occurrences of same tag
+     */
+    public function testEscapeShortcodesInTagMultipleOccurrences()
+    {
+        $content = '<code>[foo]</code> text <code>[bar]</code>';
+        $result = $this->shortcode->escapeShortcodesInTag($content, 'code');
+
+        $this->assertEquals('<code>&#91;foo]</code> text <code>&#91;bar]</code>', $result);
+    }
+
+    /**
+     * Test tag with no brackets inside passes through
+     */
+    public function testEscapeShortcodesInTagNoBrackets()
+    {
+        $content = '<pre>no brackets here</pre>';
+        $result = $this->shortcode->escapeShortcodesInTag($content, 'pre');
+
+        $this->assertEquals($content, $result);
+    }
+
+    /**
+     * Test unclosed tag is handled gracefully
+     */
+    public function testEscapeShortcodesInTagUnclosedTag()
+    {
+        $content = '<pre>[shortcode_name] no closing tag';
+        $result = $this->shortcode->escapeShortcodesInTag($content, 'pre');
+
+        // No closing </pre>, should return unchanged
+        $this->assertEquals($content, $result);
+    }
+
+    /**
+     * Test case-insensitive tag matching (e.g. <PRE>)
+     */
+    public function testEscapeShortcodesInTagCaseInsensitive()
+    {
+        $content = '<PRE>[shortcode_name]</PRE>';
+        $result = $this->shortcode->escapeShortcodesInTag($content, 'pre');
+
+        $this->assertStringContainsString('&#91;shortcode_name]', $result);
+    }
 }

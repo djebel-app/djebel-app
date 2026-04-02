@@ -1144,4 +1144,95 @@ class String_Util_Test extends TestCase {
         $result = Dj_App_String_Util::cleanAuthCode($params);
         $this->assertEmpty($result);
     }
+
+    // --- escapeShortcodeBrackets Tests ---
+
+    public function testEscapeShortcodeBracketsBasic()
+    {
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('[shortcode_name]');
+
+        $this->assertEquals('&#91;shortcode_name]', $result);
+    }
+
+    public function testEscapeShortcodeBracketsMultiple()
+    {
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('[foo] and [bar]');
+
+        $this->assertEquals('&#91;foo] and &#91;bar]', $result);
+    }
+
+    public function testEscapeShortcodeBracketsPreservesArraySyntax()
+    {
+        // [ followed by digit or $ should NOT be escaped
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('$items[0] = "test"');
+
+        $this->assertEquals('$items[0] = "test"', $result);
+    }
+
+    public function testEscapeShortcodeBracketsPreservesDollarVar()
+    {
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('$data[$key]');
+
+        $this->assertEquals('$data[$key]', $result);
+    }
+
+    public function testEscapeShortcodeBracketsMixed()
+    {
+        // Mix of shortcode-like and array-like brackets
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('$arr[0] and [shortcode] and $x[$y]');
+
+        $this->assertStringContainsString('$arr[0]', $result);
+        $this->assertStringContainsString('&#91;shortcode]', $result);
+        $this->assertStringContainsString('$x[$y]', $result);
+    }
+
+    public function testEscapeShortcodeBracketsNoBrackets()
+    {
+        $input = 'no brackets here';
+        $result = Dj_App_String_Util::escapeShortcodeBrackets($input);
+
+        $this->assertEquals($input, $result);
+    }
+
+    public function testEscapeShortcodeBracketsEmpty()
+    {
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('');
+
+        $this->assertEmpty($result);
+    }
+
+    public function testEscapeShortcodeBracketsEmptyBrackets()
+    {
+        // [] with nothing after [ — should NOT be escaped
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('items[] = 5');
+
+        $this->assertEquals('items[] = 5', $result);
+    }
+
+    public function testEscapeShortcodeBracketsTrailingBracket()
+    {
+        // [ at end of string — no next char
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('test[');
+
+        $this->assertEquals('test[', $result);
+    }
+
+    public function testEscapeShortcodeBracketsWithParams()
+    {
+        $result = Dj_App_String_Util::escapeShortcodeBrackets('[djebel_static_content content_id="blog" results_per_page="15"]');
+
+        $this->assertStringStartsWith('&#91;', $result);
+        $this->assertStringContainsString('djebel_static_content', $result);
+    }
+
+    public function testEscapeShortcodeBracketsIdempotent()
+    {
+        // Already escaped content should not be double-escaped
+        $input = '&#91;shortcode_name]';
+        $result = Dj_App_String_Util::escapeShortcodeBrackets($input);
+
+        // &#91; starts with &, not a letter, so [ before & won't match
+        // and there's no [ in the input at all
+        $this->assertEquals($input, $result);
+    }
 }
