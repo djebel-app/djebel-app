@@ -1793,6 +1793,56 @@ CLEAR_AND_REDIRECT_HTML;
     {
         $this->default_headers = $default_headers;
     }
+
+    /**
+     * Flush the HTTP response to the client and continue PHP execution in the background.
+     * Useful for deferring slow tasks (e.g., push notifications, email) after the response.
+     *
+     * Supports: PHP-FPM (fastcgi_finish_request), LiteSpeed, mod_php (Connection: close).
+     */
+    public function finishRequest()
+    {
+        set_time_limit(45);
+        ignore_user_abort(true);
+
+        // Disable output compression — prevents gzip from breaking Content-Length
+        @ini_set('zlib.output_compression', 'Off');
+
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', 1);
+        }
+
+        // Close session early to prevent blocking concurrent requests
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        if (!headers_sent()) {
+            @header('Connection: close', true);
+            @header('Content-Encoding: none', true);
+
+            $content_length = ob_get_length();
+
+            if ($content_length !== false) {
+                @header('Content-Length: ' . $content_length, true);
+            }
+        }
+
+        // Flush all output buffer levels
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+
+        @ob_flush();
+        flush();
+
+        // SAPI-specific finish — called after flushing
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        }
+    }
 }
 
 /**
