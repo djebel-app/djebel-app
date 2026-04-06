@@ -1802,7 +1802,9 @@ CLEAR_AND_REDIRECT_HTML;
      */
     public function finishRequest()
     {
-        set_time_limit(45);
+        $time_limit = Dj_App_Config::cfg('app.request.finish_request_time_limit', 45);
+        $time_limit = Dj_App_Hooks::applyFilter('app/request/finish_request_time_limit', $time_limit);
+        set_time_limit($time_limit);
         ignore_user_abort(true);
 
         // Disable output compression — prevents gzip from breaking Content-Length
