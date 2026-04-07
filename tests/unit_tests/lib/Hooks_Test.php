@@ -1168,14 +1168,12 @@ class Hooks_Test extends TestCase {
     }
 
     /**
-     * Simulates what bootstrap (index.php) does in the shutdown phase: fires
-     * 'app/shutdown' for any listeners, then drains the captured deferred queue.
-     * The drain logic itself lives in Dj_App_Hooks::runDeferredActions() so it's
-     * a single source of truth shared between bootstrap and tests.
+     * Simulates what PHP's shutdown function does in the bootstrap (registered via
+     * register_shutdown_function in index.php). Single entry point: runShutdownHooks()
+     * fires 'app/shutdown' listeners, drains them, then drains the deferred queue.
      */
     private function simulateShutdown() {
-        Dj_App_Hooks::doAction('app/shutdown');
-        Dj_App_Hooks::runDeferredActions();
+        Dj_App_Hooks::runShutdownHooks();
     }
 
     public static function deferredCallback($params, $hook = '') {
