@@ -1151,4 +1151,486 @@ class Hooks_Test extends TestCase {
     public static function staticStringMethod($value, $params = [], $hook_name = '') {
         return strlen($value);
     }
+
+    // ============================================================
+    // Deferred Action Tests
+    // ============================================================
+
+    public static $deferred_call_log = [];
+
+    protected function tearDown(): void {
+        // Full reset between deferred-action tests so static state from one test
+        // doesn't leak into the next. The setters default to [] = clear/reset.
+        self::$deferred_call_log = [];
+        Dj_App_Hooks::setDeferredActionsData();
+        Dj_App_Hooks::setDeferredActions();
+        Dj_App_Hooks::setActions();
+    }
+
+    /**
+     * Simulates what bootstrap (index.php) does in the shutdown phase: fires
+     * 'app/shutdown' for any listeners, then drains the captured deferred queue.
+     * The drain logic itself lives in Dj_App_Hooks::runDeferredActions() so it's
+     * a single source of truth shared between bootstrap and tests.
+     */
+    private function simulateShutdown() {
+        Dj_App_Hooks::doAction('app/shutdown');
+        Dj_App_Hooks::runDeferredActions();
+    }
+
+    public static function deferredCallback($params, $hook = '') {
+        self::$deferred_call_log[] = [
+            'params' => $params,
+            'hook' => $hook,
+        ];
+    }
+
+    public static function deferredCallbackB($params, $hook = '') {
+        self::$deferred_call_log[] = [
+            'params' => $params,
+            'hook' => $hook,
+            'tag' => 'B',
+        ];
+    }
+
+    public function testAddDeferredActionDoesNotRunImmediately() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_run_yet', $callback, 50);
+
+        // Hook hasn't fired yet — nothing should have run
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testDeferredActionQueuesOnTriggerHook() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trigger', $callback, 50);
+
+        $params = [ 'msg' => 'hello', 'id' => 42, ];
+        Dj_App_Hooks::doAction('app.test.deferred.trigger', $params);
+
+        // Trigger fired but app/shutdown hasn't — callback should NOT have run yet
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testDeferredActionRunsOnShutdownHook() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.runs', $callback, 50);
+
+        $trigger_params = [ 'msg' => 'hello', 'id' => 42, ];
+        Dj_App_Hooks::doAction('app.test.deferred.runs', $trigger_params);
+
+        // Simulate bootstrap firing app/shutdown + draining deferred queue
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals($trigger_params, self::$deferred_call_log[0]['params']);
+    }
+
+    public function testDeferredActionPreservesOriginalParams() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.preserves_params', $callback, 50);
+
+        $expected_params = [
+            'chat_id' => 5,
+            'sender' => 'alice',
+            'message' => 'hi there',
+        ];
+        Dj_App_Hooks::doAction('app.test.deferred.preserves_params', $expected_params);
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals($expected_params, self::$deferred_call_log[0]['params']);
+    }
+
+    public function testMultipleDeferredCallbacksOnSameTrigger() {
+        self::$deferred_call_log = [];
+
+        $callback_a = [ 'Hooks_Test', 'deferredCallback', ];
+        $callback_b = [ 'Hooks_Test', 'deferredCallbackB', ];
+
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', $callback_a, 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', $callback_b, 50);
+
+        $params = [ 'data' => 'test', ];
+        Dj_App_Hooks::doAction('app.test.deferred.multi', $params);
+        $this->simulateShutdown();
+
+        // Both callbacks should have run with the same params
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertEquals($params, self::$deferred_call_log[0]['params']);
+        $this->assertEquals($params, self::$deferred_call_log[1]['params']);
+    }
+
+    public function testMultipleTriggersInSameRequest() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_a', $callback, 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_b', $callback, 50);
+
+        $params_a = [ 'from' => 'A', ];
+        $params_b = [ 'from' => 'B', ];
+        Dj_App_Hooks::doAction('app.test.deferred.trig_a', $params_a);
+        Dj_App_Hooks::doAction('app.test.deferred.trig_b', $params_b);
+        $this->simulateShutdown();
+
+        // Each callback should have its own captured params
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertEquals('A', self::$deferred_call_log[0]['params']['from']);
+        $this->assertEquals('B', self::$deferred_call_log[1]['params']['from']);
+    }
+
+    public function testTriggerHookFiredMultipleTimes() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.repeat', $callback, 50);
+
+        $params_first = [ 'n' => 1, ];
+        $params_second = [ 'n' => 2, ];
+        Dj_App_Hooks::doAction('app.test.deferred.repeat', $params_first);
+        Dj_App_Hooks::doAction('app.test.deferred.repeat', $params_second);
+        $this->simulateShutdown();
+
+        // Each fire should queue a separate item
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertEquals(1, self::$deferred_call_log[0]['params']['n']);
+        $this->assertEquals(2, self::$deferred_call_log[1]['params']['n']);
+    }
+
+    public function testDeferredActionWithoutTriggerDoesNothing() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.never_fires', $callback, 50);
+
+        // Trigger hook never fires — only shutdown
+        Dj_App_Hooks::doAction('app/shutdown');
+
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    // ============================================================
+    // addDeferredAction / removeDeferredAction storage tests
+    // ============================================================
+
+    public function testAddDeferredActionStoresInBothActionsAndDeferredActions() {
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.store_both', $callback, 50);
+
+        $actions = Dj_App_Hooks::getActions();
+        $deferred = Dj_App_Hooks::getDeferredActions();
+
+        // Stored in $actions (so doAction can detect+skip during normal pass)
+        $this->assertArrayHasKey('app/test/deferred/store_both', $actions);
+        $this->assertArrayHasKey(50, $actions['app/test/deferred/store_both']);
+
+        // Stored in $deferred_actions (so doAction in DEFERRED mode reads it directly)
+        $this->assertArrayHasKey('app/test/deferred/store_both', $deferred);
+        $this->assertArrayHasKey(50, $deferred['app/test/deferred/store_both']);
+    }
+
+    public function testAddDeferredActionWithMultipleHooks() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        $hooks = [
+            'app.test.deferred.multi_a',
+            'app.test.deferred.multi_b',
+            'app.test.deferred.multi_c',
+        ];
+        Dj_App_Hooks::addDeferredAction($hooks, $callback, 50);
+
+        $deferred = Dj_App_Hooks::getDeferredActions();
+
+        // All three hooks should have the deferred entry
+        $this->assertArrayHasKey('app/test/deferred/multi_a', $deferred);
+        $this->assertArrayHasKey('app/test/deferred/multi_b', $deferred);
+        $this->assertArrayHasKey('app/test/deferred/multi_c', $deferred);
+
+        // Fire each hook with distinct params, then drain
+        Dj_App_Hooks::doAction('app.test.deferred.multi_a', [ 'h' => 'a', ]);
+        Dj_App_Hooks::doAction('app.test.deferred.multi_b', [ 'h' => 'b', ]);
+        Dj_App_Hooks::doAction('app.test.deferred.multi_c', [ 'h' => 'c', ]);
+        $this->simulateShutdown();
+
+        $this->assertCount(3, self::$deferred_call_log);
+        $this->assertEquals('a', self::$deferred_call_log[0]['params']['h']);
+        $this->assertEquals('b', self::$deferred_call_log[1]['params']['h']);
+        $this->assertEquals('c', self::$deferred_call_log[2]['params']['h']);
+    }
+
+    public function testRemoveDeferredActionClearsBothRegistries() {
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_both', $callback, 50);
+
+        // Sanity check — both stores have it
+        $actions_before = Dj_App_Hooks::getActions();
+        $deferred_before = Dj_App_Hooks::getDeferredActions();
+        $this->assertArrayHasKey('app/test/deferred/remove_both', $actions_before);
+        $this->assertArrayHasKey('app/test/deferred/remove_both', $deferred_before);
+
+        // Remove
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_both', $callback, 50);
+
+        // Both stores should be cleaned up (empty inner arrays get unset by removeAction)
+        $actions_after = Dj_App_Hooks::getActions();
+        $deferred_after = Dj_App_Hooks::getDeferredActions();
+        $this->assertArrayNotHasKey('app/test/deferred/remove_both', $actions_after);
+        $this->assertArrayNotHasKey('app/test/deferred/remove_both', $deferred_after);
+    }
+
+    public function testRemoveDeferredActionPreventsExecution() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_prevents', $callback, 50);
+
+        // Remove BEFORE the trigger fires
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_prevents', $callback, 50);
+
+        // Now fire and drain — callback should NOT run
+        Dj_App_Hooks::doAction('app.test.deferred.remove_prevents', [ 'msg' => 'should not run', ]);
+        $this->simulateShutdown();
+
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testRemoveDeferredActionDoesNotAffectOtherCallbacksAtSameHook() {
+        self::$deferred_call_log = [];
+
+        $callback_a = [ 'Hooks_Test', 'deferredCallback', ];
+        $callback_b = [ 'Hooks_Test', 'deferredCallbackB', ];
+
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', $callback_a, 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', $callback_b, 50);
+
+        // Remove only callback_a
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_one', $callback_a, 50);
+
+        // Fire and drain — only callback_b should run
+        Dj_App_Hooks::doAction('app.test.deferred.remove_one', [ 'msg' => 'one left', ]);
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals('B', self::$deferred_call_log[0]['tag']);
+    }
+
+    public function testRemoveDeferredActionDoesNotAffectOtherHooks() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_a', $callback, 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_b', $callback, 50);
+
+        // Remove ONLY from iso_a
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.iso_a', $callback, 50);
+
+        // Fire both hooks; only iso_b's deferred callback should run
+        Dj_App_Hooks::doAction('app.test.deferred.iso_a', [ 'h' => 'a', ]);
+        Dj_App_Hooks::doAction('app.test.deferred.iso_b', [ 'h' => 'b', ]);
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals('b', self::$deferred_call_log[0]['params']['h']);
+    }
+
+    public function testRemoveDeferredActionAfterCaptureStillSkipsExecution() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_after_cap', $callback, 50);
+
+        // Fire trigger — params get captured into $deferred_actions_data
+        Dj_App_Hooks::doAction('app.test.deferred.remove_after_cap', [ 'msg' => 'captured', ]);
+
+        // Now remove the deferred entry from $deferred_actions
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_after_cap', $callback, 50);
+
+        // Drain — the captured (hook, params) replays via doAction(DEFERRED), but the
+        // entry is gone from $deferred_actions, so the loop has nothing to run
+        $this->simulateShutdown();
+
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testRemoveDeferredActionReturnsTrueWhenFound() {
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.return_true', $callback, 50);
+
+        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.return_true', $callback, 50);
+
+        $this->assertTrue($removed);
+    }
+
+    public function testRemoveDeferredActionReturnsFalseWhenNotFound() {
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        // Never registered
+
+        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.never_added', $callback, 50);
+
+        $this->assertFalse($removed);
+    }
+
+    // ============================================================
+    // Mixed sync + deferred behavior tests
+    // ============================================================
+
+    public static function syncCallback($params, $hook = '') {
+        self::$deferred_call_log[] = [
+            'params' => $params,
+            'hook' => $hook,
+            'tag' => 'sync',
+        ];
+    }
+
+    public function testSyncCallbacksRunInlineWhileDeferredCallbacksWaitForShutdown() {
+        self::$deferred_call_log = [];
+
+        $sync_cb = [ 'Hooks_Test', 'syncCallback', ];
+        $deferred_cb = [ 'Hooks_Test', 'deferredCallback', ];
+
+        Dj_App_Hooks::addAction('app.test.deferred.mixed', $sync_cb, 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.mixed', $deferred_cb, 50);
+
+        Dj_App_Hooks::doAction('app.test.deferred.mixed', [ 'msg' => 'mixed', ]);
+
+        // Sync ran inline, deferred has NOT yet
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals('sync', self::$deferred_call_log[0]['tag']);
+
+        // After shutdown, deferred runs too
+        $this->simulateShutdown();
+
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertEquals('sync', self::$deferred_call_log[0]['tag']);
+        $this->assertArrayNotHasKey('tag', self::$deferred_call_log[1]);
+    }
+
+    public function testDeferredCallbacksRunInPriorityOrderDuringDrain() {
+        self::$deferred_call_log = [];
+
+        $callback_a = [ 'Hooks_Test', 'deferredCallback', ];
+        $callback_b = [ 'Hooks_Test', 'deferredCallbackB', ];
+
+        // Add B first at higher priority (20), A second at lower priority (10)
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', $callback_b, 20);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', $callback_a, 10);
+
+        Dj_App_Hooks::doAction('app.test.deferred.priority', [ 'msg' => 'order', ]);
+        $this->simulateShutdown();
+
+        // Priority 10 (callback_a) should run before priority 20 (callback_b)
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertArrayNotHasKey('tag', self::$deferred_call_log[0]); // callback_a — no tag
+        $this->assertEquals('B', self::$deferred_call_log[1]['tag']);    // callback_b — tag B
+    }
+
+    public function testDeferredCallbackReceivesHookNameAsSecondArg() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.hook_arg', $callback, 50);
+
+        Dj_App_Hooks::doAction('app.test.deferred.hook_arg', [ 'msg' => 'x', ]);
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        // The 2nd arg is the hook name. simulateShutdown calls doAction with the
+        // formatted hook name (since that's what's stored in $deferred_actions_data).
+        $this->assertEquals('app/test/deferred/hook_arg', self::$deferred_call_log[0]['hook']);
+    }
+
+    public function testSameCallbackDeferredOnHookANormalOnHookBStaysIsolated() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'syncCallback', ];
+
+        // Same callback: deferred on hook A, normal on hook B
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_def', $callback, 50);
+        Dj_App_Hooks::addAction('app.test.deferred.iso_norm', $callback, 50);
+
+        // Fire hook B (normal) — callback should run inline
+        Dj_App_Hooks::doAction('app.test.deferred.iso_norm', [ 'h' => 'normal', ]);
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals('normal', self::$deferred_call_log[0]['params']['h']);
+
+        // Fire hook A (deferred) — callback should NOT run yet
+        Dj_App_Hooks::doAction('app.test.deferred.iso_def', [ 'h' => 'deferred', ]);
+        $this->assertCount(1, self::$deferred_call_log); // still just the normal one
+
+        // After shutdown, the deferred one fires too
+        $this->simulateShutdown();
+        $this->assertCount(2, self::$deferred_call_log);
+        $this->assertEquals('deferred', self::$deferred_call_log[1]['params']['h']);
+    }
+
+    public function testDoActionDeferredModeReadsFromDeferredActions() {
+        self::$deferred_call_log = [];
+
+        $sync_cb = [ 'Hooks_Test', 'syncCallback', ];
+        $deferred_cb = [ 'Hooks_Test', 'deferredCallback', ];
+
+        // Mixed callbacks at the same hook
+        Dj_App_Hooks::addAction('app.test.deferred.read_def', $sync_cb, 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.read_def', $deferred_cb, 50);
+
+        // Call doAction directly with type=DEFERRED — should run ONLY the deferred one,
+        // skipping the sync callback even though both are registered for this hook.
+        $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
+        Dj_App_Hooks::doAction('app.test.deferred.read_def', [ 'msg' => 'deferred only', ], $opts);
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertArrayNotHasKey('tag', self::$deferred_call_log[0]); // deferredCallback has no tag
+    }
+
+    public function testDoActionDeferredModeDoesNotCaptureForLaterDrain() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'deferredCallback', ];
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_recap', $callback, 50);
+
+        // Call doAction in DEFERRED mode directly — fires the callback once,
+        // but should NOT enqueue another capture (otherwise infinite loop).
+        $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
+        Dj_App_Hooks::doAction('app.test.deferred.no_recap', [ 'msg' => 'once', ], $opts);
+
+        $this->assertCount(1, self::$deferred_call_log);
+
+        // The deferred queue should still be empty (no capture happened)
+        $this->assertEmpty(Dj_App_Hooks::getDeferredActionsData());
+
+        // simulateShutdown should not re-fire the callback
+        $this->simulateShutdown();
+        $this->assertCount(1, self::$deferred_call_log);
+    }
+
+    public function testMultipleDeferredCallbacksAtDifferentPrioritiesSameHook() {
+        self::$deferred_call_log = [];
+
+        $cb1 = [ 'Hooks_Test', 'deferredCallback', ];
+        $cb2 = [ 'Hooks_Test', 'deferredCallbackB', ];
+        $cb3 = [ 'Hooks_Test', 'syncCallback', ];
+
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', $cb1, 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', $cb2, 30);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', $cb3, 10);
+
+        Dj_App_Hooks::doAction('app.test.deferred.prio_mix', [ 'fire' => 1, ]);
+        $this->simulateShutdown();
+
+        // Priority order: 10 (sync), 30 (B), 50 (deferredCallback)
+        $this->assertCount(3, self::$deferred_call_log);
+        $this->assertEquals('sync', self::$deferred_call_log[0]['tag']);
+        $this->assertEquals('B',    self::$deferred_call_log[1]['tag']);
+        $this->assertArrayNotHasKey('tag', self::$deferred_call_log[2]); // deferredCallback
+    }
 }

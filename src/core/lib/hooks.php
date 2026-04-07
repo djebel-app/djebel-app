@@ -12,8 +12,45 @@ class Dj_App_Hooks {
     const HOOK_PROCESSED = 4;
     const DEFAULT_PRIORITY = 20;
 
+    const ACTION_TYPE_NORMAL = 1;   // default — skips deferred callbacks, queues their params
+    const ACTION_TYPE_DEFERRED = 2; // shutdown replay — runs ONLY deferred callbacks
+
     private static $actions = [];
     private static $filters = [];
+
+    /**
+     * Registry of deferred actions. Full mirror of $actions:
+     *   $deferred_actions[$formatted_hook][$priority][$action_id] = $callback;
+     *
+     * The callback is stored here too so the DEFERRED-mode pass in doAction() can
+     * load callbacks directly from $deferred_actions WITHOUT consulting $actions.
+     * One loop, one source per call.
+     *
+     * Example:
+     *   $deferred_actions['app/messages/insert'][50]['MyClass::sendPush'] = [$obj, 'sendPush'];
+     *
+     * Per-hook (not global) so the same callback may still run synchronously on a
+     * different hook. The action_id is the callback fingerprint (same hash used as
+     * key in $actions); priority lives in the key path so ksort applies naturally.
+     *
+     * Note: only consulted by doAction(). applyFilter() is unaffected by deferral —
+     * filters are synchronous because their return value is needed immediately, so
+     * deferral applies to actions only.
+     * @var array
+     */
+    private static $deferred_actions = [];
+
+    /**
+     * Captured params for deferred actions, keyed by hook:
+     *   $deferred_actions_data[$hook_fmt] = [ $params1, $params2, ... ];
+     *
+     * One entry per doAction() fire that skipped at least one deferred callback for
+     * the hook. The drain (in doAction's finally on app/shutdown) iterates this and
+     * replays each (hook, params) via doAction(hook, params, type=DEFERRED) — which
+     * fans out to ALL deferred callbacks for that hook with each captured params set.
+     * @var array
+     */
+    private static $deferred_actions_data = [];
 
     /**
      * This contains if the action has run regardless if it was processed or not
@@ -227,27 +264,33 @@ class Dj_App_Hooks {
 
     /**
      * Adds an action hook with organized storage by hook name and priority
-     * 
+     *
      * Usage:
      * ```php
      * // Single hook
-     * Dj_App_Hooks::addAction('init', function() { echo 'init'; });
-     * 
+     * Dj_App_Hooks::addAction('init', [ $obj, 'onInit', ]);
+     *
      * // Multiple hooks with same callback
-     * Dj_App_Hooks::addAction(['init', 'admin_init'], function() { 
-     *     echo 'both init and admin_init'; 
-     * });
-     * 
+     * Dj_App_Hooks::addAction(['init', 'admin_init'], [ $obj, 'onInit', ]);
+     *
      * // With priority (default: 20)
-     * Dj_App_Hooks::addAction('init', function() { echo 'later'; }, 30);
+     * Dj_App_Hooks::addAction('init', [ $obj, 'onInit', ], 30);
+     *
+     * // Register as DEFERRED — runs after Dj_App_Request::finishRequest() on app/shutdown
+     * $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
+     * Dj_App_Hooks::addAction('app/messages/insert', [ $obj, 'sendPush', ], 50, $opts);
      * ```
      *
      * @param string|array $hook_name Single hook name or array of hook names
      * @param callable $callback Function to execute
      * @param int $priority Execution priority (default: 20)
+     * @param array $opts Optional flags. Supported keys:
+     *   - 'type' => self::ACTION_TYPE_NORMAL (default) | self::ACTION_TYPE_DEFERRED
+     *     DEFERRED also records the callback in $deferred_actions so doAction()
+     *     skips it during normal execution and replays it on app/shutdown.
      * @throws Exception For invalid hook names or callbacks
      */
-    public static function addAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
+    public static function addAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY, $opts = []) {
         $check_ctx = [];
         $check_ctx['hook_name'] = $hook_name;
         $check_ctx['callback'] = $callback;
@@ -259,25 +302,74 @@ class Dj_App_Hooks {
             throw new Dj_App_Exception($check_res->msg(), [ 'res' => $check_res, ]);
         }
 
-        $hooks = (array)$hook_name;
+        $type = empty($opts['type']) ? self::ACTION_TYPE_NORMAL : $opts['type'];
 
+        // Generate the action_id (callback fingerprint) once — same callable for all hooks.
+        $action_id = self::generateCallbackHash($callback);
+
+        $hooks = (array) $hook_name;
+
+        // PHP auto-vivifies missing intermediate keys on nested writes — single
+        // opcode per assignment, no isset+init dance needed.
         foreach ($hooks as $hook) {
             $formatted_hook = self::formatHookName($hook);
-            
-            if (!isset(self::$actions[$formatted_hook])) {
-                self::$actions[$formatted_hook] = [];
-            }
-            
-            if (!isset(self::$actions[$formatted_hook][$priority])) {
-                self::$actions[$formatted_hook][$priority] = [];
-            }
 
-            // Generate a unique key for this callback
-            $callback_key = self::generateCallbackHash($callback);
+            self::$actions[$formatted_hook][$priority][$action_id] = $callback;
 
-            // Store callback with its unique key
-            self::$actions[$formatted_hook][$priority][$callback_key] = $callback;
+            // Mirror into $deferred_actions so doAction() in DEFERRED mode reads it directly.
+            if ($type === self::ACTION_TYPE_DEFERRED) {
+                self::$deferred_actions[$formatted_hook][$priority][$action_id] = $callback;
+            }
         }
+    }
+
+    /**
+     * Register a callback for a hook that runs DEFERRED — after the HTTP response is sent.
+     * Use for slow background tasks (push notifications, email, analytics, cleanup).
+     *
+     * Thin wrapper over addAction() with type=DEFERRED. The callback is stored in BOTH
+     * $actions (so doAction can detect+skip it during the normal pass) and $deferred_actions
+     * (so doAction in DEFERRED mode can read just the deferred ones). When 'app/shutdown'
+     * fires in NORMAL mode, doAction's finally drains the captured queue by replaying each
+     * (hook, params) via doAction(..., type=DEFERRED).
+     *
+     * Bootstrap should call Dj_App_Request::finishRequest() before firing 'app/shutdown'
+     * so this background work runs after the client connection has been closed.
+     *
+     * Note: deferral applies to ACTIONS only. Filters are synchronous because the return
+     * value is needed immediately — deferring a filter doesn't make sense.
+     *
+     * Usage:
+     *   Dj_App_Hooks::addDeferredAction('qs_app/chats/messages/action/insert', [$this, 'sendPush'], 50);
+     *
+     * @param string|array $hook_name Hook name(s)
+     * @param callable $callback Class method or function — NO closures
+     * @param int $priority Execution priority (default: 20)
+     */
+    public static function addDeferredAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
+        $opts = [
+            'type' => self::ACTION_TYPE_DEFERRED,
+        ];
+
+        self::addAction($hook_name, $callback, $priority, $opts);
+    }
+
+    /**
+     * Removes a deferred action — removes both the underlying action AND the fingerprint
+     * that marks it as deferred. After this call, the callback will no longer be invoked
+     * on the hook (deferred or otherwise).
+     *
+     * @param string|array $hook_name Hook name(s)
+     * @param callable $callback The callback to remove
+     * @param int $priority The priority level (default: 20)
+     * @return bool True if at least one fingerprint was removed
+     */
+    public static function removeDeferredAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
+        $opts = [
+            'type' => self::ACTION_TYPE_DEFERRED,
+        ];
+
+        return self::removeAction($hook_name, $callback, $priority, $opts);
     }
 
     /**
@@ -306,8 +398,15 @@ class Dj_App_Hooks {
             $hook_name = str_replace($separator_chars, '/', $hook_name);
         }
 
-        // Convert remaining non-word chars to _, singlefy, trim
-        $hook_name = preg_replace('#[^\w/]+#si', '_', $hook_name);
+        // Convert remaining non-word chars to _, singlefy, trim.
+        // Skip the regex if the string is already alphanumeric + _ + / (the common
+        // case for canonical hook names like 'app/page/content') — saves a regex call.
+        $extra_allowed_chars = [ '_', '/', ];
+
+        if (!Dj_App_String_Util::isAlphaNumericExt($hook_name, $extra_allowed_chars)) {
+            $hook_name = preg_replace('#[^\w/]+#si', '_', $hook_name);
+        }
+
         $hook_name = Dj_App_String_Util::singlefy($hook_name, ['_', '-', '/', ]);
         $hook_name = Dj_App_String_Util::trim($hook_name, '_/-');
         $hook_name = strtolower($hook_name);
@@ -330,12 +429,18 @@ class Dj_App_Hooks {
 
     /**
      * Executes all registered callbacks for a given action hook
-     * 
+     *
      * @param string $executed_hook The hook to execute
      * @param array $params Parameters to pass to the callbacks
+     * @param array $opts Optional flags. Supported keys:
+     *   - 'type' => self::ACTION_TYPE_NORMAL (default) | self::ACTION_TYPE_DEFERRED
+     *     NORMAL: skips deferred callbacks and captures (hook, params) into the
+     *             deferred queue so they can run later.
+     *     DEFERRED: runs ONLY callbacks marked as deferred for this hook (used by
+     *             the inline drain when 'app/shutdown' is fired).
      * @throws Dj_App_Hooks_Exception For invalid hook names
      */
-    public static function doAction($executed_hook, $params = []) {
+    public static function doAction($executed_hook, $params = [], $opts = []) {
         if (!is_scalar($executed_hook)) {
             throw new Dj_App_Hooks_Exception("Invalid hook name. We're expecting a scalar, something else was given.", [
                 'hook_name' => $executed_hook,
@@ -352,26 +457,48 @@ class Dj_App_Hooks {
             // Mark as processed even if no callbacks exist
             self::$executed_hooks[$executed_hook_fmt] = self::HOOK_PROCESSED;
 
-            // If no callbacks registered for this hook, return early
-            if (empty(self::$actions[$executed_hook_fmt])) {
+            // SOURCE: DEFERRED reads from $deferred_actions, NORMAL reads from $actions.
+            // PHP COW: assigning the static to a local is a refcount bump, not a copy.
+            // $source_actions starts as the whole registry, then narrows to this hook's callbacks.
+            $type = empty($opts['type']) ? self::ACTION_TYPE_NORMAL : $opts['type'];
+            $source_actions = $type === self::ACTION_TYPE_DEFERRED ? self::$deferred_actions : self::$actions;
+
+            if (empty($source_actions[$executed_hook_fmt])) {
                 return;
             }
 
-            // Sort priorities only when executing
-            ksort(self::$actions[$executed_hook_fmt]);
+            $source_actions = $source_actions[$executed_hook_fmt];
+            ksort($source_actions);
 
-            // Execute callbacks in priority order
-            foreach (self::$actions[$executed_hook_fmt] as $callbacks_by_priority) {
-                foreach ($callbacks_by_priority as $callback) {
-                    if (is_callable($callback)) {
-                        call_user_func_array($callback, array(
-                            $params,
-                            $executed_hook, // comes as 2nd param -> $event
-                        ));
+            // NORMAL mode + this hook has deferred callbacks → capture (hook, params) NOW,
+            // once, before the loop. We know the loop WILL skip them (they're registered),
+            // so there's no need for a flag inside the loop. $deferred_for_hook caches the
+            // per-hook deferred set so the loop's isset check is O(1).
+            $deferred_for_hook = [];
 
-                        // Mark as actually run only after successful execution
-                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+            if ($type === self::ACTION_TYPE_NORMAL && !empty(self::$deferred_actions[$executed_hook_fmt])) {
+                self::$deferred_actions_data[$executed_hook_fmt][] = $params;
+                $deferred_for_hook = self::$deferred_actions[$executed_hook_fmt];
+            }
+
+            // ONE loop. is_callable() is NOT checked here — addAction() validates via
+            // checkAllowed() at registration time. Skipping that check on the hot path
+            // matters when the framework powers 10M+ sites.
+            foreach ($source_actions as $priority => $callbacks_at_priority) {
+                foreach ($callbacks_at_priority as $action_id => $callback) {
+                    // Skip deferred ones — they were captured above and will fan out
+                    // via the DEFERRED replay on app/shutdown. Early continue to avoid
+                    // a nested if around the execute.
+                    if (isset($deferred_for_hook[$priority][$action_id])) {
+                        continue;
                     }
+
+                    call_user_func_array($callback, array(
+                        $params,
+                        $executed_hook, // comes as 2nd param -> $event
+                    ));
+
+                    self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
                 }
             }
         } finally {
@@ -504,20 +631,20 @@ class Dj_App_Hooks {
 
         foreach ($hooks as $hook) {
             $formatted_hook = self::formatHookName($hook);
-            
+
             if (!isset(self::$filters[$formatted_hook])) {
                 self::$filters[$formatted_hook] = [];
             }
-            
+
             if (!isset(self::$filters[$formatted_hook][$priority])) {
                 self::$filters[$formatted_hook][$priority] = [];
             }
 
-            // Generate a unique key for this callback
-            $callback_key = self::generateCallbackHash($callback);
+            // Generate the action_id (callback fingerprint) for this callback
+            $action_id = self::generateCallbackHash($callback);
 
-            // Store callback with its unique key
-            self::$filters[$formatted_hook][$priority][$callback_key] = $callback;
+            // Store callback under its action_id (matches $actions / $deferred_actions shape)
+            self::$filters[$formatted_hook][$priority][$action_id] = $callback;
         }
     }
 
@@ -526,7 +653,7 @@ class Dj_App_Hooks {
         return self::$actions;
     }
 
-    public static function setActions(array $actions): void
+    public static function setActions($actions = [])
     {
         self::$actions = $actions;
     }
@@ -536,21 +663,82 @@ class Dj_App_Hooks {
         return self::$filters;
     }
 
-    public static function setFilters(array $filters): void
+    public static function setFilters($filters = [])
     {
         self::$filters = $filters;
     }
 
+    public static function getDeferredActions()
+    {
+        return self::$deferred_actions;
+    }
+
+    public static function setDeferredActions($deferred_actions = [])
+    {
+        self::$deferred_actions = $deferred_actions;
+    }
+
+    public static function getDeferredActionsData()
+    {
+        return self::$deferred_actions_data;
+    }
+
+    public static function setDeferredActionsData($deferred_actions_data = [])
+    {
+        self::$deferred_actions_data = $deferred_actions_data;
+    }
+
+    /**
+     * Drains the captured deferred-actions queue. Each captured (hook, params)
+     * entry is replayed via doAction(..., type=DEFERRED), which iterates
+     * $deferred_actions[hook] and runs ALL the deferred callbacks for that hook
+     * in priority order with the originally-captured params.
+     *
+     * Bootstrap (index.php) calls this in the shutdown phase, AFTER
+     * Dj_App_Request::finishRequest() has flushed the response and closed the
+     * connection — so the deferred work runs in the background.
+     *
+     * Loop prevention: doAction() with type=DEFERRED reads $deferred_actions
+     * (not $actions), so the inline skip-and-capture branch never re-fires.
+     */
+    public static function runDeferredActions()
+    {
+        $pending_data = self::$deferred_actions_data;
+        self::$deferred_actions_data = [];
+
+        if (empty($pending_data)) {
+            return;
+        }
+
+        $drain_opts = [
+            'type' => self::ACTION_TYPE_DEFERRED,
+        ];
+
+        foreach ($pending_data as $hook => $param_sets) {
+            foreach ($param_sets as $params) {
+                try {
+                    self::doAction($hook, $params, $drain_opts);
+                } catch (\Exception $e) {
+                    // Don't let one failure block the rest of the pending data.
+                }
+            }
+        }
+    }
+
     /**
      * Removes an action hook.
-     * 
+     *
      * @param string|array $hook_name The hook name(s) to remove
      * @param callable $callback The callback to remove
      * @param int $priority The priority level to remove (optional)
+     * @param array $opts Optional flags. Supported keys:
+     *   - 'type' => self::ACTION_TYPE_NORMAL (default) | self::ACTION_TYPE_DEFERRED
+     *     DEFERRED also clears the matching $deferred_actions entry, so a single
+     *     pass through the hooks list handles both stores (no duplicate formatHookName).
      * @return bool True if removed, false if not found
      * @throws Dj_App_Hooks_Exception For invalid hook names
      */
-    public static function removeAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY) {
+    public static function removeAction($hook_name, $callback, $priority = self::DEFAULT_PRIORITY, $opts = []) {
         if (!is_scalar($hook_name) && !is_array($hook_name)) {
             throw new Dj_App_Hooks_Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.", [
                 'hook_name' => $hook_name,
@@ -558,31 +746,42 @@ class Dj_App_Hooks {
             ]);
         }
 
-        $hooks = (array)$hook_name;
+        $type = empty($opts['type']) ? self::ACTION_TYPE_NORMAL : $opts['type'];
+        $remove_deferred = ($type === self::ACTION_TYPE_DEFERRED);
+
+        $hooks = (array) $hook_name;
         $removed = false;
 
-        // Generate hash once for the callback we want to remove
-        $callback_key = self::generateCallbackHash($callback);
+        // Generate the action_id (callback fingerprint) once.
+        $action_id = self::generateCallbackHash($callback);
 
         foreach ($hooks as $hook) {
             $formatted_hook = self::formatHookName($hook);
-            
-            if (!isset(self::$actions[$formatted_hook][$priority])) {
-                continue;
-            }
 
-            // Remove the specific callback if it exists for this hook
-            if (isset(self::$actions[$formatted_hook][$priority][$callback_key])) {
-                unset(self::$actions[$formatted_hook][$priority][$callback_key]);
+            // Remove from the regular $actions store.
+            if (isset(self::$actions[$formatted_hook][$priority][$action_id])) {
+                unset(self::$actions[$formatted_hook][$priority][$action_id]);
                 $removed = true;
 
-                // Clean up empty arrays for this specific hook
                 if (empty(self::$actions[$formatted_hook][$priority])) {
                     unset(self::$actions[$formatted_hook][$priority]);
 
-                    // Remove empty priority arrays
                     if (empty(self::$actions[$formatted_hook])) {
                         unset(self::$actions[$formatted_hook]);
+                    }
+                }
+            }
+
+            // Also clear the deferred entry in the same pass when removing a deferred action.
+            // Mirrors the [hook][priority][action_id] cleanup pattern used for $actions above.
+            if ($remove_deferred && isset(self::$deferred_actions[$formatted_hook][$priority][$action_id])) {
+                unset(self::$deferred_actions[$formatted_hook][$priority][$action_id]);
+
+                if (empty(self::$deferred_actions[$formatted_hook][$priority])) {
+                    unset(self::$deferred_actions[$formatted_hook][$priority]);
+
+                    if (empty(self::$deferred_actions[$formatted_hook])) {
+                        unset(self::$deferred_actions[$formatted_hook]);
                     }
                 }
             }
@@ -611,25 +810,25 @@ class Dj_App_Hooks {
         $hooks = (array)$hook_name;
         $removed = false;
 
-        // Generate hash once for the callback we want to remove
-        $callback_key = self::generateCallbackHash($callback);
+        // Generate the action_id (callback fingerprint) once for the callback we want to remove
+        $action_id = self::generateCallbackHash($callback);
 
         foreach ($hooks as $hook) {
             $formatted_hook = self::formatHookName($hook);
-            
+
             if (!isset(self::$filters[$formatted_hook][$priority])) {
                 continue;
             }
 
             // Remove the specific callback if it exists for this hook
-            if (isset(self::$filters[$formatted_hook][$priority][$callback_key])) {
-                unset(self::$filters[$formatted_hook][$priority][$callback_key]);
+            if (isset(self::$filters[$formatted_hook][$priority][$action_id])) {
+                unset(self::$filters[$formatted_hook][$priority][$action_id]);
                 $removed = true;
 
                 // Clean up empty arrays for this specific hook
                 if (empty(self::$filters[$formatted_hook][$priority])) {
                     unset(self::$filters[$formatted_hook][$priority]);
-                    
+
                     if (empty(self::$filters[$formatted_hook])) {
                         unset(self::$filters[$formatted_hook]);
                     }
