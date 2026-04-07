@@ -252,13 +252,25 @@ class Shortcode_Test extends TestCase
     /**
      * Test shortcode name formatting
      */
-    public function testFormatShortCode() 
+    public function testFormatShortCode()
     {
         $this->assertEquals('test_code', $this->shortcode->formatShortCode('test-code'));
         $this->assertEquals('test_code', $this->shortcode->formatShortCode('test--code'));
         $this->assertEquals('test_code', $this->shortcode->formatShortCode('TEST_CODE'));
         $this->assertEquals('test_code', $this->shortcode->formatShortCode('test___code'));
         $this->assertEquals('test_code', $this->shortcode->formatShortCode('_test_code_'));
+    }
+
+    /**
+     * Verifies the isAlphaNumericExt fast path: clean input (alphanumeric + _)
+     * skips the regex entirely. Output must match the slow path for equivalent inputs.
+     */
+    public function testFormatShortCodeFastPathCleanInput()
+    {
+        // Already alphanumeric + underscore — fast path skips regex
+        $this->assertEquals('test_code', $this->shortcode->formatShortCode('test_code'));
+        $this->assertEquals('product123', $this->shortcode->formatShortCode('product123'));
+        $this->assertEquals('my_widget_v2', $this->shortcode->formatShortCode('my_widget_v2'));
     }
     
     /**
