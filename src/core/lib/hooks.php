@@ -276,7 +276,7 @@ class Dj_App_Hooks {
      * // With priority (default: 20)
      * Dj_App_Hooks::addAction('init', [ $obj, 'onInit', ], 30);
      *
-     * // Register as DEFERRED — runs after Dj_App_Request::finishRequest() on app/shutdown
+     * // Register as DEFERRED — runs after $req_obj->finishRequest() on app/shutdown
      * $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
      * Dj_App_Hooks::addAction('app/messages/insert', [ $obj, 'sendPush', ], 50, $opts);
      * ```
@@ -333,7 +333,7 @@ class Dj_App_Hooks {
      * fires in NORMAL mode, doAction's finally drains the captured queue by replaying each
      * (hook, params) via doAction(..., type=DEFERRED).
      *
-     * Bootstrap should call Dj_App_Request::finishRequest() before firing 'app/shutdown'
+     * Bootstrap should call $req_obj->finishRequest() before firing 'app/shutdown'
      * so this background work runs after the client connection has been closed.
      *
      * Note: deferral applies to ACTIONS only. Filters are synchronous because the return
@@ -689,13 +689,53 @@ class Dj_App_Hooks {
     }
 
     /**
+     * The single entry point for the shutdown phase. Registered as a PHP shutdown
+     * function in the bootstrap so it runs on EVERY exit path: normal completion,
+     * early return (headless mode), exit(), exceptions, even fatal errors.
+     *
+     * Closes the client connection FIRST (via $req_obj->finishRequest()) so any
+     * slow deferred work runs in the background after the user has been disconnected.
+     * Safe to call even when finishRequest already ran from the bootstrap finally —
+     * its !headers_sent() / buffer-level guards make repeat calls effective no-ops.
+     *
+     * Idempotent via state clearing — calling this twice in a row is safe:
+     *   1. First call: flush+close, fires 'app/shutdown' listeners, clears them, drains queue
+     *   2. Second call: no listeners → no-op, queue empty → no-op
+     *
+     * No flag needed because the work itself drains the state.
+     */
+    public static function runShutdownHooks()
+    {
+        // Flush response + close connection BEFORE any deferred work runs, so the
+        // user's browser disconnects immediately. Only meaningful for real HTTP
+        // requests — skip in CLI (PHPUnit, scripts) where there's no connection
+        // and finishRequest's ob_end_flush would close buffers it didn't open.
+        // Dj_App_Env::isWebRequest() returns true only when !isCli AND we have
+        // REQUEST_METHOD + REQUEST_URI in $_SERVER. class_exists guards against
+        // very-early shutdown calls before env.php / request.php have been loaded.
+        $is_web_req = class_exists('Dj_App_Env', false) && Dj_App_Env::isWebRequest();
+
+        if ($is_web_req && class_exists('Dj_App_Request', false)) {
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->finishRequest();
+        }
+
+        self::doAction('app/shutdown');
+
+        // Drain the listeners so a second runShutdownHooks() call is a no-op.
+        unset(self::$actions['app/shutdown']);
+
+        self::runDeferredActions();
+    }
+
+    /**
      * Drains the captured deferred-actions queue. Each captured (hook, params)
      * entry is replayed via doAction(..., type=DEFERRED), which iterates
      * $deferred_actions[hook] and runs ALL the deferred callbacks for that hook
      * in priority order with the originally-captured params.
      *
-     * Bootstrap (index.php) calls this in the shutdown phase, AFTER
-     * Dj_App_Request::finishRequest() has flushed the response and closed the
+     * Called by runShutdownHooks() in the shutdown phase, AFTER
+     * $req_obj->finishRequest() has flushed the response and closed the
      * connection — so the deferred work runs in the background.
      *
      * Loop prevention: doAction() with type=DEFERRED reads $deferred_actions
