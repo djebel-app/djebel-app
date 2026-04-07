@@ -1820,7 +1820,16 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         if (!headers_sent()) {
+            // Tell the client to close the TCP connection after this response so the
+            // browser stops waiting and disconnects. Combined with an explicit
+            // Content-Length below, this lets PHP keep running in the background
+            // (e.g. for deferred actions / cleanup) without holding the user's request open.
             @header('Connection: close', true);
+
+            // Disable any content encoding (gzip etc.) on this response. The
+            // Content-Length header below counts the RAW body bytes; if a downstream
+            // gzip handler re-encoded the body, the byte count would be wrong and
+            // the client would either hang waiting for more bytes or truncate early.
             @header('Content-Encoding: none', true);
 
             $content_length = ob_get_length();
