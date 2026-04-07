@@ -79,7 +79,13 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
      */
     public function code( $code = '' ) {
         if ( ! empty( $code ) ) {
-            $code = preg_replace( '#[^\w\d]#si', '_', $code );
+            // Skip the regex if $code is already alphanumeric + _ (the common case)
+            $extra_allowed_chars = [ '_', ];
+
+            if (!Dj_App_String_Util::isAlphaNumericExt($code, $extra_allowed_chars)) {
+                $code = preg_replace( '#[^\w]#si', '_', $code );
+            }
+
             $code = trim( $code, '_- ' );
             $code = strtoupper($code);
             $this->code = $code;

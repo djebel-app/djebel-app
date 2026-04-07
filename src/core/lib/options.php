@@ -826,8 +826,14 @@ class Dj_App_Options implements ArrayAccess, Countable {
         $dot_pos = strpos($key, '.');
 
         if ($dot_pos !== false) {
-            // Sanitize key: remove invalid characters, keep only word chars, dots, and hyphens
-            $key = preg_replace('/[^\w\.\-]/si', '', $key);
+            // Sanitize key: remove invalid characters, keep only word chars, dots, and hyphens.
+            // Skip the regex if $key is already clean (the common case for canonical keys).
+            $extra_allowed_chars = [ '_', '.', '-', ];
+
+            if (!Dj_App_String_Util::isAlphaNumericExt($key, $extra_allowed_chars)) {
+                $key = preg_replace('/[^\w\.\-]/si', '', $key);
+            }
+
             $keys = explode('.', $key);
 
             if (count($keys) >= 2) {

@@ -119,6 +119,51 @@ Modify content and data as it flows through your application.
 ### Multiple Hooks with Priorities
 Control the order in which your hooks execute using priority values.
 
+### Deferred Actions — Background Work After the Response
+Defer slow work (push notifications, email, analytics, cleanup) so it runs **after** the HTTP response has been flushed to the client. The user sees the page immediately; the background work continues without blocking them.
+
+```php
+// Inside a plugin or theme
+Dj_App_Hooks::addDeferredAction('app/messages/insert', [$pushService, 'sendNotif'], 50);
+Dj_App_Hooks::addDeferredAction('app/messages/insert', [$emailService, 'send'],     30);
+
+// Anywhere in the request lifecycle, fire the trigger normally:
+Dj_App_Hooks::doAction('app/messages/insert', [
+    'chat_id' => 5,
+    'sender'  => 'alice',
+    'message' => 'hi there',
+]);
+// Both deferred callbacks are SKIPPED here — params are captured for later.
+```
+
+Bootstrap (`index.php`) handles the shutdown phase in this order:
+
+```php
+} finally {
+    $req_obj->outputContent();              // 1. Echo content into PHP's output buffer
+    $req_obj->finishRequest();              // 2. Flush + Connection: close + fastcgi_finish_request
+    Dj_App_Hooks::doAction('app/shutdown'); // 3. Fire any registered shutdown listeners
+    Dj_App_Hooks::runDeferredActions();     // 4. Drain captured deferred queue in background
+}
+```
+
+After step 2, the browser already sees the page and disconnects. PHP keeps running for steps 3 and 4, so all deferred work happens **invisible to the user**.
+
+`runDeferredActions()` is the single source of truth for the drain — it iterates the captured queue and replays each `(hook, params)` via `doAction(..., type=DEFERRED)`, which reads from `$deferred_actions` and runs all deferred callbacks for that hook in priority order with the originally-captured params. Loop prevention is structural: DEFERRED-mode dispatch reads a different registry than NORMAL mode, so the inline skip-and-capture branch never re-fires.
+
+**Removing a deferred action:**
+```php
+Dj_App_Hooks::removeDeferredAction('app/messages/insert', [$pushService, 'sendNotif'], 50);
+```
+
+`removeDeferredAction` clears both `$actions` and `$deferred_actions` in a single pass — after this call the callback won't run sync OR deferred.
+
+**Notes:**
+- Mix sync and deferred callbacks at the same hook freely — sync ones run inline, deferred ones run after the response.
+- Multi-fire of the same hook is supported: each fire's params are captured separately and replayed on shutdown.
+- Deferral applies to actions only — filters are synchronous because the return value is needed immediately.
+- No bootstrap edits are required from plugins/themes — `addDeferredAction()` is the only API surface they need to know about.
+
 ## 📝 Shortcodes: Dynamic Content Anywhere
 
 Djebel's shortcode system lets you inject dynamic content **anywhere on your page** - in templates, content areas, headers, footers, sidebars, or any HTML file. No need to write PHP in your templates.
