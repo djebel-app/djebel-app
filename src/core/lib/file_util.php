@@ -163,9 +163,14 @@ class Dj_App_File_Util {
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
 
-            // Clean up temp file on error
-            if (!empty($tmp_file) && file_exists($tmp_file)) {
-                @unlink($tmp_file);
+            // Clean up temp file on error. is_file() is the right check for unlink:
+            // it returns true ONLY for regular files (not directories, not symlinks
+            // pointing to nothing), which matches what unlink() can actually delete.
+            // file_exists() would also return true for directories — unlink on a
+            // directory raises a warning. PHP's stat cache merges this single stat
+            // call with the unlink, so cost is one filesystem stat.
+            if (!empty($tmp_file) && is_file($tmp_file)) {
+                unlink($tmp_file);
             }
         } finally {
 
