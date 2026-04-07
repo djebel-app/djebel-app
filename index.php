@@ -38,6 +38,16 @@ $env_cfg_data = Dj_App_Config::loadIniFile($config_env_file);
 
 // Initialize global error handlers
 set_exception_handler(['Dj_App_Bootstrap', 'handleException']);
+
+// Register the shutdown phase FIRST so it runs before handleFatalError. This
+// matters because handleFatalError can call Dj_App::exit() while rendering an
+// error page, and PHP stops the shutdown chain when exit() fires from inside a
+// shutdown function. Running runShutdownHooks first ensures deferred work (logging,
+// notifications) gets a chance even on fatal errors.
+register_shutdown_function(['Dj_App_Hooks', 'runShutdownHooks']);
+
+// Fatal-error renderer runs AFTER runShutdownHooks. Idempotent: if no fatal error
+// is in error_get_last(), this is a no-op.
 register_shutdown_function(['Dj_App_Bootstrap', 'handleFatalError']);
 
 Dj_App_Util::microtime( 'dj_app_timer' );
@@ -70,6 +80,8 @@ if ($app_load_shortcodes) {
 }
 
 // we return after the shortcodes are loaded as there could be plugins that rely on it.
+// In headless mode the shutdown phase is still handled by the shutdown function
+// registered above (Dj_App_Hooks::runShutdownHooks) — no explicit drain needed here.
 if (empty($run_app) || $headless) {
     return;
 }
@@ -201,16 +213,6 @@ try {
     }
 } finally {
     $req_obj->outputContent();
-
-    // Flush response + close connection so deferred work runs in the background.
-    $req_obj->finishRequest();
-
-    // Fire 'app/shutdown' for any registered listeners (cleanup, logging, etc.).
-    Dj_App_Hooks::doAction('app/shutdown');
-
-    // Drain captured deferred actions in the background — single source of truth.
-    Dj_App_Hooks::runDeferredActions();
-
     $exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 }
 
