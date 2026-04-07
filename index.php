@@ -201,6 +201,16 @@ try {
     }
 } finally {
     $req_obj->outputContent();
+
+    // Flush response + close connection so deferred work runs in the background.
+    $req_obj->finishRequest();
+
+    // Fire 'app/shutdown' for any registered listeners (cleanup, logging, etc.).
+    Dj_App_Hooks::doAction('app/shutdown');
+
+    // Drain captured deferred actions in the background — single source of truth.
+    Dj_App_Hooks::runDeferredActions();
+
     $exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 }
 
