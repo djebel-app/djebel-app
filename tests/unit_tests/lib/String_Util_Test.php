@@ -251,6 +251,98 @@ class String_Util_Test extends TestCase {
         $this->assertFalse($result);
     }
 
+    public function testIsAlphaNumericExtWithIntegerIsAccepted()
+    {
+        // is_scalar accepts int — gets coerced to string and validated
+        $result_int = Dj_App_String_Util::isAlphaNumericExt(123);
+        $this->assertTrue($result_int);
+    }
+
+    public function testIsAlphaNumericExtWithNonScalarReturnsFalse()
+    {
+        $result_null = Dj_App_String_Util::isAlphaNumericExt(null);
+        $this->assertFalse($result_null);
+
+        $result_array = Dj_App_String_Util::isAlphaNumericExt([ 'a', 'b', ]);
+        $this->assertFalse($result_array);
+
+        $result_obj = Dj_App_String_Util::isAlphaNumericExt(new stdClass());
+        $this->assertFalse($result_obj);
+    }
+
+    public function testIsAlphaNumericExtWithCustomExtraCharsArray()
+    {
+        // Allow only / as extra char — no _, no -
+        $extra_chars = [ '/', ];
+
+        $result_slash = Dj_App_String_Util::isAlphaNumericExt('app/page/content', $extra_chars);
+        $this->assertTrue($result_slash);
+
+        // Underscore is NOT in extra_chars, so this should fail
+        $result_underscore = Dj_App_String_Util::isAlphaNumericExt('app_page', $extra_chars);
+        $this->assertFalse($result_underscore);
+    }
+
+    public function testIsAlphaNumericExtWithCustomExtraCharsString()
+    {
+        // Pass a single char as a string — should be coerced to array
+        $result = Dj_App_String_Util::isAlphaNumericExt('hello_world', '_');
+        $this->assertTrue($result);
+    }
+
+    public function testIsAlphaNumericExtWithEmptyExtraCharsIsStrict()
+    {
+        // No extra chars allowed → strictly alphanumeric
+        $extra_chars = [];
+
+        $result_alnum = Dj_App_String_Util::isAlphaNumericExt('hello123', $extra_chars);
+        $this->assertTrue($result_alnum);
+
+        $result_underscore = Dj_App_String_Util::isAlphaNumericExt('hello_world', $extra_chars);
+        $this->assertFalse($result_underscore);
+    }
+
+    public function testIsAlphaNumericWithValid()
+    {
+        $result = Dj_App_String_Util::isAlphaNumeric('hello123');
+        $this->assertTrue($result);
+    }
+
+    public function testIsAlphaNumericWithUnderscoreReturnsFalse()
+    {
+        // isAlphaNumeric is strict — underscores are NOT allowed (unlike isAlphaNumericExt)
+        $result = Dj_App_String_Util::isAlphaNumeric('hello_world');
+        $this->assertFalse($result);
+    }
+
+    public function testIsAlphaNumericWithDashReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isAlphaNumeric('hello-world');
+        $this->assertFalse($result);
+    }
+
+    public function testIsAlphaNumericWithEmptyReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isAlphaNumeric('');
+        $this->assertFalse($result);
+    }
+
+    public function testIsAlphaNumericWithIntegerIsAccepted()
+    {
+        // is_scalar accepts int — gets coerced to string and validated
+        $result_int = Dj_App_String_Util::isAlphaNumeric(123);
+        $this->assertTrue($result_int);
+    }
+
+    public function testIsAlphaNumericWithNonScalarReturnsFalse()
+    {
+        $result_null = Dj_App_String_Util::isAlphaNumeric(null);
+        $this->assertFalse($result_null);
+
+        $result_array = Dj_App_String_Util::isAlphaNumeric([ 'a', 'b', ]);
+        $this->assertFalse($result_array);
+    }
+
     public function testFormatSlug()
     {
         $result = Dj_App_String_Util::formatSlug('Hello World');

@@ -188,20 +188,43 @@ class Dj_App_String_Util
     }
 
     /**
-     * Checks if a string is alphanumeric and also _ + -
-     * Dj_App_String_Util::isAlphaNumericExt();
-     * @param $str
+     * Dj_App_String_Util::isAlphaNumeric();
+     * Strict alphanumeric check (a-z, A-Z, 0-9 only — no underscores, no dashes).
+     * Accepts any scalar input — int 42 is treated the same as string '42'.
+     * @param scalar $str
      * @return bool
      */
-    static public function isAlphaNumericExt($str)
+    public static function isAlphaNumeric($str)
     {
-        if (empty($str)) {
+        if (!is_scalar($str) || empty($str)) {
             return false;
         }
 
-        $filtered = str_replace(['-', '_'], '', $str);
+        $str = (string) $str;
 
-        return ctype_alnum($filtered);
+        return ctype_alnum($str);
+    }
+
+    /**
+     * Dj_App_String_Util::isAlphaNumericExt();
+     * a-z, A-Z, 0-9 plus extra allowed chars (default: _ and -).
+     * Accepts any scalar input — int 42 is treated the same as string '42'.
+     * @param scalar $str
+     * @param array|string $extra_chars Extra chars to allow. Default ['_', '-']. Pass '_' or ['_'] for underscore only, [] for strict alphanumeric.
+     * @return bool
+     */
+    public static function isAlphaNumericExt($str, $extra_chars = ['_', '-'])
+    {
+        if (!is_scalar($str) || empty($str)) {
+            return false;
+        }
+
+        $str = (string) $str;
+        $extra_chars = (array) $extra_chars;
+        $clean = str_replace($extra_chars, '', $str);
+        $is_valid = Dj_App_String_Util::isAlphaNumeric($clean);
+
+        return $is_valid;
     }
 
     const ALLOW_DOT = 2;
