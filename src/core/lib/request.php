@@ -1807,44 +1807,63 @@ CLEAR_AND_REDIRECT_HTML;
         set_time_limit($time_limit);
         ignore_user_abort(true);
 
-        // Disable output compression — prevents gzip from breaking Content-Length
-        @ini_set('zlib.output_compression', 'Off');
-
-        if (function_exists('apache_setenv')) {
-            @apache_setenv('no-gzip', 1);
-        }
-
         // Close session early to prevent blocking concurrent requests
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
         }
 
+        // Disable output compression — prevents gzip from breaking Content-Length.
+        // zlib.output_compression is INI_ALL but PHP locks it once headers go out;
+        // calling ini_set() after that raises a warning that lands in error_log even
+        // with the @ operator. Guard with !headers_sent() to be silent in production.
         if (!headers_sent()) {
+            ini_set('zlib.output_compression', 'Off');
+
+            if (function_exists('apache_setenv')) {
+                apache_setenv('no-gzip', 1);
+            }
+
             // Tell the client to close the TCP connection after this response so the
             // browser stops waiting and disconnects. Combined with an explicit
             // Content-Length below, this lets PHP keep running in the background
             // (e.g. for deferred actions / cleanup) without holding the user's request open.
-            @header('Connection: close', true);
+            header('Connection: close', true);
 
             // Disable any content encoding (gzip etc.) on this response. The
             // Content-Length header below counts the RAW body bytes; if a downstream
             // gzip handler re-encoded the body, the byte count would be wrong and
             // the client would either hang waiting for more bytes or truncate early.
-            @header('Content-Encoding: none', true);
+            header('Content-Encoding: none', true);
 
             $content_length = ob_get_length();
 
             if ($content_length !== false) {
-                @header('Content-Length: ' . $content_length, true);
+                header('Content-Length: ' . $content_length, true);
             }
         }
 
-        // Flush all output buffer levels
+        // Flush all output buffer levels. ob_end_flush() both flushes AND closes
+        // each buffer, so after the loop ob_get_level() === 0. Do NOT call ob_flush()
+        // here — there's no buffer left to flush and PHP raises a notice ("No buffer
+        // to flush"). flush() below is the system-level flush — independent of PHP's
+        // output buffer stack — and is still needed.
+        //
+        // Check ob_get_status()['flags'] for PHP_OUTPUT_HANDLER_REMOVABLE BEFORE
+        // calling ob_end_flush(). Some buffers (e.g., locked by output_buffering ini
+        // or zlib.output_handler) are non-removable and ob_end_flush() would raise
+        // "Failed to delete buffer" — captured by error_log even with @. The flag
+        // check is the cheap, correct way to bail out cleanly without any warning.
         while (ob_get_level() > 0) {
+            $buffer_status = ob_get_status();
+
+            if (empty($buffer_status['flags']) || !($buffer_status['flags'] & PHP_OUTPUT_HANDLER_REMOVABLE)) {
+                // Top buffer is locked — can't be removed. Stop trying.
+                break;
+            }
+
             ob_end_flush();
         }
 
-        @ob_flush();
         flush();
 
         // SAPI-specific finish — called after flushing
