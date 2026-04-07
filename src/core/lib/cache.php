@@ -307,11 +307,15 @@ class Dj_App_Cache
      */
     public static function delete($cache_file)
     {
-        if (!file_exists($cache_file)) {
+        // is_file() is the right check for unlink — true ONLY for regular files,
+        // matching what unlink() can actually delete. Single stat call (PHP stat
+        // cache merges this with the unlink). Returning true on missing file is
+        // the desired idempotent behavior.
+        if (!is_file($cache_file)) {
             return true;
         }
 
-        return @unlink($cache_file);
+        return unlink($cache_file);
     }
 
     /**
