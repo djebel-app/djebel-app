@@ -414,13 +414,9 @@ class Dj_App_Hooks {
             $hook_name = str_replace($separator_chars, '/', $hook_name);
         }
 
-        // Convert remaining non-word chars to _, singlefy, trim.
-        // Skip the regex if the string is already alphanumeric + _ + / (the common
-        // case for canonical hook names like 'app/page/content') — saves a regex call.
-        if (!Dj_App_String_Util::isAlphaNumericExt($hook_name, $alnum_extra_chars)) {
-            $hook_name = preg_replace('#[^\w/]+#si', '_', $hook_name);
-        }
-
+        // Sanitize via the shared helper — fast-paths clean input (the common case
+        // for canonical hook names like 'app/page/content'), regex only on dirty.
+        $hook_name = Dj_App_String_Util::sanitizeAlphaNumericExt($hook_name, $alnum_extra_chars);
         $hook_name = Dj_App_String_Util::singlefy($hook_name, $singlefy_chars);
         $hook_name = Dj_App_String_Util::trim($hook_name, '_/-');
         $hook_name = strtolower($hook_name);

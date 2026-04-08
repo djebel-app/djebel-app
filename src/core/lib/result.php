@@ -82,12 +82,8 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
      */
     public function code( $code = '' ) {
         if ( ! empty( $code ) ) {
-            // Skip the regex if $code is already alphanumeric + _ (the common case).
-            if (!Dj_App_String_Util::isAlphaNumericExt($code, self::CODE_EXTRA_ALLOWED_CHARS)) {
-                // \W is the negated word-char class; smaller compiled pattern than [^\w].
-                // No s/i flags — \w is already case-insensitive and we don't use the . metachar.
-                $code = preg_replace( '#\W#', '_', $code );
-            }
+            // Sanitize via the shared helper — fast-paths clean input, regex only on dirty.
+            $code = Dj_App_String_Util::sanitizeAlphaNumericExt($code, self::CODE_EXTRA_ALLOWED_CHARS);
 
             $code = trim( $code, '_- ' );
             $code = strtoupper($code);

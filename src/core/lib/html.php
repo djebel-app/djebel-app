@@ -153,12 +153,7 @@ class Djebel_App_HTML {
 			// ok
 		} elseif ( stripos( $attr, 'id=' ) === false ) { // ID not in the attrib list so we'll add it
 			$id = $name . '_' . $cur_val;
-
-			// Skip regex if $id is already alphanumeric + _ + - (common case)
-			if (!Dj_App_String_Util::isAlphaNumericExt($id)) {
-				$id = preg_replace( '#[^\w\-]#si', '_', $id );
-			}
-
+			$id = Dj_App_String_Util::sanitizeAlphaNumericExt($id);
 			$id = Dj_App_String_Util::singlefy($id, '_');
 			$id = Dj_App_String_Util::trim($id, '_');
 			$attr .= " id='$id' ";
@@ -207,12 +202,7 @@ class Djebel_App_HTML {
 			// ok
 		} elseif ( stripos( $attr, 'id=' ) === false ) { // ID not in the attrib list so we'll add it
 			$id = $name;
-
-			// Skip regex if $id is already alphanumeric + _ + - (common case)
-			if (!Dj_App_String_Util::isAlphaNumericExt($id)) {
-				$id = preg_replace( '#[^\w\-]#si', '_', $id );
-			}
-
+			$id = Dj_App_String_Util::sanitizeAlphaNumericExt($id);
 			$id = Dj_App_String_Util::singlefy($id, '_');
 			$id = Dj_App_String_Util::trim($id, '_');
 			$attr .= " id='$id' ";

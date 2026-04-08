@@ -108,13 +108,9 @@ class Dj_App_Shortcode {
      */
     public function formatShortCode($code)
     {
-        // Skip the regex if $code is already alphanumeric + _ (the common case)
-        $extra_allowed_chars = [ '_', ];
+        static $extra_allowed_chars = [ '_', ];
 
-        if (!Dj_App_String_Util::isAlphaNumericExt($code, $extra_allowed_chars)) {
-            $code = preg_replace('#[^\w]+#si', '_', $code);
-        }
-
+        $code = Dj_App_String_Util::sanitizeAlphaNumericExt($code, $extra_allowed_chars);
         $code = Dj_App_String_Util::singlefy($code, '_');
         $code = Dj_App_String_Util::trim($code, '_');
         $code = strtolower($code);
