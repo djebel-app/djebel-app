@@ -6,6 +6,9 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     const CONVERT_DATA_KEYS_TO_LOWER_CASE = 8;
     const CONVERT_DATA_KEYS_TO_UPPER_CASE = 16;
 
+    // Allowed extra chars when sanitizing the error code (alphanumeric + underscore).
+    const CODE_EXTRA_ALLOWED_CHARS = [ '_', ];
+
     // I put them as public even though I need them private.
     // reason: private fields don't appear in a JSON output
     public $msg = '';
@@ -79,11 +82,11 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
      */
     public function code( $code = '' ) {
         if ( ! empty( $code ) ) {
-            // Skip the regex if $code is already alphanumeric + _ (the common case)
-            $extra_allowed_chars = [ '_', ];
-
-            if (!Dj_App_String_Util::isAlphaNumericExt($code, $extra_allowed_chars)) {
-                $code = preg_replace( '#[^\w]#si', '_', $code );
+            // Skip the regex if $code is already alphanumeric + _ (the common case).
+            if (!Dj_App_String_Util::isAlphaNumericExt($code, self::CODE_EXTRA_ALLOWED_CHARS)) {
+                // \W is the negated word-char class; smaller compiled pattern than [^\w].
+                // No s/i flags — \w is already case-insensitive and we don't use the . metachar.
+                $code = preg_replace( '#\W#', '_', $code );
             }
 
             $code = trim( $code, '_- ' );
