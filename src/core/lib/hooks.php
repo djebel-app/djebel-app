@@ -388,12 +388,28 @@ class Dj_App_Hooks {
             throw new Dj_App_Exception("Invalid hook name. It must be a scalar", [ 'hook_name' => $hook_name ] );
         }
 
-        $hook_name = substr($hook_name, 0, 100);
+        // Static caches for hot-path arrays — allocated once per process, not per call.
+        // formatHookName runs on every add/remove/doAction/applyFilter, so per-call
+        // array literals add up at scale. $plural_map uses strtr (which accepts a
+        // key→value array directly) to avoid array_keys/array_values per call.
+        static $separator_chars = [ ' ', "\t", "\n", "\r", ':', '.', ];
+        static $separator_chars_str = " \t\n\r:.";
+        static $alnum_extra_chars = [ '_', '/', ];
+        static $singlefy_chars = [ '_', '-', '/', ];
+        static $plural_map = [
+            '/apps/' => '/app/',
+            '/pages/' => '/page/',
+            '/themes/' => '/theme/',
+            '/plugins/' => '/plugin/',
+        ];
+
+        // Cap at 100 chars but skip the substr call when not needed (the common case
+        // for canonical hook names like 'app/page/content' which are well under 100).
+        if (strlen($hook_name) > 100) {
+            $hook_name = substr($hook_name, 0, 100);
+        }
 
         // Normalize separators: spaces, tabs, newlines, colons, dots -> /
-        $separator_chars = [' ', "\t", "\n", "\r", ':', '.', ];
-        $separator_chars_str = implode('', $separator_chars);
-
         if (strpbrk($hook_name, $separator_chars_str) !== false) {
             $hook_name = str_replace($separator_chars, '/', $hook_name);
         }
@@ -401,27 +417,18 @@ class Dj_App_Hooks {
         // Convert remaining non-word chars to _, singlefy, trim.
         // Skip the regex if the string is already alphanumeric + _ + / (the common
         // case for canonical hook names like 'app/page/content') — saves a regex call.
-        $extra_allowed_chars = [ '_', '/', ];
-
-        if (!Dj_App_String_Util::isAlphaNumericExt($hook_name, $extra_allowed_chars)) {
+        if (!Dj_App_String_Util::isAlphaNumericExt($hook_name, $alnum_extra_chars)) {
             $hook_name = preg_replace('#[^\w/]+#si', '_', $hook_name);
         }
 
-        $hook_name = Dj_App_String_Util::singlefy($hook_name, ['_', '-', '/', ]);
+        $hook_name = Dj_App_String_Util::singlefy($hook_name, $singlefy_chars);
         $hook_name = Dj_App_String_Util::trim($hook_name, '_/-');
         $hook_name = strtolower($hook_name);
 
         // if we have app/plugins/my_plugin/action -> app/plugin/my_plugin/action
         // Note: dots and dashes are already converted by this point
         if (strpos($hook_name, 's/') !== false) { // plural? - make it singular
-            $replace_vars = [
-                '/apps/' => '/app/',
-                '/pages/' => '/page/',
-                '/themes/' => '/theme/',
-                '/plugins/' => '/plugin/',
-            ];
-
-            $hook_name = str_replace(array_keys($replace_vars), array_values($replace_vars), $hook_name);
+            $hook_name = strtr($hook_name, $plural_map);
         }
 
         return $hook_name;
