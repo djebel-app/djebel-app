@@ -423,6 +423,52 @@ class String_Util_Test extends TestCase {
         $this->assertEquals('1_2_3', $result_3);
     }
 
+    public function testSanitizeAlphaNumericExtSpecialRegexCharsInExtras()
+    {
+        // preg_quote inside the helper must escape regex meta-chars in $extra_chars.
+        // Without escaping, '.', '+', '*' would be interpreted as regex specials and
+        // the resulting pattern would be wrong (or worse, throw a fatal error).
+        $extra_chars = [ '.', '+', '*', ];
+
+        $result_dot = Dj_App_String_Util::sanitizeAlphaNumericExt('site.com', $extra_chars);
+        $this->assertEquals('site.com', $result_dot);
+
+        $result_plus = Dj_App_String_Util::sanitizeAlphaNumericExt('a+b', $extra_chars);
+        $this->assertEquals('a+b', $result_plus);
+
+        $result_mixed = Dj_App_String_Util::sanitizeAlphaNumericExt('a@b.c+d', $extra_chars);
+        $this->assertEquals('a_b.c+d', $result_mixed);
+    }
+
+    public function testSanitizeAlphaNumericExtAcceptsStringFormExtras()
+    {
+        // Pass extras as a single string instead of an array — coerced via (array) cast.
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello_world', '_');
+        $this->assertEquals('hello_world', $result);
+
+        $result_dirty = Dj_App_String_Util::sanitizeAlphaNumericExt('hello@world', '_');
+        $this->assertEquals('hello_world', $result_dirty);
+    }
+
+    public function testSanitizeAlphaNumericExtEmptyExtrasIsStrict()
+    {
+        // No extras allowed → only alphanumeric chars survive, everything else
+        // gets replaced (or stripped if replacement is '').
+        $extra_chars = [];
+
+        $result_clean = Dj_App_String_Util::sanitizeAlphaNumericExt('hello123', $extra_chars);
+        $this->assertEquals('hello123', $result_clean);
+
+        // Underscore is NOT in extras now, so it gets replaced (with the default _ replacement,
+        // which means underscores stay underscores — runs collapse to single _).
+        $result_with_underscore = Dj_App_String_Util::sanitizeAlphaNumericExt('hello_world', $extra_chars);
+        $this->assertEquals('hello_world', $result_with_underscore);
+
+        // Strip mode: empty extras + empty replacement → only alnum survives
+        $result_stripped = Dj_App_String_Util::sanitizeAlphaNumericExt('hello_world-2024!', $extra_chars, '');
+        $this->assertEquals('helloworld2024', $result_stripped);
+    }
+
     public function testFormatSlug()
     {
         $result = Dj_App_String_Util::formatSlug('Hello World');
