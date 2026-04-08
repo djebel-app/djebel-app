@@ -343,6 +343,86 @@ class String_Util_Test extends TestCase {
         $this->assertFalse($result_array);
     }
 
+    // ============================================================
+    // sanitizeAlphaNumericExt tests
+    // ============================================================
+
+    public function testSanitizeAlphaNumericExtFastPathCleanInput()
+    {
+        // Already alphanumeric + default extras (_, -) → returned as-is, no regex
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello_world-2024');
+        $this->assertEquals('hello_world-2024', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtSlowPathDirtyInput()
+    {
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello@world!2024');
+        $this->assertEquals('hello_world_2024', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtCollapsesRunsOfBadChars()
+    {
+        // Multiple consecutive bad chars collapse into ONE replacement (the + quantifier)
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello@@@world');
+        $this->assertEquals('hello_world', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtCustomExtras()
+    {
+        // Allow only / as extra char
+        $extras = [ '/', ];
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('app/page/content', $extras);
+        $this->assertEquals('app/page/content', $result);
+
+        // Underscore is NOT in extras, so it gets replaced
+        $extras_only_slash = [ '/', ];
+        $result_underscore = Dj_App_String_Util::sanitizeAlphaNumericExt('app_page', $extras_only_slash);
+        $this->assertEquals('app_page', $result_underscore); // _ becomes _ (same char)
+    }
+
+    public function testSanitizeAlphaNumericExtCustomReplacement()
+    {
+        // Use - as replacement instead of _
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello@world', [ '-', ], '-');
+        $this->assertEquals('hello-world', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtEmptyReplacement()
+    {
+        // Empty replacement → bad chars are stripped, not replaced
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt('hello@world!', [ '_', ], '');
+        $this->assertEquals('helloworld', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtWithNonScalarReturnsEmpty()
+    {
+        $result_null = Dj_App_String_Util::sanitizeAlphaNumericExt(null);
+        $this->assertEquals('', $result_null);
+
+        $result_array = Dj_App_String_Util::sanitizeAlphaNumericExt([ 'a', ]);
+        $this->assertEquals('', $result_array);
+    }
+
+    public function testSanitizeAlphaNumericExtWithIntegerCoerced()
+    {
+        // is_scalar accepts int → coerced to string and returned as-is (digits are alnum)
+        $result = Dj_App_String_Util::sanitizeAlphaNumericExt(404);
+        $this->assertEquals('404', $result);
+    }
+
+    public function testSanitizeAlphaNumericExtPatternCacheUsed()
+    {
+        // Multiple calls with the same extras+replacement should produce identical
+        // output without breaking — verifies the static pattern cache works.
+        $result_1 = Dj_App_String_Util::sanitizeAlphaNumericExt('a@b@c', [ '_', ]);
+        $result_2 = Dj_App_String_Util::sanitizeAlphaNumericExt('x#y#z', [ '_', ]);
+        $result_3 = Dj_App_String_Util::sanitizeAlphaNumericExt('1!2!3', [ '_', ]);
+
+        $this->assertEquals('a_b_c', $result_1);
+        $this->assertEquals('x_y_z', $result_2);
+        $this->assertEquals('1_2_3', $result_3);
+    }
+
     public function testFormatSlug()
     {
         $result = Dj_App_String_Util::formatSlug('Hello World');

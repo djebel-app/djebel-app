@@ -227,6 +227,55 @@ class Dj_App_String_Util
         return $is_valid;
     }
 
+    /**
+     * Dj_App_String_Util::sanitizeAlphaNumericExt();
+     * Replaces any char NOT in (alphanumeric + $extra_chars) with $replacement.
+     * Fast-paths the common case where the input is already clean — skips the
+     * regex entirely. The compiled regex pattern is cached per (extra_chars, replacement)
+     * combination so repeat calls are pattern-build-free.
+     *
+     * Use this anywhere you'd write the pattern:
+     *   if (!isAlphaNumericExt($str, $extra_chars)) {
+     *       $str = preg_replace('#[^\w'.$extra_chars_escaped.']+#', $replacement, $str);
+     *   }
+     *
+     * @param scalar $str
+     * @param array|string $extra_chars Extra chars to allow. Default ['_', '-'].
+     * @param string $replacement Replacement char/string for runs of bad chars. Default '_'.
+     * @return string Sanitized string. Empty string for non-scalar/empty input.
+     */
+    public static function sanitizeAlphaNumericExt($str, $extra_chars = ['_', '-'], $replacement = '_')
+    {
+        if (!is_scalar($str) || empty($str)) {
+            return '';
+        }
+
+        $str = (string) $str;
+
+        // Fast path: already clean → return as-is, no regex.
+        if (Dj_App_String_Util::isAlphaNumericExt($str, $extra_chars)) {
+            return $str;
+        }
+
+        // Slow path: build (and cache) the regex pattern keyed by (extra_chars, replacement).
+        // The cache is bounded — typical usage has 5-6 unique (extra_chars, replacement) pairs.
+        static $pattern_cache = [];
+
+        $extra_chars = (array) $extra_chars;
+        $extra_chars_str = implode('', $extra_chars);
+        $cache_key = $extra_chars_str . "\0" . $replacement;
+
+        if (!isset($pattern_cache[$cache_key])) {
+            $extra_chars_quoted = preg_quote($extra_chars_str, '#');
+            $pattern_cache[$cache_key] = '#[^\w' . $extra_chars_quoted . ']+#';
+        }
+
+        $pattern = $pattern_cache[$cache_key];
+        $str = preg_replace($pattern, $replacement, $str);
+
+        return $str;
+    }
+
     const ALLOW_DOT = 2;
     const KEEP_CASE = 2**2;
     const KEEP_DASH = 2**3;
@@ -365,9 +414,8 @@ class Dj_App_String_Util
 
         $page = substr($page, 0, 100);
 
-        if (!Dj_App_String_Util::isAlphaNumericExt($page)) {
-            $page = preg_replace('/[^\w\-]/si', '_', $page);
-        }
+        // Sanitize via the shared helper — fast-paths clean input (alnum + _ + -).
+        $page = Dj_App_String_Util::sanitizeAlphaNumericExt($page);
 
         $page = Dj_App_String_Util::singlefy($page, '_-');
         $page = Dj_App_String_Util::trim($page, '_-');
