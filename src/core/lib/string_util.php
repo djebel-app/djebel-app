@@ -259,6 +259,10 @@ class Dj_App_String_Util
 
         // Slow path: build (and cache) the regex pattern keyed by (extra_chars, replacement).
         // The cache is bounded — typical usage has 5-6 unique (extra_chars, replacement) pairs.
+        // The pattern uses [a-z\d] + i flag (NOT \w) as the base because \w always includes _,
+        // which would silently keep underscores even when extras=[]. The i flag makes [a-z]
+        // case-insensitive (matches A-Z too) — same coverage as [a-zA-Z] but shorter pattern.
+        // Matches isAlphaNumericExt's strict ctype_alnum semantics for empty extras.
         static $pattern_cache = [];
 
         $extra_chars = (array) $extra_chars;
@@ -267,7 +271,7 @@ class Dj_App_String_Util
 
         if (!isset($pattern_cache[$cache_key])) {
             $extra_chars_quoted = preg_quote($extra_chars_str, '#');
-            $pattern_cache[$cache_key] = '#[^\w' . $extra_chars_quoted . ']+#';
+            $pattern_cache[$cache_key] = '#[^a-z\d' . $extra_chars_quoted . ']+#i';
         }
 
         $pattern = $pattern_cache[$cache_key];
