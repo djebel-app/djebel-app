@@ -1631,4 +1631,62 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('B',    self::$deferred_call_log[1]['tag']);
         $this->assertArrayNotHasKey('tag', self::$deferred_call_log[2]); // deferredCallback
     }
+
+    // ============================================================
+    // runShutdownHooks direct tests
+    // ============================================================
+
+    public function testRunShutdownHooksFiresAppShutdownListeners() {
+        self::$deferred_call_log = [];
+
+        // Register a regular (non-deferred) listener for app/shutdown
+        $callback = [ 'Hooks_Test', 'syncCallback', ];
+        Dj_App_Hooks::addAction('app/shutdown', $callback);
+
+        // Sanity: listener hasn't fired yet
+        $this->assertEmpty(self::$deferred_call_log);
+
+        // runShutdownHooks should fire app/shutdown listeners
+        Dj_App_Hooks::runShutdownHooks();
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals('sync', self::$deferred_call_log[0]['tag']);
+    }
+
+    public function testRunShutdownHooksClearsAppShutdownListeners() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'syncCallback', ];
+        Dj_App_Hooks::addAction('app/shutdown', $callback);
+
+        // Sanity: listener is registered
+        $actions_before = Dj_App_Hooks::getActions();
+        $this->assertArrayHasKey('app/shutdown', $actions_before);
+
+        Dj_App_Hooks::runShutdownHooks();
+
+        // After runShutdownHooks, the app/shutdown listeners should be unset.
+        // This is the state-clearing idempotency mechanism — a second call has nothing to fire.
+        $actions_after = Dj_App_Hooks::getActions();
+        $this->assertArrayNotHasKey('app/shutdown', $actions_after);
+    }
+
+    public function testRunShutdownHooksIsIdempotent() {
+        self::$deferred_call_log = [];
+
+        $callback = [ 'Hooks_Test', 'syncCallback', ];
+        Dj_App_Hooks::addAction('app/shutdown', $callback);
+
+        // First call: listener fires
+        Dj_App_Hooks::runShutdownHooks();
+        $this->assertCount(1, self::$deferred_call_log);
+
+        // Second call: should be a no-op (listener was unset, queue is empty)
+        Dj_App_Hooks::runShutdownHooks();
+        $this->assertCount(1, self::$deferred_call_log);
+
+        // Third call: still no-op
+        Dj_App_Hooks::runShutdownHooks();
+        $this->assertCount(1, self::$deferred_call_log);
+    }
 }
