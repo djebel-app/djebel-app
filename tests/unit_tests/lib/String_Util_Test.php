@@ -1490,4 +1490,95 @@ class String_Util_Test extends TestCase {
         // and there's no [ in the input at all
         $this->assertEquals($input, $result);
     }
+
+    public function testIsEmailWithValid()
+    {
+        $result = Dj_App_String_Util::isEmail('user@example.com');
+        $this->assertTrue($result);
+    }
+
+    public function testIsEmailWithPlusTag()
+    {
+        $result = Dj_App_String_Util::isEmail('user+tag@example.com');
+        $this->assertTrue($result);
+    }
+
+    public function testIsEmailWithSubdomain()
+    {
+        $result = Dj_App_String_Util::isEmail('user@mail.example.com');
+        $this->assertTrue($result);
+    }
+
+    public function testIsEmailWithDotsInLocalPart()
+    {
+        $result = Dj_App_String_Util::isEmail('first.last@example.com');
+        $this->assertTrue($result);
+    }
+
+    public function testIsEmailWithMissingAtReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isEmail('userexample.com');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithMissingDomainReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isEmail('user@');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithMissingLocalPartReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isEmail('@example.com');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithEmbeddedSpaceReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isEmail('user name@example.com');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithLeadingTrailingWhitespaceReturnsFalse()
+    {
+        // isEmail does NOT trim — caller (e.g. Dj_App_Request::get) handles trim
+        $result = Dj_App_String_Util::isEmail(' user@example.com ');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithEmptyReturnsFalse()
+    {
+        $result = Dj_App_String_Util::isEmail('');
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithNonScalarReturnsFalse()
+    {
+        $result_null = Dj_App_String_Util::isEmail(null);
+        $this->assertFalse($result_null);
+
+        $result_array = Dj_App_String_Util::isEmail([ 'user@example.com', ]);
+        $this->assertFalse($result_array);
+
+        $result_obj = Dj_App_String_Util::isEmail(new stdClass());
+        $this->assertFalse($result_obj);
+    }
+
+    public function testIsEmailWithIntegerReturnsFalse()
+    {
+        // is_scalar accepts int — 42 is not an email
+        $result = Dj_App_String_Util::isEmail(42);
+        $this->assertFalse($result);
+    }
+
+    public function testIsEmailWithBoolReturnsFalse()
+    {
+        // empty(false) short-circuits to false
+        $result_false = Dj_App_String_Util::isEmail(false);
+        $this->assertFalse($result_false);
+
+        // true is scalar but "1" is not a valid email
+        $result_true = Dj_App_String_Util::isEmail(true);
+        $this->assertFalse($result_true);
+    }
 }

@@ -228,6 +228,26 @@ class Dj_App_String_Util
     }
 
     /**
+     * Dj_App_String_Util::isEmail();
+     * Validates an email address using PHP's filter_var with FILTER_VALIDATE_EMAIL.
+     * Accepts any scalar input — non-scalar / empty input returns false.
+     * @param scalar $str
+     * @return bool
+     */
+    public static function isEmail($str)
+    {
+        if (empty($str) || !is_scalar($str)) {
+            return false;
+        }
+
+        $str = (string) $str;
+        $filtered = filter_var($str, FILTER_VALIDATE_EMAIL);
+        $is_valid = !empty($filtered);
+
+        return $is_valid;
+    }
+
+    /**
      * Dj_App_String_Util::sanitizeAlphaNumericExt();
      * Replaces any char NOT in (alphanumeric + $extra_chars) with $replacement.
      * Fast-paths the common case where the input is already clean — skips the
