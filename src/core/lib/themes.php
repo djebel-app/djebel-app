@@ -162,7 +162,7 @@ class Dj_App_Themes {
             }
 
             $footer_buff = ob_get_clean();
-            $header_buff = Dj_App_Hooks::applyFilter('app.page.footer_buffer', $footer_buff);
+            $footer_buff = Dj_App_Hooks::applyFilter('app.page.footer_buffer', $footer_buff);
             // Footer
 
             $ctx['theme'] = $current_theme;
