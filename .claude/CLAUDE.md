@@ -562,6 +562,29 @@ public function __toString() {
     }
     ```
 
+    **22a. Guard-clause ordering — `empty()` BEFORE `is_scalar()` (and other function calls)**:
+    Inside a single `if (A || B)` guard, put the cheapest, most-short-circuiting check first. `empty()` is a zero-overhead language construct AND it catches the most common rejection inputs (`null`, `false`, `0`, `''`, empty array). `is_scalar()` / `is_array()` / `is_string()` are function calls that should only run AFTER the cheap rejection failed.
+    ```php
+    // ✅ CORRECT - empty() short-circuits the common case, is_scalar() only runs on non-empty input
+    public static function isEmail($str)
+    {
+        if (empty($str) || !is_scalar($str)) {
+            return false;
+        }
+
+        // ... real work ...
+    }
+
+    // ❌ WRONG - function call runs even for null/false/0/'' (the most common rejections)
+    public static function isEmail($str)
+    {
+        if (!is_scalar($str) || empty($str)) {
+            return false;
+        }
+    }
+    ```
+    Same principle applies to ANY ordered guard: cheap equality / `empty()` / `isset()` before `preg_match`, `filter_var`, DB lookups, hook calls, file I/O. Ask "which check rejects most inputs AND costs the least?" → that one goes first.
+
 23. **Consistent return types** - Always return same type from a function:
     - ❌ WRONG: Return `[]` on success, `''` on failure (mixed types!)
     - ❌ WRONG: Return `array` on success, `false` on failure
