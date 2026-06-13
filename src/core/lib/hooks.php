@@ -852,7 +852,7 @@ class Dj_App_Hooks {
      * @return bool
      */
     public static function addNotice($message, $ctx = []) {
-        $ctx['time'] = microtime(true);
+        $ctx['time'] = Dj_App_Util::time();
 
         $notice = [
             'message' => $message,
