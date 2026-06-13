@@ -53,6 +53,37 @@ class Dj_App_Hooks {
     private static $deferred_actions_data = [];
 
     /**
+     * Parked (disabled) hook entries. Same 3-level shape as the active registries:
+     *   $disabled_filters[$formatted_hook][$priority][$action_id] = $callback;
+     *
+     * disableFilter()/disableAction() MOVE entries here instead of flagging them —
+     * the fire path never sees disabled entries, so skipping them costs ZERO per
+     * fire (a flag checked inside the hot loop would tax every invocation).
+     * enableFilter()/enableAction() move them back. A fully parked hook hits the
+     * existing empty() quick-return in applyFilter()/doAction() for free.
+     * @var array
+     */
+    private static $disabled_filters = [];
+    private static $disabled_actions = [];
+
+    /**
+     * Parked entries of the $deferred_actions mirror. Kept in sync by
+     * disableAction()/enableAction() so a disabled deferred action neither runs
+     * nor queues params while parked.
+     * @var array
+     */
+    private static $disabled_deferred_actions = [];
+
+    /**
+     * Pending notices queued via addNotice(). Drained ONCE per request by
+     * flushNotices() during runShutdownHooks() — after finishRequest() has
+     * already disconnected the client, so emitting costs the user nothing.
+     * Each entry: [ 'message' => string, 'ctx' => array, ].
+     * @var array
+     */
+    private static $notices = [];
+
+    /**
      * This contains if the action has run regardless if it was processed or not
      * @var array
      */
@@ -312,12 +343,27 @@ class Dj_App_Hooks {
         // PHP auto-vivifies missing intermediate keys on nested writes — single
         // opcode per assignment, no isset+init dance needed.
         foreach ($hooks as $hook) {
-            $formatted_hook = self::formatHookName($hook);
+            $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            // SORTED INVARIANT: priorities stay sorted at registration so doAction()
+            // never sorts on the fire path. A new priority key appends at the end of
+            // the array — re-sort only when it lands out of order. array_key_last()
+            // is O(1); adds at an existing priority or in increasing order skip this.
+            if (!isset(self::$actions[$formatted_hook][$priority]) && !empty(self::$actions[$formatted_hook]) && $priority < array_key_last(self::$actions[$formatted_hook])) {
+                self::$actions[$formatted_hook][$priority] = [];
+                ksort(self::$actions[$formatted_hook]);
+            }
 
             self::$actions[$formatted_hook][$priority][$action_id] = $callback;
 
             // Mirror into $deferred_actions so doAction() in DEFERRED mode reads it directly.
             if ($type === self::ACTION_TYPE_DEFERRED) {
+                // Same sorted invariant for the mirror — the DEFERRED replay iterates it.
+                if (!isset(self::$deferred_actions[$formatted_hook][$priority]) && !empty(self::$deferred_actions[$formatted_hook]) && $priority < array_key_last(self::$deferred_actions[$formatted_hook])) {
+                    self::$deferred_actions[$formatted_hook][$priority] = [];
+                    ksort(self::$deferred_actions[$formatted_hook]);
+                }
+
                 self::$deferred_actions[$formatted_hook][$priority][$action_id] = $callback;
             }
         }
@@ -388,6 +434,22 @@ class Dj_App_Hooks {
             throw new Dj_App_Exception("Invalid hook name. It must be a scalar", [ 'hook_name' => $hook_name ] );
         }
 
+        // MEMO CACHE: raw input → formatted result. This runs on EVERY add/remove/
+        // doAction/applyFilter and the same canonical names repeat constantly, so
+        // after the first call the whole function collapses to one isset + return.
+        // The raw string itself is the key — PHP's hashtable hashes string keys in
+        // C, so manual (partial) hashing would only ADD work and risk collisions.
+        // Variant spellings ('App.Page.Content' vs 'app/page/content') each take a
+        // slot but resolve to the SAME formatted name — correctness is unaffected;
+        // the registries are keyed by the formatted name only.
+        static $formatted_cache = [];
+
+        if (isset($formatted_cache[$hook_name])) {
+            return $formatted_cache[$hook_name];
+        }
+
+        $raw_hook_name = $hook_name;
+
         // Static caches for hot-path arrays — allocated once per process, not per call.
         // formatHookName runs on every add/remove/doAction/applyFilter, so per-call
         // array literals add up at scale. $plural_map uses strtr (which accepts a
@@ -425,6 +487,13 @@ class Dj_App_Hooks {
         // Note: dots and dashes are already converted by this point
         if (strpos($hook_name, 's/') !== false) { // plural? - make it singular
             $hook_name = strtr($hook_name, $plural_map);
+        }
+
+        // Growth cap, not eviction: canonical hook names are a small fixed set, so
+        // 1000 distinct raw spellings means something is generating dynamic names —
+        // those format normally, just uncached. count() is O(1) on PHP arrays.
+        if (count($formatted_cache) < 1000) {
+            $formatted_cache[$raw_hook_name] = $hook_name;
         }
 
         return $hook_name;
@@ -470,8 +539,11 @@ class Dj_App_Hooks {
                 return;
             }
 
+            // No sort here: priorities are kept sorted at registration time
+            // (addAction/setActions/enableAction maintain the sorted invariant).
+            // That also keeps $source_actions a cheap refcount alias — the old
+            // per-fire ksort() wrote to the local and forced a full COW array copy.
             $source_actions = $source_actions[$executed_hook_fmt];
-            ksort($source_actions);
 
             // NORMAL mode + this hook has deferred callbacks → capture (hook, params) NOW,
             // once, before the loop. We know the loop WILL skip them (they're registered),
@@ -496,10 +568,10 @@ class Dj_App_Hooks {
                         continue;
                     }
 
-                    call_user_func_array($callback, array(
-                        $params,
-                        $executed_hook, // comes as 2nd param -> $event
-                    ));
+                    // Direct invocation: no call_user_func_array() dispatch overhead
+                    // and no per-call args-array allocation. Works for all callable
+                    // shapes ('Class::method', [ $obj, 'method', ], plain functions).
+                    $callback($params, $executed_hook); // $executed_hook comes as 2nd param -> $event
 
                     self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
                 }
@@ -549,23 +621,45 @@ class Dj_App_Hooks {
                 return $cur_val;
             }
 
-            // Sort priorities only when executing
-            ksort(self::$filters[$executed_hook_fmt]);
-
-            // Execute callbacks in priority order
+            // Execute callbacks in priority order. is_callable() is NOT checked on
+            // the hot path — checkAllowed() validates at registration time (same
+            // contract as doAction). Quick-return sentinels are checked FIRST:
+            // is_scalar() + isset() are C-level checks, cheaper than invoking, and
+            // this matches checkAllowed()'s precedence (sentinel before callable).
             foreach (self::$filters[$executed_hook_fmt] as $callbacks_by_priority) {
                 foreach ($callbacks_by_priority as $callback) {
-                    if (is_callable($callback)) {
-                        $cur_val = call_user_func_array($callback, array(
-                            $cur_val,
-                            $params,
-                            $executed_hook, // comes as 3rd param -> $event
-                        ));
+                    if (is_scalar($callback) && isset(self::$allowed_predefined_quick_returns[$callback])) {
+                        $cur_val = self::$allowed_predefined_quick_returns[$callback];
+                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
+                    } else {
+                        // Direct invocation: no call_user_func_array() dispatch
+                        // overhead, no per-call args-array allocation. The try is
+                        // free on the non-throwing path (PHP zero-cost exceptions).
+                        try {
+                            $cur_val = $callback($cur_val, $params, $executed_hook); // $executed_hook comes as 3rd param -> $event
+                        } catch (\Error $e) {
+                            // An \Error thrown from INSIDE a valid callback is a real
+                            // bug in that callback — don't mask it.
+                            if (is_callable($callback)) {
+                                throw $e;
+                            }
+
+                            // Non-callable entry (only reachable via setFilters()
+                            // injection or corrupted state — addFilter() validates).
+                            // Surface it LOUDLY but keep the chain running: $cur_val
+                            // is untouched and the remaining callbacks still fire.
+                            $callback_str = Dj_App_Hooks::generateCallbackHash($callback);
+
+                            $notice_ctx = [
+                                'hook_name' => $executed_hook_fmt,
+                                'callback' => $callback_str,
+                            ];
+
+                            Dj_App_Hooks::addNotice("Invalid callback for filter: [{$executed_hook_fmt}] callback: [{$callback_str}]", $notice_ctx);
+                            continue;
+                        }
 
                         // Mark as actually run only after successful execution
-                        self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
-                    } elseif (is_scalar($callback) && isset(self::$allowed_predefined_quick_returns[$callback])) {
-                        $cur_val = self::$allowed_predefined_quick_returns[$callback];
                         self::$executed_hooks[$executed_hook_fmt] = self::HOOK_RUN;
                     }
                 }
@@ -630,7 +724,7 @@ class Dj_App_Hooks {
             throw new Dj_App_Exception($check_res->msg(), [ 'res' => $check_res, ]);
         }
 
-        $hooks = (array)$hook_name;
+        $hooks = (array) $hook_name;
 
         foreach ($hooks as $hook) {
             $formatted_hook = self::formatHookName($hook);
@@ -640,11 +734,21 @@ class Dj_App_Hooks {
             }
 
             if (!isset(self::$filters[$formatted_hook][$priority])) {
-                self::$filters[$formatted_hook][$priority] = [];
+                // SORTED INVARIANT: priorities stay sorted at registration so
+                // applyFilter() never sorts on the fire path. A new priority key
+                // appends at the end of the array — re-sort only when it lands out
+                // of order. array_key_last() is O(1); adds at an existing priority
+                // or in increasing order skip the ksort entirely.
+                if (!empty(self::$filters[$formatted_hook]) && $priority < array_key_last(self::$filters[$formatted_hook])) {
+                    self::$filters[$formatted_hook][$priority] = [];
+                    ksort(self::$filters[$formatted_hook]);
+                } else {
+                    self::$filters[$formatted_hook][$priority] = [];
+                }
             }
 
             // Generate the action_id (callback fingerprint) for this callback
-            $action_id = self::generateCallbackHash($callback);
+            $action_id = Dj_App_Hooks::generateCallbackHash($callback);
 
             // Store callback under its action_id (matches $actions / $deferred_actions shape)
             self::$filters[$formatted_hook][$priority][$action_id] = $callback;
@@ -658,6 +762,19 @@ class Dj_App_Hooks {
 
     public static function setActions($actions = [])
     {
+        // Bulk replace bypasses addAction()'s sorted-at-registration bookkeeping —
+        // re-establish the sorted invariant here so the fire path keeps skipping sorts.
+        // Setters run rarely (tests, state restore), so the cost is irrelevant.
+        $hook_names = array_keys($actions);
+
+        foreach ($hook_names as $hook) {
+            if (!is_array($actions[$hook])) {
+                continue;
+            }
+
+            ksort($actions[$hook]);
+        }
+
         self::$actions = $actions;
     }
 
@@ -668,6 +785,18 @@ class Dj_App_Hooks {
 
     public static function setFilters($filters = [])
     {
+        // Bulk replace bypasses addFilter()'s sorted-at-registration bookkeeping —
+        // re-establish the sorted invariant here so the fire path keeps skipping sorts.
+        $hook_names = array_keys($filters);
+
+        foreach ($hook_names as $hook) {
+            if (!is_array($filters[$hook])) {
+                continue;
+            }
+
+            ksort($filters[$hook]);
+        }
+
         self::$filters = $filters;
     }
 
@@ -678,6 +807,18 @@ class Dj_App_Hooks {
 
     public static function setDeferredActions($deferred_actions = [])
     {
+        // Same sorted-invariant bookkeeping as setActions() — the DEFERRED replay
+        // in doAction() iterates this registry without sorting.
+        $hook_names = array_keys($deferred_actions);
+
+        foreach ($hook_names as $hook) {
+            if (!is_array($deferred_actions[$hook])) {
+                continue;
+            }
+
+            ksort($deferred_actions[$hook]);
+        }
+
         self::$deferred_actions = $deferred_actions;
     }
 
@@ -689,6 +830,88 @@ class Dj_App_Hooks {
     public static function setDeferredActionsData($deferred_actions_data = [])
     {
         self::$deferred_actions_data = $deferred_actions_data;
+    }
+
+    /**
+     * Queues a notice for deferred, FILTERABLE emission instead of calling
+     * trigger_error() inline. Costs ONE array append — safe to call from hot
+     * paths' error branches. The queue is drained once per request by
+     * flushNotices() during runShutdownHooks(), i.e. after finishRequest() has
+     * already disconnected the client, so emission costs the user nothing.
+     *
+     * Deferred (vs emitting immediately) also means plugins that load AFTER the
+     * notice was raised can still filter it, and no nested hook ever fires from
+     * inside applyFilter()'s loop (which would clobber $current_filter — it's a
+     * single string, not a stack).
+     *
+     * @param string $message The notice text passed to trigger_error() at drain time
+     * @param array $ctx Optional context. Supported keys:
+     *   - 'level' => E_USER_* constant for trigger_error() (default: E_USER_WARNING)
+     *   - anything else (e.g. 'hook_name', 'callback') travels with the notice so
+     *     'app/core/notices' filter callbacks can act on it programmatically.
+     * @return bool
+     */
+    public static function addNotice($message, $ctx = []) {
+        $ctx['time'] = microtime(true);
+
+        $notice = [
+            'message' => $message,
+            'ctx' => $ctx,
+        ];
+
+        self::$notices[] = $notice;
+
+        return true;
+    }
+
+    public static function getNotices(): array
+    {
+        return self::$notices;
+    }
+
+    public static function setNotices($notices = [])
+    {
+        self::$notices = $notices;
+    }
+
+    /**
+     * Drains the pending notices queue: fires ONE batch 'app/core/notices' filter
+     * with ALL queued notices (plugins can suppress by returning [], modify, or
+     * route them elsewhere), then trigger_error()s each surviving notice at its
+     * requested level.
+     *
+     * Called by runShutdownHooks() AFTER runDeferredActions(). Notices added
+     * DURING the drain (e.g. by filter callbacks) stay queued and are NOT
+     * re-filtered in the same pass — no recursion by construction.
+     *
+     * @return bool True if there was anything to drain
+     */
+    public static function flushNotices() {
+        if (empty(self::$notices)) {
+            return false;
+        }
+
+        $pending_notices = self::$notices;
+        self::$notices = [];
+
+        $filtered_notices = Dj_App_Hooks::applyFilter('app/core/notices', $pending_notices);
+
+        if (empty($filtered_notices) || !is_array($filtered_notices)) {
+            return true;
+        }
+
+        foreach ($filtered_notices as $notice) {
+            $message = empty($notice['message']) ? '' : $notice['message'];
+
+            if (empty($message)) {
+                continue;
+            }
+
+            $level = empty($notice['ctx']['level']) ? E_USER_WARNING : $notice['ctx']['level'];
+            trigger_error($message, $level);
+        }
+
+        return true;
     }
 
     /**
@@ -723,12 +946,17 @@ class Dj_App_Hooks {
             $req_obj->finishRequest();
         }
 
-        self::doAction('app/shutdown');
+        Dj_App_Hooks::doAction('app/shutdown');
 
         // Drain the listeners so a second runShutdownHooks() call is a no-op.
         unset(self::$actions['app/shutdown']);
 
-        self::runDeferredActions();
+        Dj_App_Hooks::runDeferredActions();
+
+        // Emit queued notices LAST — deferred work above may add more, and the
+        // 'app/core/notices' filter should see the full batch. Idempotent: the
+        // drain empties the queue, so a second call is a no-op.
+        Dj_App_Hooks::flushNotices();
     }
 
     /**
@@ -850,7 +1078,7 @@ class Dj_App_Hooks {
             ]);
         }
 
-        $hooks = (array)$hook_name;
+        $hooks = (array) $hook_name;
         $removed = false;
 
         // Generate the action_id (callback fingerprint) once for the callback we want to remove
@@ -883,8 +1111,355 @@ class Dj_App_Hooks {
     }
 
     /**
+     * Temporarily disables a filter callback (or a WHOLE hook when $callback is
+     * empty) WITHOUT removing it. The entry is MOVED into $disabled_filters —
+     * not flagged — so the fire path pays ZERO: applyFilter() never sees parked
+     * entries and a fully parked hook hits the existing empty() quick-return.
+     * Reversible via enableFilter(). removeFilter() does NOT touch parked entries.
+     *
+     * While disabled the callback is invisible: hasFilter() returns false for a
+     * fully parked hook.
+     *
+     * @param string|array $hook_name The hook name(s)
+     * @param callable|string $callback Specific callback to park; empty = whole hook
+     * @param int $priority The priority the callback was registered at
+     * @return bool True if at least one entry was parked
+     * @throws Dj_App_Hooks_Exception For invalid hook names
+     */
+    public static function disableFilter($hook_name, $callback = '', $priority = self::DEFAULT_PRIORITY) {
+        if (!is_scalar($hook_name) && !is_array($hook_name)) {
+            throw new Dj_App_Hooks_Exception("Invalid filter name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
+        }
+
+        $hooks = (array) $hook_name;
+        $disabled = false;
+
+        $action_id = '';
+
+        if (!empty($callback)) {
+            $action_id = Dj_App_Hooks::generateCallbackHash($callback);
+        }
+
+        foreach ($hooks as $hook) {
+            $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (empty(self::$filters[$formatted_hook])) {
+                continue;
+            }
+
+            // Empty callback = park the WHOLE hook. Entry-by-entry move so
+            // previously parked individual callbacks of the same hook are merged,
+            // never overwritten.
+            if (empty($callback)) {
+                foreach (self::$filters[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                    foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                        self::$disabled_filters[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                    }
+                }
+
+                unset(self::$filters[$formatted_hook]);
+                $disabled = true;
+                continue;
+            }
+
+            if (isset(self::$filters[$formatted_hook][$priority][$action_id])) {
+                self::$disabled_filters[$formatted_hook][$priority][$action_id] = self::$filters[$formatted_hook][$priority][$action_id];
+                unset(self::$filters[$formatted_hook][$priority][$action_id]);
+                $disabled = true;
+
+                // Clean up empty levels so the fire path's empty() quick-return kicks in.
+                if (empty(self::$filters[$formatted_hook][$priority])) {
+                    unset(self::$filters[$formatted_hook][$priority]);
+
+                    if (empty(self::$filters[$formatted_hook])) {
+                        unset(self::$filters[$formatted_hook]);
+                    }
+                }
+            }
+        }
+
+        return $disabled;
+    }
+
+    /**
+     * Re-enables a previously disabled filter callback (or a WHOLE hook when
+     * $callback is empty) by moving it back from $disabled_filters into $filters.
+     * Re-sorts the hook's priorities afterwards — enable is rare, so an
+     * unconditional ksort() is the simplest way to re-establish the
+     * sorted-at-registration invariant the fire path relies on.
+     *
+     * @param string|array $hook_name The hook name(s)
+     * @param callable|string $callback Specific callback to restore; empty = whole hook
+     * @param int $priority The priority the callback was registered at
+     * @return bool True if at least one entry was restored
+     * @throws Dj_App_Hooks_Exception For invalid hook names
+     */
+    public static function enableFilter($hook_name, $callback = '', $priority = self::DEFAULT_PRIORITY) {
+        if (!is_scalar($hook_name) && !is_array($hook_name)) {
+            throw new Dj_App_Hooks_Exception("Invalid filter name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
+        }
+
+        $hooks = (array) $hook_name;
+        $enabled = false;
+
+        $action_id = '';
+
+        if (!empty($callback)) {
+            $action_id = Dj_App_Hooks::generateCallbackHash($callback);
+        }
+
+        foreach ($hooks as $hook) {
+            $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (empty(self::$disabled_filters[$formatted_hook])) {
+                continue;
+            }
+
+            if (empty($callback)) {
+                foreach (self::$disabled_filters[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                    foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                        self::$filters[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                    }
+                }
+
+                unset(self::$disabled_filters[$formatted_hook]);
+                ksort(self::$filters[$formatted_hook]);
+                $enabled = true;
+                continue;
+            }
+
+            if (isset(self::$disabled_filters[$formatted_hook][$priority][$action_id])) {
+                self::$filters[$formatted_hook][$priority][$action_id] = self::$disabled_filters[$formatted_hook][$priority][$action_id];
+                unset(self::$disabled_filters[$formatted_hook][$priority][$action_id]);
+                $enabled = true;
+
+                if (empty(self::$disabled_filters[$formatted_hook][$priority])) {
+                    unset(self::$disabled_filters[$formatted_hook][$priority]);
+
+                    if (empty(self::$disabled_filters[$formatted_hook])) {
+                        unset(self::$disabled_filters[$formatted_hook]);
+                    }
+                }
+
+                ksort(self::$filters[$formatted_hook]);
+            }
+        }
+
+        return $enabled;
+    }
+
+    /**
+     * Temporarily disables an action callback (or a WHOLE hook when $callback is
+     * empty) WITHOUT removing it. Same park/unpark mechanics as disableFilter()
+     * — zero fire-path cost. ALSO parks the matching $deferred_actions mirror
+     * entry, so a disabled deferred action neither runs on the shutdown replay
+     * nor queues params during normal doAction() fires.
+     *
+     * @param string|array $hook_name The hook name(s)
+     * @param callable|string $callback Specific callback to park; empty = whole hook
+     * @param int $priority The priority the callback was registered at
+     * @return bool True if at least one entry was parked
+     * @throws Dj_App_Hooks_Exception For invalid hook names
+     */
+    public static function disableAction($hook_name, $callback = '', $priority = self::DEFAULT_PRIORITY) {
+        if (!is_scalar($hook_name) && !is_array($hook_name)) {
+            throw new Dj_App_Hooks_Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
+        }
+
+        $hooks = (array) $hook_name;
+        $disabled = false;
+
+        $action_id = '';
+
+        if (!empty($callback)) {
+            $action_id = Dj_App_Hooks::generateCallbackHash($callback);
+        }
+
+        foreach ($hooks as $hook) {
+            $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (empty($callback)) {
+                if (!empty(self::$actions[$formatted_hook])) {
+                    foreach (self::$actions[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                        foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                            self::$disabled_actions[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                        }
+                    }
+
+                    unset(self::$actions[$formatted_hook]);
+                    $disabled = true;
+                }
+
+                // Park the deferred mirror too — keeps doAction()'s capture/skip view coherent.
+                if (!empty(self::$deferred_actions[$formatted_hook])) {
+                    foreach (self::$deferred_actions[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                        foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                            self::$disabled_deferred_actions[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                        }
+                    }
+
+                    unset(self::$deferred_actions[$formatted_hook]);
+                    $disabled = true;
+                }
+
+                continue;
+            }
+
+            if (isset(self::$actions[$formatted_hook][$priority][$action_id])) {
+                self::$disabled_actions[$formatted_hook][$priority][$action_id] = self::$actions[$formatted_hook][$priority][$action_id];
+                unset(self::$actions[$formatted_hook][$priority][$action_id]);
+                $disabled = true;
+
+                if (empty(self::$actions[$formatted_hook][$priority])) {
+                    unset(self::$actions[$formatted_hook][$priority]);
+
+                    if (empty(self::$actions[$formatted_hook])) {
+                        unset(self::$actions[$formatted_hook]);
+                    }
+                }
+            }
+
+            if (isset(self::$deferred_actions[$formatted_hook][$priority][$action_id])) {
+                self::$disabled_deferred_actions[$formatted_hook][$priority][$action_id] = self::$deferred_actions[$formatted_hook][$priority][$action_id];
+                unset(self::$deferred_actions[$formatted_hook][$priority][$action_id]);
+                $disabled = true;
+
+                if (empty(self::$deferred_actions[$formatted_hook][$priority])) {
+                    unset(self::$deferred_actions[$formatted_hook][$priority]);
+
+                    if (empty(self::$deferred_actions[$formatted_hook])) {
+                        unset(self::$deferred_actions[$formatted_hook]);
+                    }
+                }
+            }
+        }
+
+        return $disabled;
+    }
+
+    /**
+     * Re-enables a previously disabled action callback (or a WHOLE hook when
+     * $callback is empty), restoring the $deferred_actions mirror entry too.
+     * Re-sorts the restored hooks' priorities to re-establish the
+     * sorted-at-registration invariant.
+     *
+     * @param string|array $hook_name The hook name(s)
+     * @param callable|string $callback Specific callback to restore; empty = whole hook
+     * @param int $priority The priority the callback was registered at
+     * @return bool True if at least one entry was restored
+     * @throws Dj_App_Hooks_Exception For invalid hook names
+     */
+    public static function enableAction($hook_name, $callback = '', $priority = self::DEFAULT_PRIORITY) {
+        if (!is_scalar($hook_name) && !is_array($hook_name)) {
+            throw new Dj_App_Hooks_Exception("Invalid hook name. We're expecting a scalar or an array, something else was given.", [
+                'hook_name' => $hook_name,
+                'type' => gettype($hook_name),
+            ]);
+        }
+
+        $hooks = (array) $hook_name;
+        $enabled = false;
+
+        $action_id = '';
+
+        if (!empty($callback)) {
+            $action_id = Dj_App_Hooks::generateCallbackHash($callback);
+        }
+
+        foreach ($hooks as $hook) {
+            $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (empty($callback)) {
+                if (!empty(self::$disabled_actions[$formatted_hook])) {
+                    foreach (self::$disabled_actions[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                        foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                            self::$actions[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                        }
+                    }
+
+                    unset(self::$disabled_actions[$formatted_hook]);
+                    ksort(self::$actions[$formatted_hook]);
+                    $enabled = true;
+                }
+
+                if (!empty(self::$disabled_deferred_actions[$formatted_hook])) {
+                    foreach (self::$disabled_deferred_actions[$formatted_hook] as $parked_priority => $callbacks_at_priority) {
+                        foreach ($callbacks_at_priority as $parked_action_id => $parked_callback) {
+                            self::$deferred_actions[$formatted_hook][$parked_priority][$parked_action_id] = $parked_callback;
+                        }
+                    }
+
+                    unset(self::$disabled_deferred_actions[$formatted_hook]);
+                    ksort(self::$deferred_actions[$formatted_hook]);
+                    $enabled = true;
+                }
+
+                continue;
+            }
+
+            if (isset(self::$disabled_actions[$formatted_hook][$priority][$action_id])) {
+                self::$actions[$formatted_hook][$priority][$action_id] = self::$disabled_actions[$formatted_hook][$priority][$action_id];
+                unset(self::$disabled_actions[$formatted_hook][$priority][$action_id]);
+                $enabled = true;
+
+                if (empty(self::$disabled_actions[$formatted_hook][$priority])) {
+                    unset(self::$disabled_actions[$formatted_hook][$priority]);
+
+                    if (empty(self::$disabled_actions[$formatted_hook])) {
+                        unset(self::$disabled_actions[$formatted_hook]);
+                    }
+                }
+
+                ksort(self::$actions[$formatted_hook]);
+            }
+
+            if (isset(self::$disabled_deferred_actions[$formatted_hook][$priority][$action_id])) {
+                self::$deferred_actions[$formatted_hook][$priority][$action_id] = self::$disabled_deferred_actions[$formatted_hook][$priority][$action_id];
+                unset(self::$disabled_deferred_actions[$formatted_hook][$priority][$action_id]);
+                $enabled = true;
+
+                if (empty(self::$disabled_deferred_actions[$formatted_hook][$priority])) {
+                    unset(self::$disabled_deferred_actions[$formatted_hook][$priority]);
+
+                    if (empty(self::$disabled_deferred_actions[$formatted_hook])) {
+                        unset(self::$disabled_deferred_actions[$formatted_hook]);
+                    }
+                }
+
+                ksort(self::$deferred_actions[$formatted_hook]);
+            }
+        }
+
+        return $enabled;
+    }
+
+    public static function setDisabledFilters($disabled_filters = [])
+    {
+        self::$disabled_filters = $disabled_filters;
+    }
+
+    public static function setDisabledActions($disabled_actions = [])
+    {
+        self::$disabled_actions = $disabled_actions;
+    }
+
+    public static function setDisabledDeferredActions($disabled_deferred_actions = [])
+    {
+        self::$disabled_deferred_actions = $disabled_deferred_actions;
+    }
+
+    /**
      * Generates a unique hash for a callback
-     * 
+     *
      * @param callable|string $callback The callback to hash
      * @return string Unique identifier for the callback
      */
