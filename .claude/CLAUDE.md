@@ -635,10 +635,33 @@ public function __toString() {
     - ❌ WRONG: `Dj_App_Hooks::addFilter('hook', function($v) { return $v; });`
     - ❌ WRONG: `array_filter($items, fn($x) => $x !== 'php');`
     - ❌ WRONG: `array_map('trim', $items);` - use `Dj_App_String_Util::trim($items)` instead!
-    - ✅ CORRECT: `Dj_App_Hooks::addFilter('hook', [ $obj, 'methodName', ]);`
+    - ✅ CORRECT: `Dj_App_Hooks::addFilter('hook', [$obj, 'methodName']);`
     - ✅ CORRECT: `$items = Dj_App_String_Util::trim($items);` - handles arrays natively!
     - Closures are hard to debug, test, and audit. Class methods are traceable.
     - Always check if framework utilities handle arrays before using array_map/array_filter.
+
+28a. **Callbacks are LITERALS — inline them, never name a one-use callback variable**:
+    - A callable passed to `addFilter`/`addAction`/`removeFilter`/`array_map`/`usort`/
+      `set_error_handler` etc. is a literal used on the spot — inline it at EVERY call
+      site, even when the SAME callback is registered/removed on multiple hooks.
+      Repeat the literal; NEVER extract it to a `$callback`/`$cb`/`$cb_a` variable.
+    - A callable literal (`['Class', 'method']`, `[$this, 'method']`, `'Class::method'`)
+      has nothing to inspect/var_dump, so the "name the function-call result" rule
+      does NOT apply to it.
+    - **No trailing comma inside the callable pair** — it's a fixed `[target, method]`
+      pair that never grows, so the grow-friendly trailing-comma rule (5b) doesn't
+      apply: `[$obj, 'method']`, never `[ $obj, 'method', ]`.
+    - ❌ WRONG:
+      ```php
+      $callback = [ 'Hooks_Test', 'deferredCallback', ];
+      Dj_App_Hooks::addDeferredAction('app/test/hook', $callback, 50);
+      Dj_App_Hooks::removeAction('app/test/hook', $callback, 50);
+      ```
+    - ✅ CORRECT:
+      ```php
+      Dj_App_Hooks::addDeferredAction('app/test/hook', ['Hooks_Test', 'deferredCallback'], 50);
+      Dj_App_Hooks::removeAction('app/test/hook', ['Hooks_Test', 'deferredCallback'], 50);
+      ```
 
 29. **Loose plugin coupling** - Plugins should NOT know about each other tightly:
     - ❌ WRONG: `Dj_App_Hooks::applyFilter('app.plugins.markdown.convert_markdown', $content);`
