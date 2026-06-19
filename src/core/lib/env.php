@@ -117,7 +117,7 @@ class Dj_App_Env {
             return false;
         }
 
-        if ( defined('PHPUNIT_COMPOSER_INSTALL') && defined('__PHPUNIT_PHAR__') ) {
+        if ( defined('PHPUNIT_COMPOSER_INSTALL') || defined('__PHPUNIT_PHAR__') ) {
             return true;
         }
 
