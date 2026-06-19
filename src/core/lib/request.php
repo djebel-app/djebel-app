@@ -630,12 +630,31 @@ class Dj_App_Request {
     }
 
     /**
+     * Current HTTP request method, upper-cased (GET / POST / HEAD / ...).
+     * Empty string when not set (e.g. CLI). The is*() helpers below check
+     * for a specific method; use this when you need the raw method value.
+     *
+     * @return string
+     */
+    public function getRequestMethod()
+    {
+        if (empty($_SERVER['REQUEST_METHOD'])) {
+            return '';
+        }
+
+        $req_method = $_SERVER['REQUEST_METHOD'];
+        $req_method = strtoupper($req_method);
+
+        return $req_method;
+    }
+
+    /**
      * Checks if current request is HEAD
      * Uses early returns and first char check for efficiency
-     * 
+     *
      * @return bool True if HEAD request
      */
-    public function isHead() 
+    public function isHead()
     {
         if (empty($_SERVER['REQUEST_METHOD'])) {
             return false;
