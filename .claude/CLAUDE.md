@@ -69,8 +69,8 @@ CLI args always take priority over env vars. Internal PHP constants (embedded in
 
 ### Git Rules
 
+- **NEVER COMMIT — EVER. NO EXCEPTIONS.** Do NOT run `git commit`, `git push`, `git merge`, `git rebase`, submodule pointer bumps, or ANY command that writes git history or mutates a remote. Claude ONLY edits the working tree and **suggests** a commit message in chat; the USER runs every commit/push themselves after reviewing. This holds even if the user said "go ahead" earlier — approval never carries over, and a request to "commit" still means *propose the message and stop*, never execute it.
 - **NEVER** add `Co-Authored-By` or any attribution/signature line to commits
-- **ALWAYS ask before committing** — show the diff/status and proposed commit message, then wait for user approval. User MUST review every commit before it happens
 - Use `git mv` (not plain `mv`) for tracked files
 
 ## Coding Standards (10x PHP Developer Rules)
