@@ -401,6 +401,39 @@ class Dj_App_Hooks {
     }
 
     /**
+     * Register a callback on the 'app/shutdown' action — the shutdown phase fires once the
+     * response has been sent to the client, so this is the home for fire-and-forget
+     * background work that must not block the request: file cleanup, GC, flushing writes.
+     *
+     * Runs unconditionally at the end with no triggering doAction(), unlike
+     * addDeferredAction() (which defers a specific hook's per-firing handling). No closures.
+     *
+     * Usage:
+     *   Dj_App_Hooks::addShutdownAction([$this, 'processDelFiles'], 50);
+     *
+     * @param callable $callback Class method or function — NO closures
+     * @param int $priority Execution priority (default: 20)
+     */
+    public static function addShutdownAction($callback, $priority = self::DEFAULT_PRIORITY) {
+        Dj_App_Hooks::addAction('app/shutdown', $callback, $priority);
+    }
+
+    /**
+     * Remove a callback registered via addShutdownAction(). A shutdown action is a plain
+     * 'app/shutdown' action (no deferred mirror), so removeAction('app/shutdown', ...) works
+     * too — this is just the symmetric, intention-revealing form.
+     *
+     * @param callable $callback The callback to remove
+     * @param int $priority The priority level (default: 20)
+     * @return bool True if a callback was removed
+     */
+    public static function removeShutdownAction($callback, $priority = self::DEFAULT_PRIORITY) {
+        $removed = Dj_App_Hooks::removeAction('app/shutdown', $callback, $priority);
+
+        return $removed;
+    }
+
+    /**
      * Removes a deferred action — removes both the underlying action AND the fingerprint
      * that marks it as deferred. After this call, the callback will no longer be invoked
      * on the hook (deferred or otherwise).

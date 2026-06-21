@@ -164,6 +164,29 @@ Dj_App_Hooks::removeDeferredAction('app/messages/insert', [$pushService, 'sendNo
 - Deferral applies to actions only — filters are synchronous because the return value is needed immediately.
 - No bootstrap edits are required from plugins/themes — `addDeferredAction()` is the only API surface they need to know about.
 
+### Shutdown Actions — Run Once at the End
+When you just need something to run **once** after the response is sent — file cleanup, GC, flushing buffered writes — and there's no per-event hook to defer, register a **shutdown action**. It fires in step 3 above (`doAction('app/shutdown')`), so it needs **no triggering `doAction`** of its own.
+
+```php
+// Registered once (e.g. in your bootstrap)
+Dj_App_Hooks::addShutdownAction([$cleanupService, 'drainTempFiles'], 50);
+// ...runs by itself at shutdown, after the response has been flushed. No trigger needed.
+
+// Remove it (symmetric):
+Dj_App_Hooks::removeShutdownAction([$cleanupService, 'drainTempFiles'], 50);
+```
+
+**Shutdown action vs deferred action** — pick by intent:
+
+| | `addDeferredAction($hook, $cb)` | `addShutdownAction($cb)` |
+|---|---|---|
+| Bound to | a specific hook | nothing — just "the end" |
+| Trigger | the hook must fire (`doAction`) | none; runs unconditionally |
+| Runs | once **per** hook firing, with that firing's params | exactly once |
+| Use for | per-event work (one push per inserted message) | run-this-cleanup-at-the-end |
+
+A shutdown action is a plain `app/shutdown` listener, so `removeAction('app/shutdown', $cb, $prio)` works too — `removeShutdownAction()` is just the symmetric, intention-revealing form.
+
 ## 📝 Shortcodes: Dynamic Content Anywhere
 
 Djebel's shortcode system lets you inject dynamic content **anywhere on your page** - in templates, content areas, headers, footers, sidebars, or any HTML file. No need to write PHP in your templates.

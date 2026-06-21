@@ -1313,6 +1313,66 @@ class Hooks_Test extends TestCase {
     }
 
     // ============================================================
+    // Shutdown Action Tests (addShutdownAction)
+    // ============================================================
+
+    public function testShutdownActionDoesNotRunBeforeShutdown() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+
+        // Registered, but shutdown hasn't fired — nothing should have run.
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testShutdownActionRunsOnShutdownWithoutAnyTrigger() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+
+        // No doAction trigger at all — unlike a deferred action, a shutdown action runs
+        // on shutdown by itself (the whole point: no synthetic firing hook needed).
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log);
+    }
+
+    public function testMultipleShutdownActionsAllRun() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallbackB'], 50);
+
+        $this->simulateShutdown();
+
+        $this->assertCount(2, self::$deferred_call_log);
+    }
+
+    public function testRemoveShutdownActionPreventsExecution() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+
+        $this->simulateShutdown();
+
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    public function testGenericRemoveActionAlsoRemovesShutdownAction() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+
+        // A shutdown action is a plain 'app/shutdown' action, so the generic removeAction works too.
+        Dj_App_Hooks::removeAction('app/shutdown', ['Hooks_Test', 'deferredCallback'], 50);
+
+        $this->simulateShutdown();
+
+        $this->assertEmpty(self::$deferred_call_log);
+    }
+
+    // ============================================================
     // addDeferredAction / removeDeferredAction storage tests
     // ============================================================
 
