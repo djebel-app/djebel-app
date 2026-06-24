@@ -1652,13 +1652,23 @@ MSG_EOF;
         $site_web_path = Dj_App_Util::removeSlash($web_path);
         $site_content_web_path = Dj_App_Util::removeSlash($web_path) . '/' . Dj_App_Util::getContentDirName();
 
+        $options_obj = Dj_App_Options::getInstance();
+        $site_title = $options_obj->get('site.site_title');
+        $site_title_esc = Djebel_App_HTML::encodeEntities($site_title);
+
+        $site_url_esc = Djebel_App_HTML::escUrl($site_url);
+        $site_web_path_esc = Djebel_App_HTML::escUrl($site_web_path);
+        $content_dir_url_esc = Djebel_App_HTML::escUrl($content_dir_url);
+        $site_content_web_path_esc = Djebel_App_HTML::escUrl($site_content_web_path);
+
         // Define magic variables and their values
         $search_magic_vars = [
-            '__SITE_URL__' => $site_url,
-            '__SITE_WEB_PATH__' => $site_web_path,
-            '__SITE_CONTENT_DIR_URL__' => $content_dir_url,
-            '__SITE_CONTENT_WEB_PATH__' => $site_content_web_path,
-            '__CONTENT_URL__' => $content_dir_url,
+            '__SITE_URL__' => $site_url_esc,
+            '__SITE_WEB_PATH__' => $site_web_path_esc,
+            '__SITE_TITLE__' => $site_title_esc,
+            '__SITE_CONTENT_DIR_URL__' => $content_dir_url_esc,
+            '__SITE_CONTENT_WEB_PATH__' => $site_content_web_path_esc,
+            '__CONTENT_URL__' => $content_dir_url_esc,
         ];
 
         // allows others to add other magic vars
