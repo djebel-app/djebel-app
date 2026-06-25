@@ -313,8 +313,9 @@ class Dj_App_Request {
 
     /**
      * Build an app URL by prepending the web path to a module-relative path. getWebPath()
-     * already returns the dir ready to use (no trailing slash; '' at the domain root), so
-     * this only ensures the module path's leading slash — exactly one slash between them.
+     * returns '/myapp' for a subdir but '/' for the domain root, so the web path's trailing
+     * slash is stripped (a no-op for a subdir; '/' -> '' for root) and the module path's
+     * leading slash ensured — exactly one slash between them.
      *   url('/stats/daily') -> '/stats/daily' (root) or '/myapp/stats/daily' (web path /myapp)
      * @param string $rel_path Module-relative path, e.g. '/stats/daily'.
      * @param array $ctx
@@ -323,6 +324,8 @@ class Dj_App_Request {
     public function url($rel_path = '', $ctx = [])
     {
         $web_path = $this->getWebPath($ctx);
+        $web_path = Dj_App_Util::removeSlash($web_path);
+
         $rel_path = Dj_App_Util::addSlash($rel_path, Dj_App_Util::FLAG_LEADING);
 
         $url = $web_path . $rel_path;

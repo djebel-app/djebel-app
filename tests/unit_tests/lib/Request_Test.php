@@ -705,4 +705,49 @@ class Request_Test extends TestCase
         $this->assertEquals('abc123def456', $retrieved_data['hash_id'], 'Hash ID should match');
         $this->assertEquals('news', $retrieved_data['category'], 'Category should be news');
     }
+
+    /**
+     * url() prepends the web path to a module path on a subdir mount.
+     */
+    public function testUrlPrependsWebPathForSubdir()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/myapp';
+
+        $req_obj = new Dj_App_Request();
+        $url = $req_obj->url('/stats/daily');
+
+        $this->assertEquals('/myapp/stats/daily', $url, 'web path is prepended to the module path');
+    }
+
+    /**
+     * url() at the domain root (getWebPath() returns '/') must NOT double the slash.
+     */
+    public function testUrlAtDomainRootHasNoDoubleSlash()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
+
+        $req_obj = new Dj_App_Request();
+        $url = $req_obj->url('/stats/daily');
+
+        $this->assertEquals('/stats/daily', $url, 'root web path collapses to no prefix, no double slash');
+    }
+
+    /**
+     * url() ensures the module path's leading slash even when the caller omits it.
+     */
+    public function testUrlAddsLeadingSlashToModulePath()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/myapp';
+
+        $req_obj = new Dj_App_Request();
+        $url = $req_obj->url('stats/daily');
+
+        $this->assertEquals('/myapp/stats/daily', $url, 'leading slash added to a bare module path');
+    }
 }
