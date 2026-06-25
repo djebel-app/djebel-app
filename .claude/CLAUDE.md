@@ -640,6 +640,18 @@ public function __toString() {
     - Closures are hard to debug, test, and audit. Class methods are traceable.
     - Always check if framework utilities handle arrays before using array_map/array_filter.
 
+28b. **ALWAYS trim via `Dj_App_String_Util::trim()` — NEVER native `trim()`**:
+    - ❌ WRONG: `$title = trim($params['title']);`
+    - ❌ WRONG: `array_map('trim', $items);` (see rule 28)
+    - ✅ CORRECT: `$title = Dj_App_String_Util::trim($params['title']);`
+    - ✅ Extra chars: `Dj_App_String_Util::trim($val, '#');` trims `#` plus the whitespace set.
+    - It is the single source of truth for trimming: handles scalars AND arrays natively,
+      strips the standard set (` \t\n\r\0\x0B`) plus any `$extra_chars`, and removes null
+      bytes first. Native `trim()` handles only scalars and forks the project's behavior.
+    - Applies everywhere — shortcode attributes, config values, parsed/markdown input,
+      request data. (For one-sided trims, native `ltrim`/`rtrim` stay — there is no
+      one-sided project helper.)
+
 28a. **Callbacks are LITERALS — inline them, never name a one-use callback variable**:
     - A callable passed to `addFilter`/`addAction`/`removeFilter`/`array_map`/`usort`/
       `set_error_handler` etc. is a literal used on the spot — inline it at EVERY call
