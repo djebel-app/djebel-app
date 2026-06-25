@@ -1008,6 +1008,32 @@ class Dj_App_Exception extends Exception { }
 // templates/single-post.php
 ```
 
+### Plugin & Theme Slugs and Asset Prefixes
+
+The prefix depends on **where** the name appears. One idea: **drop the redundant `plugin`
+where the thing already sits inside a plugins container; keep the full `djebel-plugin-` only
+where the identifier floats loose in a global namespace.** Three tiers for a plugin `<name>`:
+
+```
+Tier 1  Repo-context   djebel-<name>           dir, plugin_uri slug, data subdir
+                                                e.g. djebel-contact
+Tier 2  Global ns      djebel-plugin-<name>    text_domain, CSS/JS classes+ids, form fields,
+                                                option keys, PHP class (Djebel_Plugin_<Name>)
+                                                e.g. djebel-plugin-contact
+Tier 3  Hooks          app.plugin.<name>.*     already under app.plugin. -> bare <name>
+                                                e.g. app.plugin.contact.*
+
+Private/site plugins insert `site-`:  djebel-site-<name>  /  djebel-site-plugin-<name>
+                                       e.g. djebel-site-dl / djebel-site-plugin-dl
+Themes (same 2 tiers):                 djebel-<name>        dir, theme_uri, theme_id, data subdir
+                                       djebel-theme-<name>  text_domain, CSS/JS, ids
+```
+
+CSS/id descriptors name the element by role, never abbreviated (`…-email-input`, not `…-e1`).
+Core framework CSS uses the reserved `dj-app-*` prefix; never reuse it in a plugin/theme.
+
+Full reference: `docs/plugin-guide.md` and `docs/theme-guide.md`.
+
 ---
 
 ## Error Handling & Result Patterns
