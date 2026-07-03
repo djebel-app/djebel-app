@@ -4,6 +4,19 @@ How to build a Djebel plugin, and — most importantly — the **naming conventi
 plugin MUST follow. Consistency is the #1 rule: a reader should be able to guess a plugin's
 dir, CSS classes, hooks, and option keys from its name alone, with zero surprises.
 
+## Keep it lean — one job per plugin
+
+Djebel plugins are **lean**: 0% body fat, only what's truly needed. A plugin does **one job**
+and exposes hooks so *other* plugins can extend it — it never absorbs adjacent concerns.
+
+- `djebel-contact` renders a contact form and emails it. That's all — it does **not** log
+  submissions, write a DB row, or ping Slack.
+- Persistence, notifications, analytics, and the like are **separate add-on plugins** that
+  listen on the hooks the core plugin fires (see [Extend via hooks](#extend-via-hooks--add-on-plugins)).
+
+The test: if a responsibility could be peeled off and the plugin still does its core job, it
+doesn't belong inside the plugin — it's an add-on.
+
 ## Naming Conventions (MANDATORY)
 
 A plugin's name appears in several places, and the prefix it carries depends on **where** it
@@ -119,15 +132,59 @@ $options_obj = Dj_App_Options::getInstance();
 $to_email = $options_obj->get('plugins.djebel-plugin-contact.to_email', 'admin@localhost');
 ```
 
-The plugin's data dir (CSV exports, caches, etc.) comes from the Tier 1 helper:
+A plugin that stores data (CSV exports, caches, etc.) gets its data dir from the Tier 1
+helper, keyed by its **own** slug — so data never lands in another plugin's tree:
 
 ```php
 $params = [
-    'plugin' => 'djebel-contact',
+    'plugin' => 'djebel-contact-log-csv',
 ];
 
 $dir = Dj_App_Util::getCorePrivateDataDir($params);
 ```
+
+## Extend via hooks — add-on plugins
+
+A plugin's job is fixed; its **extension points** are open. Fire actions/filters at the
+moments that matter, and let optional concerns live in their own tiny plugins that hook them —
+so the core plugin never grows and never changes when you add a feature.
+
+**The core plugin fires the event** (it owns the data, so it passes it along):
+
+```php
+$ctx = [
+    'email' => $email,
+    'message' => $message,
+    'data' => $data,
+];
+
+Dj_App_Hooks::doAction('app.plugin.contact.message_processed', $ctx);
+```
+
+**An add-on plugin listens** — a separate, lean plugin (`djebel-contact-log-csv`) that does
+nothing but persist:
+
+```php
+public function init()
+{
+    Dj_App_Hooks::addAction('app.plugin.contact.message_processed', [ $this, 'saveToCsv' ]);
+}
+
+public function saveToCsv($ctx)
+{
+    if (empty($ctx['data'])) {
+        return;
+    }
+    // ...write $ctx['data'] to its OWN data dir (see Reading config)...
+}
+```
+
+- The add-on writes to **its own** data dir — never the core plugin's dir or code.
+- Delete the add-on and the core plugin still works; it just loses that one feature.
+- Want a second sink (DB, webhook, a Google Sheet)? Another small plugin on the **same
+  hook** — the core plugin never changes.
+- A hook name shared by the firing plugin and its listeners is a **contract**: change one
+  side, grep the other.
 
 ## Legacy plugins (migrate later)
 
