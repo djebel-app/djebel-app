@@ -750,4 +750,88 @@ class Request_Test extends TestCase
 
         $this->assertEquals('/myapp/stats/daily', $url, 'leading slash added to a bare module path');
     }
+
+    /**
+     * isHttps() is true when the HTTPS server var is a non-'off' value (e.g. 'on').
+     */
+    public function testIsHttpsTrueWhenHttpsServerVarOn()
+    {
+        unset($_SERVER['HTTP_X_FORWARDED_PROTO']);
+        $_SERVER['HTTPS'] = 'on';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertTrue($is_https, "HTTPS='on' should be detected as HTTPS");
+    }
+
+    /**
+     * isHttps() also treats other non-'off' HTTPS values (e.g. '1') as secure.
+     */
+    public function testIsHttpsTrueWhenHttpsServerVarOne()
+    {
+        unset($_SERVER['HTTP_X_FORWARDED_PROTO']);
+        $_SERVER['HTTPS'] = '1';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertTrue($is_https, "HTTPS='1' should be detected as HTTPS");
+    }
+
+    /**
+     * isHttps() treats HTTPS='off' (the IIS convention) as NOT secure.
+     */
+    public function testIsHttpsFalseWhenHttpsServerVarOff()
+    {
+        unset($_SERVER['HTTP_X_FORWARDED_PROTO']);
+        $_SERVER['HTTPS'] = 'off';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertFalse($is_https, "HTTPS='off' should NOT be detected as HTTPS");
+    }
+
+    /**
+     * isHttps() is false with no HTTPS var and no forwarded-proto header (plain HTTP).
+     */
+    public function testIsHttpsFalseWhenNoHttpsSignals()
+    {
+        unset($_SERVER['HTTPS']);
+        unset($_SERVER['HTTP_X_FORWARDED_PROTO']);
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertFalse($is_https, 'no HTTPS signals should be plain HTTP');
+    }
+
+    /**
+     * isHttps() honors X-Forwarded-Proto=https set by a TLS-terminating proxy / load balancer.
+     */
+    public function testIsHttpsTrueWhenForwardedProtoHttps()
+    {
+        unset($_SERVER['HTTPS']);
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertTrue($is_https, 'X-Forwarded-Proto=https should be detected as HTTPS');
+    }
+
+    /**
+     * isHttps() is false when the forwarded-proto header says http.
+     */
+    public function testIsHttpsFalseWhenForwardedProtoHttp()
+    {
+        unset($_SERVER['HTTPS']);
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'http';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $is_https = $req_obj->isHttps();
+
+        $this->assertFalse($is_https, 'X-Forwarded-Proto=http should be plain HTTP');
+    }
 }

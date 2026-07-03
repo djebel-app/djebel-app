@@ -1284,6 +1284,28 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Whether the current request is over HTTPS. Checks the HTTPS server var and the
+     * X-Forwarded-Proto header set by reverse proxies / load balancers.
+     * @return bool
+     */
+    public function isHttps()
+    {
+        $https = empty($_SERVER['HTTPS']) ? '' : $_SERVER['HTTPS'];
+
+        if (!empty($https) && strcasecmp($https, 'off') != 0) {
+            return true;
+        }
+
+        $forwarded = empty($_SERVER['HTTP_X_FORWARDED_PROTO']) ? '' : $_SERVER['HTTP_X_FORWARDED_PROTO'];
+
+        if (strcasecmp($forwarded, 'https') == 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Serves 404 and exits
      * @param void
      * @return void
