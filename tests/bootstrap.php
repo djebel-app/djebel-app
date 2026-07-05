@@ -17,6 +17,9 @@ $_SERVER['PORT'] = 443;
 
 putenv('DJEBEL_APP_CORE_RUN=0');
 
+// Committed sample/fixture files used by the unit tests.
+define('DJEBEL_APP_TEST_DATA_DIR', __DIR__ . '/unit_tests/data');
+
 $dj_app_dir = dirname(__DIR__);
 require_once $dj_app_dir . '/index.php';
 
