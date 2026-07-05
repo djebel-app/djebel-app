@@ -178,6 +178,56 @@ BUFF_EOF;
         $this->assertStringContainsStringIgnoringCase('__theme_url__/css/style3.css', $buff);
     }
 
+    public function testReplaceMagicVarsThemeUrlVersionsExistingAsset()
+    {
+        $params = [
+            'theme_dir' => DJEBEL_APP_TEST_DATA_DIR . '/theme',
+            'theme_url' => 'https://djebel.example/theme',
+        ];
+
+        $buff = '<link href="__THEME_URL__/style.css">';
+        $result = Dj_App_Util::replaceMagicVars($buff, $params);
+
+        // The fixture exists → its URL carries a ?v=<filemtime> cache buster.
+        $this->assertStringContainsString('https://djebel.example/theme/style.css?v=', $result);
+        $this->assertStringNotContainsString('__THEME_URL__', $result);
+    }
+
+    public function testReplaceMagicVarsThemeUrlMissingAssetStaysUnversioned()
+    {
+        $params = [
+            'theme_dir' => DJEBEL_APP_TEST_DATA_DIR . '/theme',
+            'theme_url' => 'https://djebel.example/theme',
+        ];
+
+        $buff = '<img src="__THEME_URL__/missing.png">';
+        $result = Dj_App_Util::replaceMagicVars($buff, $params);
+
+        $this->assertStringContainsString('https://djebel.example/theme/missing.png', $result);
+        $this->assertStringNotContainsString('missing.png?v=', $result);
+    }
+
+    public function testReplaceMagicVarsThemeUrlReplacesDuplicateRefs()
+    {
+        $params = [
+            'theme_dir' => DJEBEL_APP_TEST_DATA_DIR . '/theme',
+            'theme_url' => 'https://djebel.example/theme',
+        ];
+
+        $buff = '<link href="__THEME_URL__/style.css"><link href="__THEME_URL__/style.css">';
+        $result = Dj_App_Util::replaceMagicVars($buff, $params);
+
+        $this->assertEquals(2, substr_count($result, 'style.css?v='));
+    }
+
+    public function testReplaceMagicVarsWithoutMagicTokensReturnsUnchanged()
+    {
+        $buff = '<p>plain content</p>';
+        $result = Dj_App_Util::replaceMagicVars($buff);
+
+        $this->assertEquals($buff, $result);
+    }
+
     public function testReplaceTags()
     {
         $tags = [
