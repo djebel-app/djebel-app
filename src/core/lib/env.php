@@ -30,7 +30,7 @@ class Dj_App_Env {
             return true;
         }
 
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV');
+        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
 
         if (empty($dj_app_env)) {
             return false;
@@ -60,11 +60,7 @@ class Dj_App_Env {
             return false;
         }
 
-        $ips_fmt = str_replace([' ', "\t", "\n", "\r", "|", ';', ], ',', $dev_ips);
-        $ips = explode(',', $ips_fmt);
-        $ips = empty($ips) ? [] : $ips;
-        $ips = array_filter($ips);
-        $ips = array_unique($ips);
+        $ips = Dj_App_String_Util::splitOnSeparators($dev_ips);
 
         if (in_array($_SERVER['REMOTE_ADDR'], $ips)) {
             return true;
@@ -94,7 +90,7 @@ class Dj_App_Env {
     }
 
     public static function isLive() {
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV');
+        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
 
         if (empty($dj_app_env)) {
             return true;
@@ -134,7 +130,7 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isStaging() {
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV');
+        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
         $s = stripos( $dj_app_env, 'staging' ) !== false;
 
         return $s;
@@ -167,10 +163,12 @@ class Dj_App_Env {
     {
         $key_fmt = strtoupper($key);
         $val = getenv($key_fmt);
-        $val = empty($val) ? '' : $val;
 
-        if (empty($val) && !empty($_SERVER[$key_fmt])) {
-            $val = $_SERVER[$key_fmt];
+        // false = not set. A real '0' value must survive — empty() would eat it.
+        $val = $val === false ? '' : $val;
+
+        if (!strlen($val) && isset($_SERVER[$key_fmt]) && is_scalar($_SERVER[$key_fmt])) {
+            $val = (string) $_SERVER[$key_fmt];
         }
 
         // clear spaces & some optional quotes that may have been inserted.
@@ -181,21 +179,38 @@ class Dj_App_Env {
 
     /**
      * Searches for a value in an environment variable or in a constant or defaults to a value.
-     * Dj_App_Env::getEnv();
+     * Accepts CSV fallback keys — 'DJEBEL_APP_ENV,APP_ENV' — first non-empty wins.
+     * Dj_App_Env::getEnvConst();
      * @param string $key
      * @param mixed $defalt
      * @return string
      */
     public static function getEnvConst($key, $defalt = '')
     {
-        $val = Dj_App_Env::getEnv($key);
+        $keys = [ $key, ];
 
-        if (empty($val)) {
-            $key_fmt = strtoupper($key);
-            $val = defined($key_fmt) ? constant($key_fmt) : '';
+        if (strpos($key, ',') !== false) {
+            $keys = Dj_App_String_Util::splitOnSeparators($key);
         }
 
-        $val = empty($val) ? $defalt : $val;
+        $val = '';
+
+        foreach ($keys as $one_key) {
+            $val = Dj_App_Env::getEnv($one_key);
+
+            if (!strlen($val)) {
+                $key_fmt = strtoupper($one_key);
+                $val = defined($key_fmt) ? constant($key_fmt) : '';
+                $val = (string) $val;
+            }
+
+            if (strlen($val)) {
+                break;
+            }
+        }
+
+        // strlen, not empty() — a legit '0' value must NOT fall through to the default.
+        $val = strlen($val) ? $val : $defalt;
 
         // Call replaceSystemVars from Dj_App_Config since it's available during bootstrap
         $val = Dj_App_Config::replaceSystemVars($val);
