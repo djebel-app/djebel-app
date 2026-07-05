@@ -840,8 +840,10 @@ CLEAR_AND_REDIRECT_HTML;
         $future_redirect_url = $url;
         $future_redirect_url_web_path = parse_url($future_redirect_url, PHP_URL_PATH);
 
-        // On that page already. This happens when we redirect but the browser keeps the POST data with 307 redir.
-        if ($req_url == $future_redirect_url_web_path) {
+        // Already on that page — redirecting a GET to itself would just loop, so skip.
+        // A POST to the same URL is the Post-Redirect-Get pattern (e.g. a login form
+        // posting to the page it protects) — that one goes through.
+        if (!$this->isPost() && $req_url == $future_redirect_url_web_path) {
             return;
         }
 
