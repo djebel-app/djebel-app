@@ -82,7 +82,7 @@ Don't be afraid to refactor. The architecture should adapt to actual usage, not 
 - `Dj_App_Request` - HTTP requests (getWebPath, getCleanRequestUrl, get, set)
 - `Dj_App_Result` - Result objects (status, isError, data)
 - `Dj_App_Cache` - Caching (get, set, remove, removeAll)
-- `Djebel_App_HTML` - HTML utilities (escAttr, escHtml, escUrl, encodeEntities)
+- `Dj_App_HTML` - HTML utilities (escAttr, escHtml, escUrl, encodeEntities)
 
 ### Quick Reference
 
@@ -104,7 +104,7 @@ $normalized = Dj_App_File_Util::normalizePath($path);
 echo dj_esc($user_input);                    // Quick HTML escape
 echo dj_esc_attr($attribute);                // For HTML attributes
 echo dj_esc_url($url);                       // For URLs
-echo Djebel_App_HTML::encodeEntities($str);  // Alternative (both valid)
+echo Dj_App_HTML::encodeEntities($str);  // Alternative (both valid)
 
 // String search (prefer over regex)
 if (strpos($content, '---') !== false) {
@@ -135,7 +135,7 @@ Every decision must be evaluated against these three pillars. **You MUST push ba
 
 ### 1. Security First - ROCK SOLID and UNHACKABLE
 - **Always sanitize and validate user input** - never trust external data
-- **Escape output** - use `Djebel_App_HTML::encodeEntities()` for HTML output
+- **Escape output** - use `Dj_App_HTML::encodeEntities()` for HTML output
 - **Prevent injection attacks** - no direct SQL, use prepared statements/ORM
 - **File operations security** - validate paths, prevent directory traversal
 - **Session and authentication** - follow framework security patterns
@@ -147,13 +147,13 @@ Every decision must be evaluated against these three pillars. **You MUST push ba
 // CORRECT - Sanitized and escaped
 $title = Dj_App_String_Util::trim($_REQUEST['title']);
 $title = Dj_App_String_Util::formatSlug($title);
-echo Djebel_App_HTML::encodeEntities($title);
+echo Dj_App_HTML::encodeEntities($title);
 
 // BETTER - Use framework request object with SMART defaults (no need to pass '')
 $req_obj = Dj_App_Request::getInstance();
 $title = $req_obj->get('title');  // Framework has smart defaults!
 $title = Dj_App_String_Util::trim($title);
-echo Djebel_App_HTML::encodeEntities($title);
+echo Dj_App_HTML::encodeEntities($title);
 
 // WRONG - Direct output of user input
 echo $_REQUEST['title']; // XSS vulnerability!
@@ -825,7 +825,7 @@ $slug = $req_obj->get('slug');  // Framework handles defaults
 $slug = Dj_App_String_Util::formatSlug($slug);
 
 // For display, always escape
-echo Djebel_App_HTML::encodeEntities($title);
+echo Dj_App_HTML::encodeEntities($title);
 
 // ACCEPTABLE - Direct $_REQUEST with sanitization
 $title = Dj_App_String_Util::trim($_REQUEST['title']);
@@ -1163,11 +1163,11 @@ echo $user_input;
 // CORRECT - Use request object with SMART defaults and escape
 $req_obj = Dj_App_Request::getInstance();
 $title = $req_obj->get('title');  // Framework has smart defaults
-echo Djebel_App_HTML::encodeEntities($title);
+echo Dj_App_HTML::encodeEntities($title);
 
 // ACCEPTABLE - Direct $_REQUEST with escaping
 $title = empty($_REQUEST['title']) ? '' : $_REQUEST['title'];
-echo Djebel_App_HTML::encodeEntities($title);
+echo Dj_App_HTML::encodeEntities($title);
 ```
 
 ❌ **SQL Injection**
@@ -1440,7 +1440,10 @@ require_once __DIR__ . '/includes/class-helper.php';
 // 2. Get singleton instance
 $obj = Djebel_Plugin_Name::getInstance();
 
-// 3. Register hooks
+// 3. Register hooks (+ any class_alias) — ALL file wiring lives up here, before the
+//    class, so the top of the file is its manifest. Works because PHP early-binds a
+//    class that extends/implements nothing; a class WITH extends is not early-bound —
+//    wiring then follows the declaration (with a // NOTE: saying why).
 Dj_App_Hooks::addAction('app.core.init', [$obj, 'init']);
 Dj_App_Hooks::addFilter('some.filter', [$obj, 'filterMethod']);
 
@@ -1988,7 +1991,7 @@ Example suggestions:
 
 ### Security (CRITICAL)
 - **Always sanitize user input** - use framework methods like `Dj_App_String_Util::trim()`, `formatSlug()`
-- **Always escape output** - use `Djebel_App_HTML::encodeEntities()` for HTML
+- **Always escape output** - use `Dj_App_HTML::encodeEntities()` for HTML
 - **Validate file paths** - prevent directory traversal attacks
 - **Never expose sensitive data** - in errors, logs, or responses
 
