@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class Util_Test extends TestCase {
+class Dj_App_Util_Test extends TestCase {
     private $result;
     
     public function setUp() : void {

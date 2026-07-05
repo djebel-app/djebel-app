@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class String_Util_Test extends TestCase {
+class Dj_App_String_Util_Test extends TestCase {
 
     public function testContainsCaseInsensitive()
     {

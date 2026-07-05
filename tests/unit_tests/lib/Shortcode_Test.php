@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class Shortcode_Test extends TestCase 
+class Dj_App_Shortcode_Test extends TestCase 
 {
     private $shortcode;
     
