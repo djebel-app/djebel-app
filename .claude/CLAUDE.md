@@ -703,6 +703,26 @@ public function __toString() {
       alias/instantiation must come AFTER the declaration; leave a one-line `// NOTE:`
       saying why it can't sit at the top.
 
+32. **Singleton instance lives in a function-local `static` INSIDE getInstance() —
+    NEVER in a class property.** This is how EVERY core singleton does it (request,
+    options, db, page, themes, shortcode, bootstrap):
+    ```php
+    public static function getInstance() {
+        static $instance = null;
+
+        if (is_null($instance)) {
+            $instance = new static();
+        }
+
+        return $instance;
+    }
+    ```
+    - ❌ WRONG: `protected static $instance;` + `self::$instance` — widens the class
+      surface (a property anything in-class can poke), adds a member the reader must
+      track, and forks the codebase's one canonical shape.
+    - The function-local static is invisible outside getInstance() — the instance has
+      exactly one owner and one access path.
+
 ### Target: 1,000,000 Sites
 
 When code runs on 1,000,000 sites:

@@ -1901,7 +1901,10 @@ Plugins:
 
 ### Singleton Pattern
 
-All plugins use singleton pattern:
+All plugins use singleton pattern. **The instance is stored in a function-local
+`static` INSIDE getInstance() — NEVER in a class property** (`protected static
+$instance;` + `self::$instance` is forbidden: it widens the class surface and forks
+the one canonical shape every core singleton uses):
 
 ```php
 public static function getInstance() {
