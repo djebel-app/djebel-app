@@ -561,6 +561,12 @@ This is a **production framework** running on live sites. Breaking changes break
   ```
 
 - **String operations**: Use `Dj_App_String_Util::trim()` instead of PHP's `trim()`
+- **Tag/placeholder replacement**: Use `Dj_App_Util::replaceTags($buff, $tags)` for `{TAG}` /
+  `%%TAG%%` templates. Pass **bare** tag names as keys — both delimiter forms are matched,
+  case-insensitively:
+  ```php
+  $file = Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%.csv', ['YYYY' => '2026', 'MM' => '07']);
+  ```
 - **Boolean checks**: Use `Dj_App_Util::isDisabled()` and `Dj_App_Util::isEnabled()` for parameter validation
 - **Slash removal**: Use `Dj_App_Util::removeSlash()` with flags:
   - `Dj_App_Util::FLAG_LEADING` - remove leading slashes
