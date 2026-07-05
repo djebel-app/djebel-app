@@ -1546,4 +1546,67 @@ META;
         $this->assertEmpty($result);
     }
 
+    public function testToArrayWithScalar()
+    {
+        $result = Dj_App_Util::toArray('abc');
+        $this->assertEquals(['abc'], $result);
+    }
+
+    public function testToArrayWithEmpty()
+    {
+        $result = Dj_App_Util::toArray('');
+        $this->assertEmpty($result);
+    }
+
+    public function testToArrayWithNestedArray()
+    {
+        $data = [
+            'name' => 'slavi',
+            'tags' => ['a', 'b'],
+        ];
+
+        $result = Dj_App_Util::toArray($data);
+
+        $this->assertEquals(['slavi'], $result['name']);
+        $this->assertEquals([['a'], ['b']], $result['tags']);
+    }
+
+    public function testToArrayWithObjectPublicProps()
+    {
+        $data = new stdClass();
+        $data->name = 'slavi';
+        $data->nested = new stdClass();
+        $data->nested->id = 42;
+
+        $result = Dj_App_Util::toArray($data);
+
+        $this->assertEquals(['slavi'], $result['name']);
+        $this->assertEquals([42], $result['nested']['id']);
+    }
+
+    public function testToArraySkipsCallableProps()
+    {
+        $data = new stdClass();
+        $data->name = 'slavi';
+        $data->cb = 'strlen';
+
+        $result = Dj_App_Util::toArray($data);
+
+        $this->assertArrayNotHasKey('cb', $result);
+        $this->assertEquals(['slavi'], $result['name']);
+    }
+
+    public function testToArrayWithCircularObjectCompletes()
+    {
+        // A self-referencing object must bottom out via the depth cap, not hang.
+        $data = new stdClass();
+        $data->name = 'slavi';
+        $data->self = $data;
+
+        $result = Dj_App_Util::toArray($data);
+
+        $this->assertEquals(['slavi'], $result['name']);
+        $this->assertIsArray($result['self']);
+    }
+
 }

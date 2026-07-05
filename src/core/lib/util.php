@@ -1040,68 +1040,62 @@ MSG_EOF;
 
     /**
      * Recursively converts data to arrays.
-     * Supports only: scalars, arrays, and objects with public properties
-     * All empty values and unsupported types become empty arrays
+     * Supports only: scalars, arrays, and objects with public properties.
+     * All empty values and unsupported types become empty arrays.
+     * Cycles are safe — the depth cap bottoms a self-referencing object out as [].
      * Dj_App_Util::toArray();
      * @param mixed $data The data to convert
+     * @param int $depth Internal recursion level — omit it.
      * @return array
      */
-    public static function toArray($data) 
+    public static function toArray($data, $depth = 0)
     {
-        $converter = function($data, $depth = 0) use (&$converter) {
-            static $processed_objects = [];
-            
-            if ($depth > 100) {
-                return [];
-            }
-
-            // Handle empty values consistently
-            if (empty($data)) {
-                return [];
-            }
-
-            // Handle scalar values as single-element arrays
-            if (is_scalar($data)) {
-                return [$data];
-            }
-
-            // Handle arrays recursively
-            if (is_array($data)) {
-                $result = [];
-                foreach ($data as $key => $value) {
-                    $safe_key = is_string($key) ? $key : (string)$key;
-                    $result[$safe_key] = $converter($value, $depth + 1);
-                }
-                return $result;
-            }
-
-            // Handle objects with public properties
-            if (is_object($data)) {
-                $hash = spl_object_hash($data);
-                if (isset($processed_objects[$hash])) {
-                    return [];
-                }
-                $processed_objects[$hash] = true;
-
-                $result = [];
-                $reflection = new ReflectionObject($data);
-                $props = $reflection->getProperties(ReflectionProperty::IS_PUBLIC);
-                
-                foreach ($props as $prop) {
-                    $prop_name = $prop->getName();
-                    if (!is_callable($data->$prop_name)) {
-                        $result[$prop_name] = $converter($data->$prop_name, $depth + 1);
-                    }
-                }
-                
-                return $result;
-            }
-
-            // Everything else becomes an empty array
+        if ($depth > 100) {
             return [];
-        };
+        }
 
-        return $converter($data);
+        // Handle empty values consistently
+        if (empty($data)) {
+            return [];
+        }
+
+        // Handle scalar values as single-element arrays
+        if (is_scalar($data)) {
+            return [ $data, ];
+        }
+
+        if (is_array($data)) {
+            $result = [];
+            $next_depth = $depth + 1;
+
+            foreach ($data as $key => $value) {
+                $result[$key] = Dj_App_Util::toArray($value, $next_depth);
+            }
+
+            return $result;
+        }
+
+        // Objects: public properties only — get_object_vars sees exactly what the old
+        // ReflectionProperty::IS_PUBLIC loop saw, without instantiating a reflector.
+        if (is_object($data)) {
+            $props = get_object_vars($data);
+            $result = [];
+            $next_depth = $depth + 1;
+
+            foreach ($props as $prop_name => $value) {
+                // A callable stored in a property isn't data (same skip as before).
+                if (is_callable($value)) {
+                    continue;
+                }
+
+                $result[$prop_name] = Dj_App_Util::toArray($value, $next_depth);
+            }
+
+            return $result;
+        }
+
+        // Everything else becomes an empty array
+        return [];
     }
 
     const FLAG_LEADING = 2;
@@ -1715,27 +1709,44 @@ MSG_EOF;
 
         // Process theme URLs separately (needs versioning)
         if (stripos($buff, '__THEME_URL__') !== false) {
-            $buff = preg_replace_callback(
+            $theme_dir = empty($params['theme_dir']) ? '' : $params['theme_dir'];
+            $theme_url = empty($params['theme_url']) ? '' : $params['theme_url'];
+
+            // Matches href/src/srcset attrs whose value contains __THEME_URL__/<asset>:
+            // capture 1 = the attr name, 2 = the full attr value, 3 = the asset after the token.
+            $matched = preg_match_all(
                 '~(href|srcset|src)\h*=\h*[\'"](.*?__THEME_URL__/([^\'"]+))[\'"]~i',
-                function($matches) use ($params) {
-                    $full_match = $matches[0];
-                    $path = end($matches); // Get the path part after __theme_url__/
+                $buff,
+                $theme_url_matches,
+                PREG_SET_ORDER
+            );
 
-                    // Get full server path to check file
-                    $file_path = $params['theme_dir'] . '/' . $path;
-                    $url = str_ireplace('__THEME_URL__', $params['theme_url'], $matches[2]);
+            if (!empty($matched)) {
+                $replace_map = [];
 
-                    if (file_exists($file_path)) {
-                        $version = filemtime($file_path);
+                foreach ($theme_url_matches as $match) {
+                    $full_match = $match[0];
+
+                    // The same asset referenced multiple times resolves once.
+                    if (isset($replace_map[$full_match])) {
+                        continue;
+                    }
+
+                    $asset_rel_file = $match[3];
+                    $asset_file = $theme_dir . '/' . $asset_rel_file;
+                    $url = str_ireplace('__THEME_URL__', $theme_url, $match[2]);
+
+                    if (file_exists($asset_file)) {
+                        $version = filemtime($asset_file);
                         $url = Dj_App_Request::addQueryParam('v', $version, $url);
                     }
 
-                    $full_match = str_replace($matches[2], $url, $full_match);
+                    $replace_map[$full_match] = str_replace($match[2], $url, $full_match);
+                }
 
-                    return $full_match;
-                },
-                $buff
-            );
+                // One pass over the buffer with the whole map — no callback re-entry.
+                $buff = strtr($buff, $replace_map);
+            }
         }
 
         return $buff;
