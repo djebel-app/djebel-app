@@ -3,7 +3,7 @@
  * CLI utility class for command-line tools
  * Provides argument parsing and normalization
  */
-class Dj_Cli_Util {
+class Dj_App_Cli_Util {
     /**
      * Normalize CLI arguments by converting hyphens to underscores in argument names
      * This allows --bundle-id and --bundle_id to work interchangeably

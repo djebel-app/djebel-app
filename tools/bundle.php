@@ -73,7 +73,7 @@ try {
         'compression_level' => 9,
     ];
 
-    $params = Dj_Cli_Util::parseArgs($expected_params, $args);
+    $params = Dj_App_Cli_Util::parseArgs($expected_params, $args);
 
     // Extract to local variables
     $bundle_id = $params['bundle_id'];
@@ -445,17 +445,17 @@ try {
     echo "Size: $size_fmt bytes\n";
 
 } catch (Exception $e) {
-    Dj_Cli_Util::stderr("Error: " . $e->getMessage());
+    Dj_App_Cli_Util::stderr("Error: " . $e->getMessage());
 
     $previous = $e->getPrevious();
     if ($previous !== null) {
-        Dj_Cli_Util::stderr("Caused by: " . $previous->getMessage());
+        Dj_App_Cli_Util::stderr("Caused by: " . $previous->getMessage());
     }
 
     // Provide stack trace in verbose mode
     if (!empty(getenv('DJEBEL_APP_TOOL_BUNDLE_VERBOSE'))) {
-        Dj_Cli_Util::stderr("Stack trace:");
-        Dj_Cli_Util::stderr($e->getTraceAsString());
+        Dj_App_Cli_Util::stderr("Stack trace:");
+        Dj_App_Cli_Util::stderr($e->getTraceAsString());
     }
 
     $exit_code = 255;
