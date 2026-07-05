@@ -600,7 +600,11 @@ public function __toString() {
     - ✅ CORRECT: `Dj_App_Util::isDisabled($val)` - checks 0, false, 'no', 'off', 'disabled'
     - ✅ CORRECT: `Dj_App_Util::isEnabled($val)` - checks 1, true, 'yes', 'on', 'enabled'
     - ✅ CORRECT: Folding scan logic into `getCorePrivateDir()` instead of creating `detectPrivateBaseDir()`
+    - ❌ WRONG: `md5($x)` — **`md5` is BANNED**; djebel hashes with `sha1` only
+    - ❌ WRONG: `substr(sha1($x), 0, 12)` — hand-rolled partial hash; the helper already exists
+    - ✅ CORRECT: `Dj_App_Util::generateHash($x, $length = 12)` — SHA1-based, 12-char default
     - **BEFORE writing ANY new method**, search `src/core/lib/*` files first!
+    - **READ THE WHOLE FILE + know its DESIGN before editing a byte** — is it a **singleton**? then `Class::getInstance()`, NEVER `new Class()` (real miss: `new Dj_App_Request()` in a test — it's a singleton, use `getInstance()`). Note existing helpers/consts + conventions (`sha1`, never `md5`) FIRST — partial reads cause reinvented helpers + copied bad patterns.
     - **BEFORE creating a new function**, check if an existing function already partially does the job — enhance it instead
     - Call utilities directly - NO wrapper methods!
     - Goal: LEAST possible code, secure and fast
