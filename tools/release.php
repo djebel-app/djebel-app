@@ -79,7 +79,7 @@ try {
         'build_dir' => '',
     ];
 
-    $params = Dj_Cli_Util::parseArgs($expected_params, $args);
+    $params = Dj_App_Cli_Util::parseArgs($expected_params, $args);
 
     // Extract to local vars
     $plugin_dir_input = $params['plugin_dir'];
@@ -333,12 +333,12 @@ try {
         echo "Size:    $zip_size_fmt bytes\n";
     }
 } catch (Exception $e) {
-    Dj_Cli_Util::stderr("Error: " . $e->getMessage());
+    Dj_App_Cli_Util::stderr("Error: " . $e->getMessage());
 
     $previous = $e->getPrevious();
 
     if ($previous !== null) {
-        Dj_Cli_Util::stderr("Caused by: " . $previous->getMessage());
+        Dj_App_Cli_Util::stderr("Caused by: " . $previous->getMessage());
     }
 
     $exit_code = 255;
