@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class File_Util_Test extends TestCase {
+class Dj_App_File_Util_Test extends TestCase {
     private $test_dir;
 
     public function setUp() : void {

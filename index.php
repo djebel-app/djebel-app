@@ -469,7 +469,7 @@ class Dj_App_Bootstrap {
             'status_code' => 500,
         ];
         
-        Djebel_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
+        Dj_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
     }
 
     /**
@@ -501,7 +501,7 @@ class Dj_App_Bootstrap {
                 'status_code' => 500,
             ];
             
-            Djebel_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
+            Dj_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
         }
     }
 

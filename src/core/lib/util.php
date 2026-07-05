@@ -627,7 +627,7 @@ class Dj_App_Util {
             'status_code' => $code,
         ];
 
-        Djebel_App_HTML::renderPage($content, $title ?: 'Application Error', $options);
+        Dj_App_HTML::renderPage($content, $title ?: 'Application Error', $options);
     }
 
     /**
@@ -1629,7 +1629,7 @@ MSG_EOF;
             // Build new tag with updated content
             $before_attrs = !empty($before_name) ? ' ' . trim($before_name) : '';
             $after_attrs = !empty($attributes) ? ' ' . $attributes : '';
-            $encoded_content = Djebel_App_HTML::encodeEntities($content);
+            $encoded_content = Dj_App_HTML::encodeEntities($content);
 
             $new_tag = sprintf('<meta%s name="%s"%s content="%s">', 
                 $before_attrs, 
@@ -1642,7 +1642,7 @@ MSG_EOF;
             $head_content = str_replace($full_tag, $new_tag, $head_content);
         } else {
             // Tag doesn't exist, add it before </head>
-            $encoded_content = Djebel_App_HTML::encodeEntities($content);
+            $encoded_content = Dj_App_HTML::encodeEntities($content);
             $new_tag = sprintf('<meta name="%s" content="%s">%s', $tag_name, $encoded_content, "\n");
             $head_content .= $new_tag;
         }
@@ -1685,12 +1685,12 @@ MSG_EOF;
 
         $options_obj = Dj_App_Options::getInstance();
         $site_title = $options_obj->get('site.site_title');
-        $site_title_esc = Djebel_App_HTML::encodeEntities($site_title);
+        $site_title_esc = Dj_App_HTML::encodeEntities($site_title);
 
-        $site_url_esc = Djebel_App_HTML::escUrl($site_url);
-        $site_web_path_esc = Djebel_App_HTML::escUrl($site_web_path);
-        $content_dir_url_esc = Djebel_App_HTML::escUrl($content_dir_url);
-        $site_content_web_path_esc = Djebel_App_HTML::escUrl($site_content_web_path);
+        $site_url_esc = Dj_App_HTML::escUrl($site_url);
+        $site_web_path_esc = Dj_App_HTML::escUrl($site_web_path);
+        $content_dir_url_esc = Dj_App_HTML::escUrl($content_dir_url);
+        $site_content_web_path_esc = Dj_App_HTML::escUrl($site_content_web_path);
 
         // Define magic variables and their values
         $search_magic_vars = [

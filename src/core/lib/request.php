@@ -770,8 +770,8 @@ class Dj_App_Request {
         }
 
         $loading_text = "Loading ...";
-        $loading_text_esc_as_attrib = Djebel_App_HTML::encodeEntities($loading_text);
-        $url_esc = Djebel_App_HTML::encodeEntities($url); // esc_attr breaks stuff the wp_safe redir does this
+        $loading_text_esc_as_attrib = Dj_App_HTML::encodeEntities($loading_text);
+        $url_esc = Dj_App_HTML::encodeEntities($url); // esc_attr breaks stuff the wp_safe redir does this
 
         // there's some html output. Add JS redirect and html redirect the same time.
         if ( headers_sent() ) { // if we encode it twice data won't be transferred.
@@ -1323,7 +1323,7 @@ CLEAR_AND_REDIRECT_HTML;
      * @return string
      */
     public function encode($str) {
-        $str = Djebel_App_HTML::encodeEntities($str);
+        $str = Dj_App_HTML::encodeEntities($str);
         return $str;
     }
 
@@ -1332,7 +1332,7 @@ CLEAR_AND_REDIRECT_HTML;
      * @return string
      */
     public function decode($str) {
-        $str = Djebel_App_HTML::decodeEntities($str);
+        $str = Dj_App_HTML::decodeEntities($str);
         return $str;
     }
 

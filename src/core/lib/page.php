@@ -41,7 +41,7 @@ class Dj_App_Page {
             $val = Dj_App_Hooks::applyFilter( "app.core.request.page.get.$name", $val, $ctx );
 
             if ($escape) {
-                $val = Djebel_App_HTML::encodeEntities($val);
+                $val = Dj_App_HTML::encodeEntities($val);
             }
 
             return $val;
@@ -53,7 +53,7 @@ class Dj_App_Page {
         $val = empty($val) ? $default : $val;
 
         if ($escape) {
-            $val = Djebel_App_HTML::encodeEntities($val);
+            $val = Dj_App_HTML::encodeEntities($val);
         }
 
         return $val;
