@@ -178,6 +178,43 @@ BUFF_EOF;
         $this->assertStringContainsStringIgnoringCase('__theme_url__/css/style3.css', $buff);
     }
 
+    public function testReplaceTags()
+    {
+        $tags = [
+            'YYYY' => '2026',
+            'MM' => '07',
+            'DD' => '03',
+        ];
+
+        // {TAG} form
+        $out = Dj_App_Util::replaceTags('data_{YYYY}-{MM}-{DD}.csv', $tags);
+        $this->assertEquals('data_2026-07-03.csv', $out);
+
+        // %%TAG%% form
+        $out = Dj_App_Util::replaceTags('data_%%YYYY%%-%%MM%%-%%DD%%.csv', $tags);
+        $this->assertEquals('data_2026-07-03.csv', $out);
+
+        // both delimiter forms in one string, with a repeated tag
+        $out = Dj_App_Util::replaceTags('{YYYY}/%%MM%%/x_{DD}-%%YYYY%%.csv', $tags);
+        $this->assertEquals('2026/07/x_03-2026.csv', $out);
+
+        // case-insensitive (str_ireplace) — a lowercase tag in the template still matches
+        $out = Dj_App_Util::replaceTags('y={yyyy} m=%%mm%%', $tags);
+        $this->assertEquals('y=2026 m=07', $out);
+
+        // no matching tag -> buffer returned unchanged
+        $out = Dj_App_Util::replaceTags('nothing here', $tags);
+        $this->assertEquals('nothing here', $out);
+
+        // empty tags -> buffer returned unchanged
+        $out = Dj_App_Util::replaceTags('data_{YYYY}.csv', []);
+        $this->assertEquals('data_{YYYY}.csv', $out);
+
+        // empty buffer -> empty
+        $out = Dj_App_Util::replaceTags('', $tags);
+        $this->assertEmpty($out);
+    }
+
     public function testIsEnabled()
     {
         // Test empty values - should return false

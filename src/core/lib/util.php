@@ -1511,6 +1511,37 @@ MSG_EOF;
     }
 
     /**
+     * Replaces {tag} and %%tag%% placeholders in a string (case-insensitive). Pass BARE tag
+     * names as keys — both delimiter forms are matched, so a template may use either.
+     * Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%-{DD}.csv', ['YYYY' => '2026', 'MM' => '07', 'DD' => '03']);
+     *
+     * @param string $buff The string containing the tags
+     * @param array $tags Map of bare-tag-name => replacement value
+     * @return string
+     */
+    public static function replaceTags($buff, $tags = [])
+    {
+        if (empty($buff) || empty($tags)) {
+            return $buff;
+        }
+
+        $search = [];
+        $replace = [];
+
+        // Each bare tag matches both {TAG} and %%TAG%%
+        foreach ($tags as $tag => $val) {
+            $search[] = '{' . $tag . '}';
+            $replace[] = $val;
+            $search[] = '%%' . $tag . '%%';
+            $replace[] = $val;
+        }
+
+        $buff = str_ireplace($search, $replace, $buff);
+
+        return $buff;
+    }
+
+    /**
      * Replaces or adds meta tag content efficiently by working on the head section only.
      * Searches for meta tags by name attribute and replaces the content value while preserving other attributes.
      * If the tag doesn't exist, it will be added to the head section.
