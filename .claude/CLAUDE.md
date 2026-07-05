@@ -669,14 +669,14 @@ public function __toString() {
       apply: `[$obj, 'method']`, never `[ $obj, 'method', ]`.
     - ❌ WRONG:
       ```php
-      $callback = [ 'Hooks_Test', 'deferredCallback', ];
+      $callback = [ 'Dj_App_Hooks_Test', 'deferredCallback', ];
       Dj_App_Hooks::addDeferredAction('app/test/hook', $callback, 50);
       Dj_App_Hooks::removeAction('app/test/hook', $callback, 50);
       ```
     - ✅ CORRECT:
       ```php
-      Dj_App_Hooks::addDeferredAction('app/test/hook', ['Hooks_Test', 'deferredCallback'], 50);
-      Dj_App_Hooks::removeAction('app/test/hook', ['Hooks_Test', 'deferredCallback'], 50);
+      Dj_App_Hooks::addDeferredAction('app/test/hook', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+      Dj_App_Hooks::removeAction('app/test/hook', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
       ```
 
 29. **Loose plugin coupling** - Plugins should NOT know about each other tightly:
@@ -689,6 +689,19 @@ public function __toString() {
     - If asked to add feature X to plugin A, don't touch plugin B
     - Ask: "Should I update plugin B to support this?"
     - Core files, other plugins, and shared libraries need explicit permission
+
+31. **File wiring goes at the TOP, right after `<?php`** — `class_alias()`, singleton
+    instantiation (`$obj = Class::getInstance();`), and hook registration sit at the top
+    of the file, BEFORE the class declaration (the established plugin-file shape). A
+    reader sees what the file wires up without scrolling; nothing important hides below
+    hundreds of lines.
+    - ✅ CORRECT: `class_alias('Dj_App_HTML', 'Djebel_App_HTML');` at the top of html.php
+    - ❌ WRONG: the same alias appended at the END of the file (invisible to readers)
+    - Works because PHP **early-binds** a class that extends/implements nothing — it
+      exists at compile time, before the file's top-level code runs.
+    - **Caveat:** a class that `extends`/`implements` is NOT early-bound — there the
+      alias/instantiation must come AFTER the declaration; leave a one-line `// NOTE:`
+      saying why it can't sit at the top.
 
 ### Target: 1,000,000 Sites
 
