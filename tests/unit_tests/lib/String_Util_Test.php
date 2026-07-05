@@ -235,6 +235,24 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertEquals('a_b', $result);
     }
 
+    public function testSplitOnSeparatorsCsv()
+    {
+        $result = Dj_App_String_Util::splitOnSeparators('a,b,c');
+        $this->assertEquals(['a', 'b', 'c'], $result);
+    }
+
+    public function testSplitOnSeparatorsMixedSeparatorsTrimsAndDedupes()
+    {
+        $result = Dj_App_String_Util::splitOnSeparators(" a | b;c\n a ");
+        $this->assertEquals(['a', 'b', 'c'], $result);
+    }
+
+    public function testSplitOnSeparatorsEmpty()
+    {
+        $result = Dj_App_String_Util::splitOnSeparators('');
+        $this->assertEmpty($result);
+    }
+
     public function testIsAlphaNumericExtWithValid()
     {
         $result = Dj_App_String_Util::isAlphaNumericExt('hello123');

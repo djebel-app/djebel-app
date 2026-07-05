@@ -190,6 +190,31 @@ class Dj_App_String_Util
     }
 
     /**
+     * Splits a buffer on the common list separators — comma, pipe, semicolon and
+     * whitespace — into a trimmed, de-duplicated array; empty entries are dropped.
+     * Dj_App_String_Util::splitOnSeparators();
+     * @param string $buff
+     * @return array
+     */
+    public static function splitOnSeparators($buff)
+    {
+        if (empty($buff) || !is_scalar($buff)) {
+            return [];
+        }
+
+        $separator_chars = [ "\t", "\n", "\r", ' ', '|', ';', ];
+        $buff = str_replace($separator_chars, ',', $buff);
+
+        $items = explode(',', $buff);
+        $items = Dj_App_String_Util::trim($items);
+        $items = array_filter($items);
+        $items = array_unique($items);
+        $items = array_values($items);
+
+        return $items;
+    }
+
+    /**
      * Dj_App_String_Util::isAlphaNumeric();
      * Strict alphanumeric check (a-z, A-Z, 0-9 only — no underscores, no dashes).
      * Accepts any scalar input — int 42 is treated the same as string '42'.
