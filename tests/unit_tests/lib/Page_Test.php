@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class Page_Test extends TestCase {
+class Dj_App_Page_Test extends TestCase {
     private $page_obj;
     private static $hook_test_data = [];
 

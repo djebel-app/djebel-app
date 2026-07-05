@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class Hooks_Test extends TestCase {
+class Dj_App_Hooks_Test extends TestCase {
     public function testAddFilter() {
         Dj_App_Hooks::addFilter( 'app.core.test.return_false', Dj_App_Hooks::RETURN_FALSE );
         $this->assertFalse(Dj_App_Hooks::hasRun('app.core.test.return_false'));
@@ -27,20 +27,20 @@ class Hooks_Test extends TestCase {
 
     public function testAddFilterWithStaticMethodCallbacks() {
         // Test string format static method callback
-        Dj_App_Hooks::addFilter( 'app.core.test.static_string', ['Hooks_Test', 'staticStringMethod'] );
+        Dj_App_Hooks::addFilter( 'app.core.test.static_string', ['Dj_App_Hooks_Test', 'staticStringMethod'] );
         $res = Dj_App_Hooks::applyFilter( 'app.core.test.static_string', 'test' );
         $this->assertTrue(Dj_App_Hooks::hasRun('app.core.test.static_string'));
         $this->assertEquals(4, $res);
 
         // Test array format static method callback
-        Dj_App_Hooks::addFilter( 'app.core.test.static_array', ['Hooks_Test', 'staticTestMethod'] );
+        Dj_App_Hooks::addFilter( 'app.core.test.static_array', ['Dj_App_Hooks_Test', 'staticTestMethod'] );
         $res = Dj_App_Hooks::applyFilter( 'app.core.test.static_array', 'test' );
         $this->assertTrue(Dj_App_Hooks::hasRun('app.core.test.static_array'));
         $this->assertEquals('test_processed', $res);
 
         // Clean up
-        Dj_App_Hooks::removeFilter( 'app.core.test.static_string', ['Hooks_Test', 'staticStringMethod'] );
-        Dj_App_Hooks::removeFilter( 'app.core.test.static_array', ['Hooks_Test', 'staticTestMethod'] );
+        Dj_App_Hooks::removeFilter( 'app.core.test.static_string', ['Dj_App_Hooks_Test', 'staticStringMethod'] );
+        Dj_App_Hooks::removeFilter( 'app.core.test.static_array', ['Dj_App_Hooks_Test', 'staticTestMethod'] );
     }
 
     public function testCheckAllowedEmptyHookName() {
@@ -328,43 +328,43 @@ class Hooks_Test extends TestCase {
 
     public function testOriginalStaticMethodCallbackFormat() {
         // Test the exact format that was causing the original error
-        Dj_App_Hooks::addFilter( 'app.page.full_content', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::addFilter( 'app.page.full_content', 'Dj_App_Hooks_Test::staticTestMethod' );
         $res = Dj_App_Hooks::applyFilter( 'app.page.full_content', 'test' );
         $this->assertTrue(Dj_App_Hooks::hasRun('app.page.full_content'));
         $this->assertEquals('test_processed', $res);
 
         // Clean up
-        Dj_App_Hooks::removeFilter( 'app.page.full_content', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::removeFilter( 'app.page.full_content', 'Dj_App_Hooks_Test::staticTestMethod' );
     }
 
     public function testStaticMethodAsStringCallback() {
         // Test static method as string format (the original issue)
-        Dj_App_Hooks::addFilter( 'app.core.test.static_string', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::addFilter( 'app.core.test.static_string', 'Dj_App_Hooks_Test::staticTestMethod' );
         $res = Dj_App_Hooks::applyFilter( 'app.core.test.static_string', 'hello' );
         $this->assertTrue(Dj_App_Hooks::hasRun('app.core.test.static_string'));
         $this->assertEquals('hello_processed', $res);
 
         // Test with a different static method - use a unique hook name to avoid interference
-        Dj_App_Hooks::addFilter( 'unique.test.static_string', 'Hooks_Test::staticStringMethod' );
+        Dj_App_Hooks::addFilter( 'unique.test.static_string', 'Dj_App_Hooks_Test::staticStringMethod' );
         $res = Dj_App_Hooks::applyFilter( 'unique.test.static_string', 'abc' );
         $this->assertTrue(Dj_App_Hooks::hasRun('unique.test.static_string'));
         $this->assertEquals(3, $res, "Expected 3, got: " . var_export($res, true));
 
         // Test with the exact format from the original error
-        Dj_App_Hooks::addFilter( 'app.page.full_content', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::addFilter( 'app.page.full_content', 'Dj_App_Hooks_Test::staticTestMethod' );
         $res = Dj_App_Hooks::applyFilter( 'app.page.full_content', 'original_test' );
         $this->assertTrue(Dj_App_Hooks::hasRun('app.page.full_content'));
         $this->assertEquals('original_test_processed', $res);
 
         // Clean up
-        Dj_App_Hooks::removeFilter( 'app.core.test.static_string', 'Hooks_Test::staticTestMethod' );
-        Dj_App_Hooks::removeFilter( 'unique.test.static_string', 'Hooks_Test::staticStringMethod' );
-        Dj_App_Hooks::removeFilter( 'app.page.full_content', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::removeFilter( 'app.core.test.static_string', 'Dj_App_Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::removeFilter( 'unique.test.static_string', 'Dj_App_Hooks_Test::staticStringMethod' );
+        Dj_App_Hooks::removeFilter( 'app.page.full_content', 'Dj_App_Hooks_Test::staticTestMethod' );
     }
 
     public function testSpecificStaticArrayFilter() {
         // Test the exact pattern requested
-        Dj_App_Hooks::addFilter( 'app.core.test.static_array', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::addFilter( 'app.core.test.static_array', 'Dj_App_Hooks_Test::staticTestMethod' );
         
         // Verify the filter was added and works
         $res = Dj_App_Hooks::applyFilter( 'app.core.test.static_array', 'test_value' );
@@ -376,7 +376,7 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('another_value_processed', $res2);
         
         // Clean up
-        Dj_App_Hooks::removeFilter( 'app.core.test.static_array', 'Hooks_Test::staticTestMethod' );
+        Dj_App_Hooks::removeFilter( 'app.core.test.static_array', 'Dj_App_Hooks_Test::staticTestMethod' );
         
         // Verify cleanup worked
         $res3 = Dj_App_Hooks::applyFilter( 'app.core.test.static_array', 'test_value' );
@@ -413,7 +413,7 @@ class Hooks_Test extends TestCase {
         $this->assertFalse(Dj_App_Hooks::hasFilter('non_existent_filter'));
         
         // Add a filter
-        Dj_App_Hooks::addFilter('test_has_filter', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('test_has_filter', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Test that hasFilter returns true for existing filters
         $this->assertTrue(Dj_App_Hooks::hasFilter('test_has_filter'));
@@ -422,12 +422,12 @@ class Hooks_Test extends TestCase {
         $this->assertTrue(Dj_App_Hooks::hasFilter('TEST_HAS_FILTER'));
         $this->assertTrue(Dj_App_Hooks::hasFilter('test-has-filter'));
         // Note: test.has.filter becomes test/has/filter, but we need to add it with the correct format first
-        Dj_App_Hooks::addFilter('test/has/filter', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('test/has/filter', 'Dj_App_Hooks_Test::staticTestMethod');
         $this->assertTrue(Dj_App_Hooks::hasFilter('test/has/filter'));
-        Dj_App_Hooks::removeFilter('test/has/filter', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('test/has/filter', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Clean up
-        Dj_App_Hooks::removeFilter('test_has_filter', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('test_has_filter', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Verify cleanup worked
         $this->assertFalse(Dj_App_Hooks::hasFilter('test_has_filter'));
@@ -436,7 +436,7 @@ class Hooks_Test extends TestCase {
     public function testHasActionWithMultipleCallbacks() {
         // Add multiple actions to the same hook
         Dj_App_Hooks::addAction('multi_action', [$this, 'sampleAction']);
-        Dj_App_Hooks::addAction('multi_action', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addAction('multi_action', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Should return true even with multiple callbacks
         $this->assertTrue(Dj_App_Hooks::hasAction('multi_action'));
@@ -448,7 +448,7 @@ class Hooks_Test extends TestCase {
         $this->assertTrue(Dj_App_Hooks::hasAction('multi_action'));
         
         // Remove the last callback
-        Dj_App_Hooks::removeAction('multi_action', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeAction('multi_action', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Should now return false
         $this->assertFalse(Dj_App_Hooks::hasAction('multi_action'));
@@ -456,20 +456,20 @@ class Hooks_Test extends TestCase {
 
     public function testHasFilterWithMultipleCallbacks() {
         // Add multiple filters to the same hook
-        Dj_App_Hooks::addFilter('multi_filter', 'Hooks_Test::staticTestMethod');
-        Dj_App_Hooks::addFilter('multi_filter', 'Hooks_Test::staticStringMethod');
+        Dj_App_Hooks::addFilter('multi_filter', 'Dj_App_Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('multi_filter', 'Dj_App_Hooks_Test::staticStringMethod');
         
         // Should return true even with multiple callbacks
         $this->assertTrue(Dj_App_Hooks::hasFilter('multi_filter'));
         
         // Remove one callback
-        Dj_App_Hooks::removeFilter('multi_filter', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('multi_filter', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Should still return true as there's another callback
         $this->assertTrue(Dj_App_Hooks::hasFilter('multi_filter'));
         
         // Remove the last callback
-        Dj_App_Hooks::removeFilter('multi_filter', 'Hooks_Test::staticStringMethod');
+        Dj_App_Hooks::removeFilter('multi_filter', 'Dj_App_Hooks_Test::staticStringMethod');
         
         // Should now return false
         $this->assertFalse(Dj_App_Hooks::hasFilter('multi_filter'));
@@ -478,14 +478,14 @@ class Hooks_Test extends TestCase {
     public function testHasActionWithDifferentPriorities() {
         // Add actions with different priorities
         Dj_App_Hooks::addAction('priority_action', [$this, 'sampleAction'], 10);
-        Dj_App_Hooks::addAction('priority_action', 'Hooks_Test::staticTestMethod', 20);
+        Dj_App_Hooks::addAction('priority_action', 'Dj_App_Hooks_Test::staticTestMethod', 20);
         
         // Should return true regardless of priority
         $this->assertTrue(Dj_App_Hooks::hasAction('priority_action'));
         
         // Clean up
         Dj_App_Hooks::removeAction('priority_action', [$this, 'sampleAction'], 10);
-        Dj_App_Hooks::removeAction('priority_action', 'Hooks_Test::staticTestMethod', 20);
+        Dj_App_Hooks::removeAction('priority_action', 'Dj_App_Hooks_Test::staticTestMethod', 20);
         
         // Should now return false
         $this->assertFalse(Dj_App_Hooks::hasAction('priority_action'));
@@ -493,15 +493,15 @@ class Hooks_Test extends TestCase {
 
     public function testHasFilterWithDifferentPriorities() {
         // Add filters with different priorities
-        Dj_App_Hooks::addFilter('priority_filter', 'Hooks_Test::staticTestMethod', 10);
-        Dj_App_Hooks::addFilter('priority_filter', 'Hooks_Test::staticStringMethod', 20);
+        Dj_App_Hooks::addFilter('priority_filter', 'Dj_App_Hooks_Test::staticTestMethod', 10);
+        Dj_App_Hooks::addFilter('priority_filter', 'Dj_App_Hooks_Test::staticStringMethod', 20);
         
         // Should return true regardless of priority
         $this->assertTrue(Dj_App_Hooks::hasFilter('priority_filter'));
         
         // Clean up
-        Dj_App_Hooks::removeFilter('priority_filter', 'Hooks_Test::staticTestMethod', 10);
-        Dj_App_Hooks::removeFilter('priority_filter', 'Hooks_Test::staticStringMethod', 20);
+        Dj_App_Hooks::removeFilter('priority_filter', 'Dj_App_Hooks_Test::staticTestMethod', 10);
+        Dj_App_Hooks::removeFilter('priority_filter', 'Dj_App_Hooks_Test::staticStringMethod', 20);
         
         // Should now return false
         $this->assertFalse(Dj_App_Hooks::hasFilter('priority_filter'));
@@ -530,11 +530,11 @@ class Hooks_Test extends TestCase {
         $this->assertFalse(Dj_App_Hooks::hasFilter(null));
         
         // Test with numeric hook name
-        Dj_App_Hooks::addFilter('456', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('456', 'Dj_App_Hooks_Test::staticTestMethod');
         $this->assertTrue(Dj_App_Hooks::hasFilter('456'));
         
         // Clean up
-        Dj_App_Hooks::removeFilter('456', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('456', 'Dj_App_Hooks_Test::staticTestMethod');
     }
 
     public function testHasHook() {
@@ -551,13 +551,13 @@ class Hooks_Test extends TestCase {
         Dj_App_Hooks::removeAction('test_has_hook', [$this, 'sampleAction']);
         
         // Add a filter
-        Dj_App_Hooks::addFilter('test_has_hook', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('test_has_hook', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Test that hasHook returns true for existing filters
         $this->assertTrue(Dj_App_Hooks::hasHook('test_has_hook'));
         
         // Clean up filter
-        Dj_App_Hooks::removeFilter('test_has_hook', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('test_has_hook', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Verify cleanup worked
         $this->assertFalse(Dj_App_Hooks::hasHook('test_has_hook'));
@@ -566,7 +566,7 @@ class Hooks_Test extends TestCase {
     public function testHasHookWithBothActionAndFilter() {
         // Add both action and filter to the same hook name
         Dj_App_Hooks::addAction('dual_hook', [$this, 'sampleAction']);
-        Dj_App_Hooks::addFilter('dual_hook', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('dual_hook', 'Dj_App_Hooks_Test::staticTestMethod');
         
         // Should return true since both exist
         $this->assertTrue(Dj_App_Hooks::hasHook('dual_hook'));
@@ -576,7 +576,7 @@ class Hooks_Test extends TestCase {
         $this->assertTrue(Dj_App_Hooks::hasHook('dual_hook'));
         
         // Remove filter, nothing should exist
-        Dj_App_Hooks::removeFilter('dual_hook', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('dual_hook', 'Dj_App_Hooks_Test::staticTestMethod');
         $this->assertFalse(Dj_App_Hooks::hasHook('dual_hook'));
     }
 
@@ -996,7 +996,7 @@ class Hooks_Test extends TestCase {
     public function testHookRegistrationWithSlashNames()
     {
         // Register with / separator
-        Dj_App_Hooks::addFilter('app/plugin/slash_test', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('app/plugin/slash_test', 'Dj_App_Hooks_Test::staticTestMethod');
         $this->assertTrue(Dj_App_Hooks::hasFilter('app/plugin/slash_test'));
 
         // Same hook accessed via dot notation
@@ -1005,13 +1005,13 @@ class Hooks_Test extends TestCase {
         $res = Dj_App_Hooks::applyFilter('app.plugin.slash_test', 'hello');
         $this->assertEquals('hello_processed', $res);
 
-        Dj_App_Hooks::removeFilter('app/plugin/slash_test', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('app/plugin/slash_test', 'Dj_App_Hooks_Test::staticTestMethod');
     }
 
     public function testHookRegistrationWithDotNames()
     {
         // Register with . separator
-        Dj_App_Hooks::addFilter('app.plugin.dot_test', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::addFilter('app.plugin.dot_test', 'Dj_App_Hooks_Test::staticTestMethod');
         $this->assertTrue(Dj_App_Hooks::hasFilter('app.plugin.dot_test'));
 
         // Same hook accessed via slash notation
@@ -1020,7 +1020,7 @@ class Hooks_Test extends TestCase {
         $res = Dj_App_Hooks::applyFilter('app/plugin/dot_test', 'world');
         $this->assertEquals('world_processed', $res);
 
-        Dj_App_Hooks::removeFilter('app.plugin.dot_test', 'Hooks_Test::staticTestMethod');
+        Dj_App_Hooks::removeFilter('app.plugin.dot_test', 'Dj_App_Hooks_Test::staticTestMethod');
     }
 
     public function testFormatHookNameMessyInput()
@@ -1200,7 +1200,7 @@ class Hooks_Test extends TestCase {
     public function testAddDeferredActionDoesNotRunImmediately() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_run_yet', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_run_yet', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Hook hasn't fired yet — nothing should have run
         $this->assertEmpty(self::$deferred_call_log);
@@ -1209,7 +1209,7 @@ class Hooks_Test extends TestCase {
     public function testDeferredActionQueuesOnTriggerHook() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.trigger', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trigger', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $params = [ 'msg' => 'hello', 'id' => 42, ];
         Dj_App_Hooks::doAction('app.test.deferred.trigger', $params);
@@ -1221,7 +1221,7 @@ class Hooks_Test extends TestCase {
     public function testDeferredActionRunsOnShutdownHook() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.runs', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.runs', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $trigger_params = [ 'msg' => 'hello', 'id' => 42, ];
         Dj_App_Hooks::doAction('app.test.deferred.runs', $trigger_params);
@@ -1236,7 +1236,7 @@ class Hooks_Test extends TestCase {
     public function testDeferredActionPreservesOriginalParams() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.preserves_params', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.preserves_params', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $expected_params = [
             'chat_id' => 5,
@@ -1253,8 +1253,8 @@ class Hooks_Test extends TestCase {
     public function testMultipleDeferredCallbacksOnSameTrigger() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', ['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', ['Hooks_Test', 'deferredCallbackB'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.multi', ['Dj_App_Hooks_Test', 'deferredCallbackB'], 50);
 
         $params = [ 'data' => 'test', ];
         Dj_App_Hooks::doAction('app.test.deferred.multi', $params);
@@ -1269,8 +1269,8 @@ class Hooks_Test extends TestCase {
     public function testMultipleTriggersInSameRequest() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_a', ['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_b', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_a', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.trig_b', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $params_a = [ 'from' => 'A', ];
         $params_b = [ 'from' => 'B', ];
@@ -1287,7 +1287,7 @@ class Hooks_Test extends TestCase {
     public function testTriggerHookFiredMultipleTimes() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.repeat', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.repeat', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $params_first = [ 'n' => 1, ];
         $params_second = [ 'n' => 2, ];
@@ -1304,7 +1304,7 @@ class Hooks_Test extends TestCase {
     public function testDeferredActionWithoutTriggerDoesNothing() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.never_fires', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.never_fires', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Trigger hook never fires — only shutdown
         Dj_App_Hooks::doAction('app/shutdown');
@@ -1319,7 +1319,7 @@ class Hooks_Test extends TestCase {
     public function testShutdownActionDoesNotRunBeforeShutdown() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Registered, but shutdown hasn't fired — nothing should have run.
         $this->assertEmpty(self::$deferred_call_log);
@@ -1328,7 +1328,7 @@ class Hooks_Test extends TestCase {
     public function testShutdownActionRunsOnShutdownWithoutAnyTrigger() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // No doAction trigger at all — unlike a deferred action, a shutdown action runs
         // on shutdown by itself (the whole point: no synthetic firing hook needed).
@@ -1340,8 +1340,8 @@ class Hooks_Test extends TestCase {
     public function testMultipleShutdownActionsAllRun() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallbackB'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallbackB'], 50);
 
         $this->simulateShutdown();
 
@@ -1351,8 +1351,8 @@ class Hooks_Test extends TestCase {
     public function testRemoveShutdownActionPreventsExecution() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::removeShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $this->simulateShutdown();
 
@@ -1362,10 +1362,10 @@ class Hooks_Test extends TestCase {
     public function testGenericRemoveActionAlsoRemovesShutdownAction() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addShutdownAction(['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addShutdownAction(['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // A shutdown action is a plain 'app/shutdown' action, so the generic removeAction works too.
-        Dj_App_Hooks::removeAction('app/shutdown', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeAction('app/shutdown', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $this->simulateShutdown();
 
@@ -1377,7 +1377,7 @@ class Hooks_Test extends TestCase {
     // ============================================================
 
     public function testAddDeferredActionStoresInBothActionsAndDeferredActions() {
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.store_both', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.store_both', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $actions = Dj_App_Hooks::getActions();
         $deferred = Dj_App_Hooks::getDeferredActions();
@@ -1400,7 +1400,7 @@ class Hooks_Test extends TestCase {
             'app.test.deferred.multi_c',
         ];
 
-        Dj_App_Hooks::addDeferredAction($hooks, ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction($hooks, ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $deferred = Dj_App_Hooks::getDeferredActions();
 
@@ -1422,7 +1422,7 @@ class Hooks_Test extends TestCase {
     }
 
     public function testRemoveDeferredActionClearsBothRegistries() {
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_both', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_both', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Sanity check — both stores have it
         $actions_before = Dj_App_Hooks::getActions();
@@ -1431,7 +1431,7 @@ class Hooks_Test extends TestCase {
         $this->assertArrayHasKey('app/test/deferred/remove_both', $deferred_before);
 
         // Remove
-        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_both', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_both', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Both stores should be cleaned up (empty inner arrays get unset by removeAction)
         $actions_after = Dj_App_Hooks::getActions();
@@ -1443,10 +1443,10 @@ class Hooks_Test extends TestCase {
     public function testRemoveDeferredActionPreventsExecution() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_prevents', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_prevents', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Remove BEFORE the trigger fires
-        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_prevents', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_prevents', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Now fire and drain — callback should NOT run
         Dj_App_Hooks::doAction('app.test.deferred.remove_prevents', [ 'msg' => 'should not run', ]);
@@ -1458,11 +1458,11 @@ class Hooks_Test extends TestCase {
     public function testRemoveDeferredActionDoesNotAffectOtherCallbacksAtSameHook() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', ['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', ['Hooks_Test', 'deferredCallbackB'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_one', ['Dj_App_Hooks_Test', 'deferredCallbackB'], 50);
 
         // Remove only the first callback
-        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_one', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_one', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Fire and drain — only deferredCallbackB should run
         Dj_App_Hooks::doAction('app.test.deferred.remove_one', [ 'msg' => 'one left', ]);
@@ -1475,11 +1475,11 @@ class Hooks_Test extends TestCase {
     public function testRemoveDeferredActionDoesNotAffectOtherHooks() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_a', ['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_b', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_a', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_b', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Remove ONLY from iso_a
-        Dj_App_Hooks::removeDeferredAction('app.test.deferred.iso_a', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.iso_a', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Fire both hooks; only iso_b's deferred callback should run
         Dj_App_Hooks::doAction('app.test.deferred.iso_a', [ 'h' => 'a', ]);
@@ -1493,13 +1493,13 @@ class Hooks_Test extends TestCase {
     public function testRemoveDeferredActionAfterCaptureStillSkipsExecution() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_after_cap', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.remove_after_cap', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Fire trigger — params get captured into $deferred_actions_data
         Dj_App_Hooks::doAction('app.test.deferred.remove_after_cap', [ 'msg' => 'captured', ]);
 
         // Now remove the deferred entry from $deferred_actions
-        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_after_cap', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::removeDeferredAction('app.test.deferred.remove_after_cap', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Drain — the captured (hook, params) replays via doAction(DEFERRED), but the
         // entry is gone from $deferred_actions, so the loop has nothing to run
@@ -1509,16 +1509,16 @@ class Hooks_Test extends TestCase {
     }
 
     public function testRemoveDeferredActionReturnsTrueWhenFound() {
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.return_true', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.return_true', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
-        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.return_true', ['Hooks_Test', 'deferredCallback'], 50);
+        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.return_true', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $this->assertTrue($removed);
     }
 
     public function testRemoveDeferredActionReturnsFalseWhenNotFound() {
         // Never registered
-        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.never_added', ['Hooks_Test', 'deferredCallback'], 50);
+        $removed = Dj_App_Hooks::removeDeferredAction('app.test.deferred.never_added', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         $this->assertFalse($removed);
     }
@@ -1538,8 +1538,8 @@ class Hooks_Test extends TestCase {
     public function testSyncCallbacksRunInlineWhileDeferredCallbacksWaitForShutdown() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addAction('app.test.deferred.mixed', ['Hooks_Test', 'syncCallback'], 10);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.mixed', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addAction('app.test.deferred.mixed', ['Dj_App_Hooks_Test', 'syncCallback'], 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.mixed', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         Dj_App_Hooks::doAction('app.test.deferred.mixed', [ 'msg' => 'mixed', ]);
 
@@ -1559,8 +1559,8 @@ class Hooks_Test extends TestCase {
         self::$deferred_call_log = [];
 
         // Add B first at higher priority (20), A second at lower priority (10)
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', ['Hooks_Test', 'deferredCallbackB'], 20);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', ['Hooks_Test', 'deferredCallback'], 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', ['Dj_App_Hooks_Test', 'deferredCallbackB'], 20);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.priority', ['Dj_App_Hooks_Test', 'deferredCallback'], 10);
 
         Dj_App_Hooks::doAction('app.test.deferred.priority', [ 'msg' => 'order', ]);
         $this->simulateShutdown();
@@ -1574,7 +1574,7 @@ class Hooks_Test extends TestCase {
     public function testDeferredCallbackReceivesHookNameAsSecondArg() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.hook_arg', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.hook_arg', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         Dj_App_Hooks::doAction('app.test.deferred.hook_arg', [ 'msg' => 'x', ]);
         $this->simulateShutdown();
@@ -1589,8 +1589,8 @@ class Hooks_Test extends TestCase {
         self::$deferred_call_log = [];
 
         // Same callback: deferred on hook A, normal on hook B
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_def', ['Hooks_Test', 'syncCallback'], 50);
-        Dj_App_Hooks::addAction('app.test.deferred.iso_norm', ['Hooks_Test', 'syncCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.iso_def', ['Dj_App_Hooks_Test', 'syncCallback'], 50);
+        Dj_App_Hooks::addAction('app.test.deferred.iso_norm', ['Dj_App_Hooks_Test', 'syncCallback'], 50);
 
         // Fire hook B (normal) — callback should run inline
         Dj_App_Hooks::doAction('app.test.deferred.iso_norm', [ 'h' => 'normal', ]);
@@ -1611,8 +1611,8 @@ class Hooks_Test extends TestCase {
         self::$deferred_call_log = [];
 
         // Mixed callbacks at the same hook
-        Dj_App_Hooks::addAction('app.test.deferred.read_def', ['Hooks_Test', 'syncCallback'], 10);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.read_def', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addAction('app.test.deferred.read_def', ['Dj_App_Hooks_Test', 'syncCallback'], 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.read_def', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Call doAction directly with type=DEFERRED — should run ONLY the deferred one,
         // skipping the sync callback even though both are registered for this hook.
@@ -1626,7 +1626,7 @@ class Hooks_Test extends TestCase {
     public function testDoActionDeferredModeDoesNotCaptureForLaterDrain() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_recap', ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.no_recap', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
         // Call doAction in DEFERRED mode directly — fires the callback once,
         // but should NOT enqueue another capture (otherwise infinite loop).
@@ -1646,9 +1646,9 @@ class Hooks_Test extends TestCase {
     public function testMultipleDeferredCallbacksAtDifferentPrioritiesSameHook() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Hooks_Test', 'deferredCallback'], 50);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Hooks_Test', 'deferredCallbackB'], 30);
-        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Hooks_Test', 'syncCallback'], 10);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Dj_App_Hooks_Test', 'deferredCallbackB'], 30);
+        Dj_App_Hooks::addDeferredAction('app.test.deferred.prio_mix', ['Dj_App_Hooks_Test', 'syncCallback'], 10);
 
         Dj_App_Hooks::doAction('app.test.deferred.prio_mix', [ 'fire' => 1, ]);
         $this->simulateShutdown();
@@ -1668,7 +1668,7 @@ class Hooks_Test extends TestCase {
         self::$deferred_call_log = [];
 
         // Register a regular (non-deferred) listener for app/shutdown
-        Dj_App_Hooks::addAction('app/shutdown', ['Hooks_Test', 'syncCallback']);
+        Dj_App_Hooks::addAction('app/shutdown', ['Dj_App_Hooks_Test', 'syncCallback']);
 
         // Sanity: listener hasn't fired yet
         $this->assertEmpty(self::$deferred_call_log);
@@ -1683,7 +1683,7 @@ class Hooks_Test extends TestCase {
     public function testRunShutdownHooksClearsAppShutdownListeners() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addAction('app/shutdown', ['Hooks_Test', 'syncCallback']);
+        Dj_App_Hooks::addAction('app/shutdown', ['Dj_App_Hooks_Test', 'syncCallback']);
 
         // Sanity: listener is registered
         $actions_before = Dj_App_Hooks::getActions();
@@ -1700,7 +1700,7 @@ class Hooks_Test extends TestCase {
     public function testRunShutdownHooksIsIdempotent() {
         self::$deferred_call_log = [];
 
-        Dj_App_Hooks::addAction('app/shutdown', ['Hooks_Test', 'syncCallback']);
+        Dj_App_Hooks::addAction('app/shutdown', ['Dj_App_Hooks_Test', 'syncCallback']);
 
         // First call: listener fires
         Dj_App_Hooks::runShutdownHooks();
@@ -1767,7 +1767,7 @@ class Hooks_Test extends TestCase {
         // Register with dotted CamelCase, fire with the canonical slash form —
         // each variant spelling gets its own memo-cache slot but they must all
         // resolve to the SAME registry entry.
-        Dj_App_Hooks::addFilter('App.Test.Variant.Spelling', ['Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::addFilter('App.Test.Variant.Spelling', ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
 
         $result = Dj_App_Hooks::applyFilter('app/test/variant/spelling', '');
         $this->assertEquals('A', $result);
@@ -1776,7 +1776,7 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('A', $result);
 
         // Removal via a third spelling hits the same entry too.
-        $removed = Dj_App_Hooks::removeFilter('app.test.variant.spelling', ['Hooks_Test', 'orderFilterA'], 10);
+        $removed = Dj_App_Hooks::removeFilter('app.test.variant.spelling', ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
         $this->assertTrue($removed);
         $this->assertFalse(Dj_App_Hooks::hasFilter('app/test/variant/spelling'));
     }
@@ -1784,19 +1784,19 @@ class Hooks_Test extends TestCase {
     public function testApplyFilterRespectsLateLowPriorityAddFilter() {
         $hook = 'app/test/sort/late_low_filter';
 
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('B', $result);
 
         // Late registration at a LOWER priority must still run first on the next fire.
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterA'], 5);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 5);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('AB', $result);
 
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterA'], 5);
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 5);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
     }
 
     public function testDoActionRespectsLateLowPriorityAddAction() {
@@ -1804,7 +1804,7 @@ class Hooks_Test extends TestCase {
 
         $hook = 'app/test/sort/late_low_action';
 
-        Dj_App_Hooks::addAction($hook, ['Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::addAction($hook, ['Dj_App_Hooks_Test', 'orderActionB'], 20);
         Dj_App_Hooks::doAction($hook);
 
         $expected_calls = [ 'B', ];
@@ -1812,22 +1812,22 @@ class Hooks_Test extends TestCase {
 
         self::$order_call_log = [];
 
-        Dj_App_Hooks::addAction($hook, ['Hooks_Test', 'orderActionA'], 5);
+        Dj_App_Hooks::addAction($hook, ['Dj_App_Hooks_Test', 'orderActionA'], 5);
         Dj_App_Hooks::doAction($hook);
 
         $expected_calls = [ 'A', 'B', ];
         $this->assertEquals($expected_calls, self::$order_call_log);
 
-        Dj_App_Hooks::removeAction($hook, ['Hooks_Test', 'orderActionA'], 5);
-        Dj_App_Hooks::removeAction($hook, ['Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::removeAction($hook, ['Dj_App_Hooks_Test', 'orderActionA'], 5);
+        Dj_App_Hooks::removeAction($hook, ['Dj_App_Hooks_Test', 'orderActionB'], 20);
     }
 
     public function testAddFilterKeepsPrioritiesSorted() {
         $hook = 'app/test/sort/registration_order';
 
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterC'], 30);
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterC'], 30);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
 
         // The invariant holds at registration time — BEFORE any fire.
         $filters = Dj_App_Hooks::getFilters();
@@ -1839,29 +1839,29 @@ class Hooks_Test extends TestCase {
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('ABC', $result);
 
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterC'], 30);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterC'], 30);
     }
 
     public function testRemoveFilterKeepsExecutionOrder() {
         $hook = 'app/test/sort/remove_keeps_order';
 
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterC'], 30);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterC'], 30);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('ABC', $result);
 
         // Removing a key from a sorted array keeps it sorted — no re-sort needed.
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('AC', $result);
 
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterC'], 30);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterC'], 30);
     }
 
     public function testSetFiltersSortsPriorities() {
@@ -1871,9 +1871,9 @@ class Hooks_Test extends TestCase {
         // the sorted invariant because the fire path no longer sorts.
         $injected_filters = [
             $hook => [
-                30 => [ 'cb_c' => ['Hooks_Test', 'orderFilterC'], ],
-                10 => [ 'cb_a' => ['Hooks_Test', 'orderFilterA'], ],
-                20 => [ 'cb_b' => ['Hooks_Test', 'orderFilterB'], ],
+                30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
+                10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
+                20 => [ 'cb_b' => ['Dj_App_Hooks_Test', 'orderFilterB'], ],
             ],
         ];
         Dj_App_Hooks::setFilters($injected_filters);
@@ -1894,9 +1894,9 @@ class Hooks_Test extends TestCase {
         // A non-callable can only enter via setFilters() — addFilter() validates.
         $injected_filters = [
             $hook => [
-                10 => [ 'cb_a' => ['Hooks_Test', 'orderFilterA'], ],
+                10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
                 20 => [ 'cb_bad' => ['No_Such_Class_Xyz', 'nope'], ],
-                30 => [ 'cb_c' => ['Hooks_Test', 'orderFilterC'], ],
+                30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
             ],
         ];
         Dj_App_Hooks::setFilters($injected_filters);
@@ -1932,13 +1932,13 @@ class Hooks_Test extends TestCase {
         $hook = 'app/test/notice/callable_shapes';
 
         // String static callable + instance-method array callable.
-        Dj_App_Hooks::addFilter($hook, 'Hooks_Test::staticTestMethod', 10);
+        Dj_App_Hooks::addFilter($hook, 'Dj_App_Hooks_Test::staticTestMethod', 10);
         Dj_App_Hooks::addFilter($hook, [$this, 'instanceFilterMethod'], 20);
 
         $result = Dj_App_Hooks::applyFilter($hook, 'val');
         $this->assertEquals('val_processed_instance', $result);
 
-        Dj_App_Hooks::removeFilter($hook, 'Hooks_Test::staticTestMethod', 10);
+        Dj_App_Hooks::removeFilter($hook, 'Dj_App_Hooks_Test::staticTestMethod', 10);
         Dj_App_Hooks::removeFilter($hook, [$this, 'instanceFilterMethod'], 20);
     }
 
@@ -2000,33 +2000,33 @@ class Hooks_Test extends TestCase {
     public function testDisableFilterCallbackSkipsIt() {
         $hook = 'app/test/disable/filter_callback';
 
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('AB', $result);
 
-        $disable_res = Dj_App_Hooks::disableFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
+        $disable_res = Dj_App_Hooks::disableFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
         $this->assertTrue($disable_res);
 
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('B', $result);
 
-        $enable_res = Dj_App_Hooks::enableFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
+        $enable_res = Dj_App_Hooks::enableFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
         $this->assertTrue($enable_res);
 
         // Restored callback runs again, in ascending priority order.
         $result = Dj_App_Hooks::applyFilter($hook, '');
         $this->assertEquals('AB', $result);
 
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterB'], 20);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
     }
 
     public function testDisableWholeFilterHook() {
         $hook = 'app/test/disable/whole_filter_hook';
 
-        Dj_App_Hooks::addFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
         $this->assertTrue(Dj_App_Hooks::hasFilter($hook));
 
         // Empty callback = park the WHOLE hook.
@@ -2045,7 +2045,7 @@ class Hooks_Test extends TestCase {
         $this->assertEquals('A', $result);
         $this->assertTrue(Dj_App_Hooks::hasFilter($hook));
 
-        Dj_App_Hooks::removeFilter($hook, ['Hooks_Test', 'orderFilterA'], 10);
+        Dj_App_Hooks::removeFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
     }
 
     public function testDisableActionParksDeferredMirror() {
@@ -2053,9 +2053,9 @@ class Hooks_Test extends TestCase {
 
         $hook = 'app/test/disable/deferred_action';
 
-        Dj_App_Hooks::addDeferredAction($hook, ['Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addDeferredAction($hook, ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
 
-        $disable_res = Dj_App_Hooks::disableAction($hook, ['Hooks_Test', 'deferredCallback'], 50);
+        $disable_res = Dj_App_Hooks::disableAction($hook, ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
         $this->assertTrue($disable_res);
 
         // While parked: the callback neither runs nor queues params.
@@ -2068,7 +2068,7 @@ class Hooks_Test extends TestCase {
         $this->simulateShutdown();
         $this->assertEmpty(self::$deferred_call_log);
 
-        $enable_res = Dj_App_Hooks::enableAction($hook, ['Hooks_Test', 'deferredCallback'], 50);
+        $enable_res = Dj_App_Hooks::enableAction($hook, ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
         $this->assertTrue($enable_res);
 
         $trigger_params = [ 'msg' => 'runs again', ];

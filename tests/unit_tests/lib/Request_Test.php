@@ -9,7 +9,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class Request_Test extends TestCase
+class Dj_App_Request_Test extends TestCase
 {
     protected $original_server;
 
