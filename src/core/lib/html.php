@@ -1,9 +1,15 @@
 <?php
 
-class Djebel_App_HTML {
+// BC alias — site plugins/themes across existing djebel installs still call the old
+// class name (djebel-static-content, djebel-simple-newsletter, contact, faq, ...).
+// Remove after those are migrated to Dj_App_HTML. Works up top because the class
+// below extends nothing, so PHP early-binds it at compile time.
+class_alias('Dj_App_HTML', 'Djebel_App_HTML');
+
+class Dj_App_HTML {
 	/**
      * Generates HTML select
-	 * Djebel_App_HTML::htmlSelect()
+	 * Dj_App_HTML::htmlSelect()
 	 * @param string $name
 	 * @param string $sel
 	 * @param array $options - the dropdown options
@@ -104,7 +110,7 @@ class Djebel_App_HTML {
 	
 	/**
 	 * Generates an HTML radio group
-	 * Djebel_App_HTML::radio();
+	 * Dj_App_HTML::radio();
 	 *
 	 * If the msg has a text surrounded with * it will be bolded.
 	 * You can append or prepend text by passing the last param '$extra'.
@@ -134,7 +140,7 @@ class Djebel_App_HTML {
 
 	/**
 	 * Generates an HTML checkbox
-	 * Djebel_App_HTML::checkbox();
+	 * Dj_App_HTML::checkbox();
 	 *
 	 * If the msg has a text surrounded with * it will be bolded.
 	 * You can append or prepend text by passing the last param '$extra'.
@@ -180,7 +186,7 @@ class Djebel_App_HTML {
 
 	/**
 	 * Generates a hidden input text
-	 * Djebel_App_HTML::hidden();
+	 * Dj_App_HTML::hidden();
 	 */
 	public static function hidden( $name, $value = '', $extra = array() ) {
         return self::text($name, $value, ['_type' => 'hidden', ]);
@@ -188,7 +194,7 @@ class Djebel_App_HTML {
 
 	/**
 	 * Generates an html input text box
-	 * Djebel_App_HTML::text();
+	 * Dj_App_HTML::text();
 	 */
 	public static function text( $name, $value = '', $extra = array() ) {
 		$name    = dj_esc_attr($name);
@@ -252,7 +258,7 @@ class Djebel_App_HTML {
 
 	/**
 	 * Renders a page with content - ONE method for all cases
-	 * Djebel_App_HTML::renderPage($content, $title, $options);
+	 * Dj_App_HTML::renderPage($content, $title, $options);
 	 */
 	public static function renderPage($content, $title = '', $options = []) {
 		// Auto-detect error pages and set appropriate styling
@@ -438,7 +444,7 @@ class Djebel_App_HTML {
 
     /**
      * Encode all applicable characters to HTML entities
-     * Djebel_App_HTML::encodeEntities()
+     * Dj_App_HTML::encodeEntities()
      *
      * Convenience wrapper for escHtml() - both are valid, use whichever you prefer.
      *
@@ -451,7 +457,7 @@ class Djebel_App_HTML {
 
     /**
      * Decode HTML entities back to characters
-     * Djebel_App_HTML::decHtml()
+     * Dj_App_HTML::decHtml()
      *
      * Converts HTML entities like &lt; &gt; &amp; back to < > &
      *
@@ -460,7 +466,7 @@ class Djebel_App_HTML {
      *
      * @example
      * $encoded = '&lt;div&gt;Content&lt;/div&gt;';
-     * $decoded = Djebel_App_HTML::decHtml($encoded);
+     * $decoded = Dj_App_HTML::decHtml($encoded);
      * // Returns: <div>Content</div>
      */
     static public function decHtml($str) {
@@ -470,7 +476,7 @@ class Djebel_App_HTML {
 
     /**
      * Decode HTML entities back to characters
-     * Djebel_App_HTML::decodeEntities()
+     * Dj_App_HTML::decodeEntities()
      *
      * Convenience wrapper for decHtml() - both are valid, use whichever you prefer.
      *
@@ -497,12 +503,12 @@ class Djebel_App_HTML {
      * 
      * @example
      * $html = 'Before <div>Content</div> After';
-     * $result = Djebel_App_HTML::removeTag('div', $html);
+     * $result = Dj_App_HTML::removeTag('div', $html);
      * // Returns: 'Before  After'
      * 
      * @example  
      * $html = 'Text <SCRIPT>alert("bad")</SCRIPT> More';
-     * $result = Djebel_App_HTML::removeTag('script', $html);
+     * $result = Dj_App_HTML::removeTag('script', $html);
      * // Returns: 'Text  More'
      */
     static public function removeTag($tag, $content) {
@@ -707,7 +713,7 @@ class Djebel_App_HTML {
 
     /**
      * Escape HTML attribute value for safe output
-     * Djebel_App_HTML::escAttr()
+     * Dj_App_HTML::escAttr()
      *
      * Converts special characters to HTML entities to prevent XSS attacks in attributes.
      * Use this for any user-supplied data inserted into HTML attributes.
@@ -720,7 +726,7 @@ class Djebel_App_HTML {
      * echo "<input name='$name' />";
      *
      * @example
-     * $class = Djebel_App_HTML::escAttr($user_class);
+     * $class = Dj_App_HTML::escAttr($user_class);
      * echo "<div class='$class'>Content</div>";
      */
     public static function escAttr($value) {
@@ -740,7 +746,7 @@ class Djebel_App_HTML {
 
     /**
      * Escape HTML content for safe output
-     * Djebel_App_HTML::escHtml()
+     * Dj_App_HTML::escHtml()
      *
      * Converts special characters to HTML entities to prevent XSS attacks.
      * Use this for any user-supplied data inserted into HTML content.
@@ -753,7 +759,7 @@ class Djebel_App_HTML {
      * echo "<h1>$title</h1>";
      *
      * @example
-     * $comment = Djebel_App_HTML::escHtml($user_comment);
+     * $comment = Dj_App_HTML::escHtml($user_comment);
      * echo "<p>$comment</p>";
      */
     public static function escHtml($value) {
@@ -773,7 +779,7 @@ class Djebel_App_HTML {
 
     /**
      * Escape URL for safe output
-     * Djebel_App_HTML::escUrl()
+     * Dj_App_HTML::escUrl()
      *
      * Validates and sanitizes URLs to prevent XSS attacks.
      * Only allows http://, https://, and relative URLs.
@@ -786,7 +792,7 @@ class Djebel_App_HTML {
      * echo "<a href='$redirect'>Next</a>";
      *
      * @example
-     * $image = Djebel_App_HTML::escUrl($user_avatar);
+     * $image = Dj_App_HTML::escUrl($user_avatar);
      * echo "<img src='$image' />";
      */
     public static function escUrl($url) {
@@ -831,7 +837,7 @@ class Djebel_App_HTML {
 if (!function_exists('dj_esc_attr')) {
     /**
      * Escape HTML attribute value
-     * Convenience wrapper for Djebel_App_HTML::escAttr()
+     * Convenience wrapper for Dj_App_HTML::escAttr()
      *
      * @param mixed $value The value to escape
      * @return string The escaped string
@@ -840,14 +846,14 @@ if (!function_exists('dj_esc_attr')) {
      * echo "<input name='" . dj_esc_attr($name) . "' />";
      */
     function dj_esc_attr($value) {
-        return Djebel_App_HTML::escAttr($value);
+        return Dj_App_HTML::escAttr($value);
     }
 }
 
 if (!function_exists('dj_esc_html')) {
     /**
      * Escape HTML content
-     * Convenience wrapper for Djebel_App_HTML::escHtml()
+     * Convenience wrapper for Dj_App_HTML::escHtml()
      *
      * @param mixed $value The value to escape
      * @return string The escaped string
@@ -856,14 +862,14 @@ if (!function_exists('dj_esc_html')) {
      * echo "<h1>" . dj_esc_html($title) . "</h1>";
      */
     function dj_esc_html($value) {
-        return Djebel_App_HTML::escHtml($value);
+        return Dj_App_HTML::escHtml($value);
     }
 }
 
 if (!function_exists('dj_esc_url')) {
     /**
      * Escape URL
-     * Convenience wrapper for Djebel_App_HTML::escUrl()
+     * Convenience wrapper for Dj_App_HTML::escUrl()
      *
      * @param string $url The URL to escape
      * @return string The sanitized URL
@@ -872,7 +878,7 @@ if (!function_exists('dj_esc_url')) {
      * echo "<a href='" . dj_esc_url($redirect) . "'>Next</a>";
      */
     function dj_esc_url($url) {
-        return Djebel_App_HTML::escUrl($url);
+        return Dj_App_HTML::escUrl($url);
     }
 }
 
@@ -895,7 +901,7 @@ if (!function_exists('dj_esc')) {
 if (!function_exists('dj_dec_html')) {
     /**
      * Decode HTML entities
-     * Convenience wrapper for Djebel_App_HTML::decHtml()
+     * Convenience wrapper for Dj_App_HTML::decHtml()
      *
      * @param string $str The string with HTML entities
      * @return string The decoded string
@@ -904,7 +910,7 @@ if (!function_exists('dj_dec_html')) {
      * echo dj_dec_html('&lt;div&gt;Content&lt;/div&gt;');
      */
     function dj_dec_html($str) {
-        return Djebel_App_HTML::decHtml($str);
+        return Dj_App_HTML::decHtml($str);
     }
 }
 

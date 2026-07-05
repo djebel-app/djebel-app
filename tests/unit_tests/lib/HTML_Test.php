@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-class HTML_Test extends TestCase {
+class Dj_App_HTML_Test extends TestCase {
 
     public function setUp() : void {
     }
@@ -13,7 +13,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagBasic()
     {
         $content = 'Before <div>Content to remove</div> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = 'Before  After';
         
         $this->assertEquals($expected, $result);
@@ -22,14 +22,14 @@ class HTML_Test extends TestCase {
     public function testRemoveTagCaseInsensitive()
     {
         $content = 'Before <DIV>Content to remove</DIV> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = 'Before  After';
         
         $this->assertEquals($expected, $result);
         
         // Test with mixed case
         $content = 'Before <DiV>Content to remove</dIv> After';
-        $result = Djebel_App_HTML::removeTag('DIV', $content);
+        $result = Dj_App_HTML::removeTag('DIV', $content);
         $expected = 'Before  After';
         
         $this->assertEquals($expected, $result);
@@ -38,7 +38,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagWithAttributes()
     {
         $content = 'Before <div class="test" id="myDiv">Content to remove</div> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = 'Before  After';
         
         $this->assertEquals($expected, $result);
@@ -47,7 +47,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagMultiple()
     {
         $content = 'Before <div>First</div> Middle <div>Second</div> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = 'Before  Middle  After';
         
         $this->assertEquals($expected, $result);
@@ -56,7 +56,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagNested()
     {
         $content = 'Before <div>Outer <span>nested</span> content</div> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = 'Before  After';
         
         $this->assertEquals($expected, $result);
@@ -65,7 +65,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagNoClosingTag()
     {
         $content = 'Before <div>Content without closing tag After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         // Should return original content when no closing tag is found
         $expected = $content;
         
@@ -75,7 +75,7 @@ class HTML_Test extends TestCase {
     public function testRemoveTagNotFound()
     {
         $content = 'Before <span>Content</span> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         // Should return original content when tag is not found
         $expected = $content;
         
@@ -86,15 +86,15 @@ class HTML_Test extends TestCase {
     {
         // Empty tag
         $content = 'Before <div>Content</div> After';
-        $result = Djebel_App_HTML::removeTag('', $content);
+        $result = Dj_App_HTML::removeTag('', $content);
         $this->assertEquals($content, $result);
         
         // Empty content
-        $result = Djebel_App_HTML::removeTag('div', '');
+        $result = Dj_App_HTML::removeTag('div', '');
         $this->assertEmpty($result);
         
         // Null content
-        $result = Djebel_App_HTML::removeTag('div', null);
+        $result = Dj_App_HTML::removeTag('div', null);
         $this->assertEquals(null, $result);
     }
 
@@ -103,12 +103,12 @@ class HTML_Test extends TestCase {
         $content = 'Before <div>Content</div> After';
         
         // Tag with special characters should be sanitized
-        $result = Djebel_App_HTML::removeTag('di<v>', $content);
+        $result = Dj_App_HTML::removeTag('di<v>', $content);
         $expected = 'Before  After'; // Should still work as 'div'
         $this->assertEquals($expected, $result);
         
         // Tag with only special characters should return original content
-        $result = Djebel_App_HTML::removeTag('<>', $content);
+        $result = Dj_App_HTML::removeTag('<>', $content);
         $this->assertEquals($content, $result);
     }
 
@@ -116,7 +116,7 @@ class HTML_Test extends TestCase {
     {
         // Self-closing tags should not be affected since we look for opening/closing pairs
         $content = 'Before <img src="test.jpg" /> After';
-        $result = Djebel_App_HTML::removeTag('img', $content);
+        $result = Dj_App_HTML::removeTag('img', $content);
         $expected = $content; // Should remain unchanged
         
         $this->assertEquals($expected, $result);
@@ -126,7 +126,7 @@ class HTML_Test extends TestCase {
     {
         // Simple nested case first
         $content = '<div>Outer <div>Inner</div> Content</div>';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         $expected = '';
         
         $this->assertEquals($expected, $result);
@@ -147,7 +147,7 @@ class HTML_Test extends TestCase {
             </html>
         ';
         
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         
         // Both div tags should be removed (note: the outer div contains the paragraph, so it gets removed too)
         $this->assertStringNotContainsString('<div', $result);
@@ -176,7 +176,7 @@ class HTML_Test extends TestCase {
             </html>
         ';
         
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         
         // Div should be removed
         $this->assertStringNotContainsString('<div', $result);
@@ -194,7 +194,7 @@ class HTML_Test extends TestCase {
     {
         // Test that isValidTagMatch prevents false positive matches
         $content = 'Before <divider>Content</divider> <div>Real div</div> After';
-        $result = Djebel_App_HTML::removeTag('div', $content);
+        $result = Dj_App_HTML::removeTag('div', $content);
         
         // The <divider> tag should remain untouched
         $this->assertStringContainsString('<divider>Content</divider>', $result);
@@ -212,7 +212,7 @@ class HTML_Test extends TestCase {
     public function testEscAttrBasic()
     {
         $input = 'normal text';
-        $result = Djebel_App_HTML::escAttr($input);
+        $result = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals('normal text', $result);
     }
@@ -220,7 +220,7 @@ class HTML_Test extends TestCase {
     public function testEscAttrDoubleQuotes()
     {
         $input = 'text with "quotes"';
-        $result = Djebel_App_HTML::escAttr($input);
+        $result = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals('text with &quot;quotes&quot;', $result);
     }
@@ -228,7 +228,7 @@ class HTML_Test extends TestCase {
     public function testEscAttrSingleQuotes()
     {
         $input = "text with 'quotes'";
-        $result = Djebel_App_HTML::escAttr($input);
+        $result = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals('text with &#039;quotes&#039;', $result);
     }
@@ -236,7 +236,7 @@ class HTML_Test extends TestCase {
     public function testEscAttrSpecialChars()
     {
         $input = '<script>alert("XSS")</script>';
-        $result = Djebel_App_HTML::escAttr($input);
+        $result = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals('&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;', $result);
     }
@@ -244,30 +244,30 @@ class HTML_Test extends TestCase {
     public function testEscAttrAmpersand()
     {
         $input = 'Tom & Jerry';
-        $result = Djebel_App_HTML::escAttr($input);
+        $result = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals('Tom &amp; Jerry', $result);
     }
 
     public function testEscAttrEmpty()
     {
-        $this->assertEmpty(Djebel_App_HTML::escAttr(''));
-        $this->assertEmpty(Djebel_App_HTML::escAttr(null));
+        $this->assertEmpty(Dj_App_HTML::escAttr(''));
+        $this->assertEmpty(Dj_App_HTML::escAttr(null));
     }
 
     public function testEscAttrNumeric()
     {
-        $result = Djebel_App_HTML::escAttr(123);
+        $result = Dj_App_HTML::escAttr(123);
         $this->assertEquals('123', $result);
 
-        $result = Djebel_App_HTML::escAttr(0);
+        $result = Dj_App_HTML::escAttr(0);
         $this->assertEquals('0', $result);
     }
 
     public function testEscAttrNonScalar()
     {
         $array = [ 'test', ];
-        $result = Djebel_App_HTML::escAttr($array);
+        $result = Dj_App_HTML::escAttr($array);
 
         $this->assertEmpty($result);
     }
@@ -277,7 +277,7 @@ class HTML_Test extends TestCase {
     public function testEscHtmlBasic()
     {
         $input = 'normal text';
-        $result = Djebel_App_HTML::escHtml($input);
+        $result = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals('normal text', $result);
     }
@@ -285,7 +285,7 @@ class HTML_Test extends TestCase {
     public function testEscHtmlScriptTag()
     {
         $input = '<script>alert("XSS")</script>';
-        $result = Djebel_App_HTML::escHtml($input);
+        $result = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals('&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;', $result);
     }
@@ -293,7 +293,7 @@ class HTML_Test extends TestCase {
     public function testEscHtmlHtmlTags()
     {
         $input = '<div class="test">Content</div>';
-        $result = Djebel_App_HTML::escHtml($input);
+        $result = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals('&lt;div class=&quot;test&quot;&gt;Content&lt;/div&gt;', $result);
     }
@@ -301,30 +301,30 @@ class HTML_Test extends TestCase {
     public function testEscHtmlSpecialChars()
     {
         $input = '< > & " \'';
-        $result = Djebel_App_HTML::escHtml($input);
+        $result = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals('&lt; &gt; &amp; &quot; &#039;', $result);
     }
 
     public function testEscHtmlEmpty()
     {
-        $this->assertEmpty(Djebel_App_HTML::escHtml(''));
-        $this->assertEmpty(Djebel_App_HTML::escHtml(null));
+        $this->assertEmpty(Dj_App_HTML::escHtml(''));
+        $this->assertEmpty(Dj_App_HTML::escHtml(null));
     }
 
     public function testEscHtmlNumeric()
     {
-        $result = Djebel_App_HTML::escHtml(456);
+        $result = Dj_App_HTML::escHtml(456);
         $this->assertEquals('456', $result);
 
-        $result = Djebel_App_HTML::escHtml(0);
+        $result = Dj_App_HTML::escHtml(0);
         $this->assertEquals('0', $result);
     }
 
     public function testEscHtmlNonScalar()
     {
         $object = new stdClass();
-        $result = Djebel_App_HTML::escHtml($object);
+        $result = Dj_App_HTML::escHtml($object);
 
         $this->assertEmpty($result);
     }
@@ -334,7 +334,7 @@ class HTML_Test extends TestCase {
     public function testEscUrlHttps()
     {
         $input = 'https://example.com/page';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals('https://example.com/page', $result);
     }
@@ -342,7 +342,7 @@ class HTML_Test extends TestCase {
     public function testEscUrlHttp()
     {
         $input = 'http://example.com/page';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals('http://example.com/page', $result);
     }
@@ -350,7 +350,7 @@ class HTML_Test extends TestCase {
     public function testEscUrlRelative()
     {
         $input = '/path/to/page';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals('/path/to/page', $result);
     }
@@ -358,42 +358,42 @@ class HTML_Test extends TestCase {
     public function testEscUrlWithQueryString()
     {
         $input = 'https://example.com/page?foo=bar&baz=qux';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals('https://example.com/page?foo=bar&amp;baz=qux', $result);
     }
 
     public function testEscUrlInvalidProtocol()
     {
-        $result = Djebel_App_HTML::escUrl('javascript:alert("XSS")');
+        $result = Dj_App_HTML::escUrl('javascript:alert("XSS")');
         $this->assertEmpty($result);
 
-        $result = Djebel_App_HTML::escUrl('data:text/html,<script>alert("XSS")</script>');
+        $result = Dj_App_HTML::escUrl('data:text/html,<script>alert("XSS")</script>');
         $this->assertEmpty($result);
 
-        $result = Djebel_App_HTML::escUrl('ftp://example.com');
+        $result = Dj_App_HTML::escUrl('ftp://example.com');
         $this->assertEmpty($result);
     }
 
     public function testEscUrlEmpty()
     {
-        $this->assertEmpty(Djebel_App_HTML::escUrl(''));
-        $this->assertEmpty(Djebel_App_HTML::escUrl(null));
+        $this->assertEmpty(Dj_App_HTML::escUrl(''));
+        $this->assertEmpty(Dj_App_HTML::escUrl(null));
     }
 
     public function testEscUrlNonString()
     {
-        $result = Djebel_App_HTML::escUrl(123);
+        $result = Dj_App_HTML::escUrl(123);
         $this->assertEmpty($result);
 
-        $result = Djebel_App_HTML::escUrl([ 'url', ]);
+        $result = Dj_App_HTML::escUrl([ 'url', ]);
         $this->assertEmpty($result);
     }
 
     public function testEscUrlCaseInsensitive()
     {
         $input = 'HTTPS://EXAMPLE.COM/PAGE';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals('HTTPS://EXAMPLE.COM/PAGE', $result);
     }
@@ -401,7 +401,7 @@ class HTML_Test extends TestCase {
     public function testEscUrlWithSpecialChars()
     {
         $input = 'https://example.com/page?name=<script>alert("XSS")</script>';
-        $result = Djebel_App_HTML::escUrl($input);
+        $result = Dj_App_HTML::escUrl($input);
 
         $this->assertStringContainsString('&lt;script&gt;', $result);
         $this->assertStringContainsString('&quot;', $result);
@@ -412,7 +412,7 @@ class HTML_Test extends TestCase {
     public function testEncodeEntitiesBasic()
     {
         $input = '<div>Test & Content</div>';
-        $result = Djebel_App_HTML::encodeEntities($input);
+        $result = Dj_App_HTML::encodeEntities($input);
 
         $this->assertStringContainsString('&lt;', $result);
         $this->assertStringContainsString('&gt;', $result);
@@ -422,8 +422,8 @@ class HTML_Test extends TestCase {
     public function testEncodeEntitiesDelegatesToEscHtml()
     {
         $input = '<script>alert("test")</script>';
-        $result = Djebel_App_HTML::encodeEntities($input);
-        $expected = Djebel_App_HTML::escHtml($input);
+        $result = Dj_App_HTML::encodeEntities($input);
+        $expected = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -431,8 +431,8 @@ class HTML_Test extends TestCase {
     public function testDecodeEntitiesDelegatesToDecHtml()
     {
         $input = '&lt;div&gt;Test &amp; Content&lt;/div&gt;';
-        $result = Djebel_App_HTML::decodeEntities($input);
-        $expected = Djebel_App_HTML::decHtml($input);
+        $result = Dj_App_HTML::decodeEntities($input);
+        $expected = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -443,7 +443,7 @@ class HTML_Test extends TestCase {
     {
         $input = 'test "value"';
         $result = dj_esc_attr($input);
-        $expected = Djebel_App_HTML::escAttr($input);
+        $expected = Dj_App_HTML::escAttr($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -452,7 +452,7 @@ class HTML_Test extends TestCase {
     {
         $input = '<script>alert("test")</script>';
         $result = dj_esc_html($input);
-        $expected = Djebel_App_HTML::escHtml($input);
+        $expected = Dj_App_HTML::escHtml($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -461,7 +461,7 @@ class HTML_Test extends TestCase {
     {
         $input = 'https://example.com/page';
         $result = dj_esc_url($input);
-        $expected = Djebel_App_HTML::escUrl($input);
+        $expected = Dj_App_HTML::escUrl($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -514,7 +514,7 @@ class HTML_Test extends TestCase {
     public function testDecHtmlBasic()
     {
         $input = '&lt;div&gt;Content&lt;/div&gt;';
-        $result = Djebel_App_HTML::decHtml($input);
+        $result = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals('<div>Content</div>', $result);
     }
@@ -522,7 +522,7 @@ class HTML_Test extends TestCase {
     public function testDecHtmlSpecialChars()
     {
         $input = '&lt; &gt; &amp; &quot;';
-        $result = Djebel_App_HTML::decHtml($input);
+        $result = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals('< > & "', $result);
     }
@@ -530,7 +530,7 @@ class HTML_Test extends TestCase {
     public function testDecHtmlScript()
     {
         $input = '&lt;script&gt;alert(&quot;test&quot;)&lt;/script&gt;';
-        $result = Djebel_App_HTML::decHtml($input);
+        $result = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals('<script>alert("test")</script>', $result);
     }
@@ -538,7 +538,7 @@ class HTML_Test extends TestCase {
     public function testDecHtmlNoEntities()
     {
         $input = 'plain text';
-        $result = Djebel_App_HTML::decHtml($input);
+        $result = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals('plain text', $result);
     }
@@ -549,7 +549,7 @@ class HTML_Test extends TestCase {
     {
         $input = '&lt;div&gt;Content&lt;/div&gt;';
         $result = dj_dec_html($input);
-        $expected = Djebel_App_HTML::decHtml($input);
+        $expected = Dj_App_HTML::decHtml($input);
 
         $this->assertEquals($expected, $result);
     }
@@ -583,5 +583,18 @@ class HTML_Test extends TestCase {
         $decoded = dj_dec($escaped);
 
         $this->assertEquals($original, $decoded);
+    }
+
+    public function testOldClassNameStillAliased()
+    {
+        // BC contract: existing site plugins/themes call Djebel_App_HTML — the
+        // class_alias in html.php must keep the old name working until they migrate.
+        $alias_exists = class_exists('Djebel_App_HTML');
+
+        $this->assertTrue($alias_exists);
+
+        $escaped = Djebel_App_HTML::encodeEntities('<b>');
+
+        $this->assertEquals(Dj_App_HTML::encodeEntities('<b>'), $escaped);
     }
 }
