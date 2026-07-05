@@ -155,27 +155,29 @@ class Dj_App_String_Util
             // Keep alphanumeric chars, replace non-alphanumeric with _, prevent consecutive underscores
             $len = strlen($str);
             $chars = [];
-            $underscore_ord = 95;
 
             for ($i = 0; $i < $len; $i++) {
                 $char = $str[$i];
-                $prev_char = $i > 0 ? $chars[$i - 1] : '';
 
-                if (ord($char) === $underscore_ord) {
-                    if (ord($prev_char) === $underscore_ord) {
-                        continue;
-                    }
-
-                    $chars[] = '_';
-                } elseif (ctype_alnum($char)) {
+                // Hot path: most chars are alphanumeric — append and move on, nothing
+                // else is computed.
+                if (ctype_alnum($char)) {
                     $chars[] = $char;
-                } else {
-                    if (ord($prev_char) === $underscore_ord) {
-                        continue;
-                    }
-
-                    $chars[] = '_';
+                    continue;
                 }
+
+                // '_' and any junk char both become a single '_' — skip when the
+                // previous APPENDED char is already '_'. $chars can be shorter than $i
+                // (skipped chars don't append), so read the END of $chars, never
+                // $chars[$i - 1].
+                $chars_count = count($chars);
+                $prev_char = empty($chars_count) ? '' : $chars[$chars_count - 1];
+
+                if ($prev_char == '_') {
+                    continue;
+                }
+
+                $chars[] = '_';
             }
 
             $str = implode('', $chars);

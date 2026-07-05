@@ -221,6 +221,20 @@ class String_Util_Test extends TestCase {
         $this->assertEmpty($result);
     }
 
+    public function testFormatKeyWithCodeLikeJunk()
+    {
+        // Regression: extractMetaInfo can feed a CODE line here; the char loop skips
+        // chars, so $chars is shorter than $i — the old $chars[$i - 1] read past the end.
+        $result = Dj_App_String_Util::formatKey('if (empty(self');
+        $this->assertEquals('if_empty_self', $result);
+    }
+
+    public function testFormatKeyCollapsesConsecutiveJunkChars()
+    {
+        $result = Dj_App_String_Util::formatKey('a!! b');
+        $this->assertEquals('a_b', $result);
+    }
+
     public function testIsAlphaNumericExtWithValid()
     {
         $result = Dj_App_String_Util::isAlphaNumericExt('hello123');
