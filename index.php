@@ -318,6 +318,13 @@ class Dj_App_Config {
 
         // using INI_SCANNER_RAW because so we have any special chars like | preserved in the values.
         $env_vars = parse_ini_file($file, false, INI_SCANNER_RAW);
+
+        // A malformed ini file makes parse_ini_file return false — passing that to
+        // array_change_key_case() is a fatal TypeError, so bail on anything empty.
+        if (empty($env_vars)) {
+            return $data;
+        }
+
         $env_vars = array_change_key_case($env_vars, CASE_UPPER);
 
         if ($flags & self::INI_LOAD_SET_ENV) {
