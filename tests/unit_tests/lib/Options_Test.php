@@ -255,7 +255,7 @@ EOT;
         $options_obj = Dj_App_Options::getInstance();
         $options_obj->clear();
 
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $this->assertFileExists($app_ini_file);
 
         $app_ini = file_get_contents($app_ini_file);
@@ -356,7 +356,7 @@ EOT;
         $options_obj->clear();
 
         // Load actual app.ini test data
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $this->assertFileExists($app_ini_file);
 
         $app_ini = file_get_contents($app_ini_file);
@@ -482,7 +482,7 @@ EOT;
         $options_obj->clear();
 
         // Load actual app.ini
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $this->assertFileExists($app_ini_file);
 
         $app_ini = file_get_contents($app_ini_file);
@@ -554,7 +554,7 @@ EOT;
         $options_obj->clear();
 
         // Load actual app.ini with real plugins data
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $this->assertFileExists($app_ini_file);
 
         $app_ini = file_get_contents($app_ini_file);
@@ -685,7 +685,7 @@ EOT;
         $options_obj->clear();
 
         // Load app.ini which has keys with dashes: "djebel-static-content"
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $app_ini = file_get_contents($app_ini_file);
         $cfg = $options_obj->parseBuffer($app_ini);
         $options_obj->setData($cfg);
@@ -724,7 +724,7 @@ EOT;
         $options_obj->clear();
 
         // Test with actual app.ini file
-        $app_ini_file = dirname(__DIR__) . '/data/app.ini';
+        $app_ini_file = DJEBEL_APP_TEST_DATA_DIR . '/app.ini';
         $this->assertFileExists($app_ini_file);
 
         // Use parseIniFile() directly
