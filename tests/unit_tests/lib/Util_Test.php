@@ -1659,4 +1659,33 @@ META;
         $this->assertIsArray($result['self']);
     }
 
+    public function testGetCorePrivateDirBaseUnchangedWithoutParams()
+    {
+        $base = Dj_App_Util::getCorePrivateDir();
+
+        $this->assertNotEmpty($base);
+        // Cached — a second no-param call returns the same base.
+        $this->assertEquals($base, Dj_App_Util::getCorePrivateDir());
+    }
+
+    public function testGetCorePrivateDirAppSubAppendsUnderApp()
+    {
+        $base = Dj_App_Util::getCorePrivateDir();
+        $lib_dir = Dj_App_Util::getCorePrivateDir(['app' => 'lib']);
+        $plugins_dir = Dj_App_Util::getCorePrivateDir(['app' => 'plugins']);
+
+        $this->assertEquals($base . '/app/lib', $lib_dir);
+        $this->assertEquals($base . '/app/plugins', $plugins_dir);
+    }
+
+    public function testGetCorePrivateDirAppSubSanitizesTraversal()
+    {
+        $base = Dj_App_Util::getCorePrivateDir();
+        $dir = Dj_App_Util::getCorePrivateDir(['app' => '../../etc']);
+
+        // formatStringId strips traversal — the result can never escape base/app.
+        $this->assertStringNotContainsString('..', $dir);
+        $this->assertStringStartsWith($base . '/app/', $dir);
+    }
+
 }

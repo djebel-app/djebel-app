@@ -444,49 +444,56 @@ class Dj_App_Util {
      */
     public static function getCorePrivateDir($params = [])
     {
-        static $dir = null;
+        static $base_dir = null;
 
-        if (!is_null($dir)) {
-            return $dir;
-        }
+        // Resolve the base private dir once (the expensive scan/realpath); cache it.
+        if (is_null($base_dir)) {
+            $dir = Dj_App_Env::getEnvConst('DJEBEL_APP_PRIVATE_DIR');
 
-        $dir = Dj_App_Env::getEnvConst('DJEBEL_APP_PRIVATE_DIR');
+            if (empty($dir)) {
+                $priv_dir_name = Dj_App_Config::cfg('app.core.private_dir_name', '.ht_djebel');
+                $script_dir = Dj_App_Util::getScriptDir();
 
-        if (empty($dir)) {
-            $priv_dir_name = Dj_App_Config::cfg('app.core.private_dir_name', '.ht_djebel');
-            $script_dir = Dj_App_Util::getScriptDir();
+                // Scan from script dir up to find private dir (handles symlinks)
+                if (!empty($script_dir)) {
+                    $check_dirs = [
+                        $script_dir => 1,              // Script dir itself
+                        dirname($script_dir) => 1,     // One level up (site root)
+                        dirname($script_dir, 2) => 1,  // Two levels up
+                    ];
 
-            // Scan from script dir up to find private dir (handles symlinks)
-            if (!empty($script_dir)) {
-                $check_dirs = [
-                    $script_dir => 1,              // Script dir itself
-                    dirname($script_dir) => 1,     // One level up (site root)
-                    dirname($script_dir, 2) => 1,  // Two levels up
-                ];
+                    foreach ($check_dirs as $candidate_dir => $enabled) {
+                        if (empty($enabled)) {
+                            continue;
+                        }
 
-                foreach ($check_dirs as $candidate_dir => $enabled) {
-                    if (empty($enabled)) {
-                        continue;
+                        $check_path = $candidate_dir . '/' . $priv_dir_name;
+
+                        if (is_dir($check_path)) {
+                            $dir = $check_path;
+                            break;
+                        }
                     }
+                }
 
-                    $check_path = $candidate_dir . '/' . $priv_dir_name;
-
-                    if (is_dir($check_path)) {
-                        $dir = $check_path;
-                        break;
-                    }
+                // Fallback to original hardcoded path
+                if (empty($dir)) {
+                    $dir = Dj_App_Util::getSiteRootDir() . '/' . $priv_dir_name;
                 }
             }
 
-            // Fallback to original hardcoded path
-            if (empty($dir)) {
-                $dir = Dj_App_Util::getSiteRootDir() . '/' . $priv_dir_name;
-            }
+            // Resolve $HOME, ~/, symlinks etc.
+            $dir = Dj_App_File_Util::resolvePath($dir);
+            $base_dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_dir', $dir );
         }
 
-        // Resolve $HOME, ~/, symlinks etc.
-        $dir = Dj_App_File_Util::resolvePath($dir);
-        $dir = Dj_App_Hooks::applyFilter( 'app.config.djebel_private_dir', $dir );
+        $dir = $base_dir;
+
+        // Smart sub-location under app/, sanitized — ['app' => 'lib'] -> .ht_djebel/app/lib
+        if (!empty($params['app'])) {
+            $sub = Dj_App_String_Util::formatStringId($params['app']);
+            $dir = $base_dir . '/app/' . $sub;
+        }
 
         return $dir;
     }
