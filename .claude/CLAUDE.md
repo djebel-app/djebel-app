@@ -763,6 +763,11 @@ This is **Djebel**, a PHP-based CMS framework (v0.0.1) with a plugin-based archi
 - Conditional plugin loading based on URL patterns
 - Safe loading with `include_once` to prevent crashes
 
+**Plugin distribution model — the core stays pristine:**
+- **djebel-app itself never gains feature code.** Every feature ships as a plugin; do NOT add a feature into the core repo, ever.
+- A **distributable** plugin lives in its OWN git repo and is pulled into each site as a git submodule — never tracked in the consuming site's repo. Decide by *is it distributable / generic?*, not *who needed it first* ("created for site X" ≠ "belongs to site X").
+- Mechanics, naming tiers, and the fix-once-pull-everywhere workflow live once, in `docs/plugin-guide.md` (Public vs Private → Distribution). Don't restate them here.
+
 **Theme System** (`src/core/lib/themes.php`):
 - Dynamic theme loading and switching
 - Hook integration for theme lifecycle events
