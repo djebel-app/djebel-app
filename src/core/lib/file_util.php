@@ -289,17 +289,17 @@ class Dj_App_File_Util {
      *   getExt('file') => ''
      *   getExt('.htaccess') => 'htaccess'
      *
-     * @param string $path
+     * @param string $file
      * @return string
      */
-    public static function getExt($path)
+    public static function getExt($file)
     {
-        if (empty($path)) {
+        if (empty($file)) {
             return '';
         }
 
-        $path = (string) $path;
-        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        $file = (string) $file;
+        $ext = pathinfo($file, PATHINFO_EXTENSION);
         $ext = strtolower($ext);
 
         return $ext;
