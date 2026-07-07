@@ -86,6 +86,27 @@ Example — a private download counter named `dl`: dir `djebel-site-dl`, `text_d
 `site-` makes it obvious in the dir listing, the markup, and the CSS that this one isn't a
 distributable.
 
+## Distribution — one plugin, one repo, many sites
+
+A **distributable** plugin (public, above) lives in its **own git repo** — never inside a
+site's repo, and never inside djebel-app itself. **djebel-app stays pristine: the core never
+gains feature code.** Each site that uses the plugin pulls it in as a **git submodule** under
+that site's plugin dir (`dj-content/system_plugins/<plugin>` for a system plugin,
+`.../plugins/<plugin>` for a regular one), so every site shares one source of truth and no
+plugin code is ever committed into the site's own repo.
+
+- Decide the home by *is it distributable?*, not *who needed it first*. A plugin first built
+  because one site needed it is still distributable if it's generic — give it its own repo.
+- **Fix once, pull everywhere:** edit + commit + push from inside any site's submodule
+  checkout (the commit lands in the **plugin** repo); every other site then runs
+  `git submodule update --remote <plugin>` and bumps its pinned pointer.
+- Two gotchas: a submodule checks out **detached** — run `git checkout main` inside it before
+  committing, or the commit is orphaned; and each change is **two commits** — one in the
+  plugin repo (the fix), one in the site repo (the moved pointer). A site only sees the fix
+  once its pointer is bumped — that's the feature: each site pins a known-good version.
+- A genuinely **site-specific** plugin (`djebel-site-<name>`) is the exception — nothing to
+  distribute, so it stays in that one site's repo.
+
 ## Plugin Header
 
 The main file is `plugin.php` and opens with a header comment block. Note `plugin_uri` is the
