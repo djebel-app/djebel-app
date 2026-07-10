@@ -65,6 +65,16 @@ if ($app_load_options) {
     Dj_App_Hooks::doAction( 'app.core.options.loaded' );
 }
 
+// Dj_App_Lib (the lazy lib loader) — opt-in per app via `[app] load_libs` in app.ini; when the app
+// omits it the default comes from env/const (DJEBEL_APP_CORE_LOAD_LIBS) via cfg. The
+// app.core.load_libs filter overrides both. Default off. isEnabled() reads on/off/yes/no/1/0.
+$load_libs = $options_obj->get('app.load_libs', Dj_App_Config::cfg('app.core.load_libs'));
+$load_libs = Dj_App_Hooks::applyFilter('app.core.load_libs', $load_libs);
+
+if (Dj_App_Util::isEnabled($load_libs)) {
+    require_once $app_lib_dir . '/lib.php';
+}
+
 // should we run?
 $run_app = Dj_App_Config::cfg('app.core.run', true);
 $headless = Dj_App_Config::cfg('app.core.headless', false);
