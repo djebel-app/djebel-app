@@ -116,7 +116,7 @@ if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
             $extension = Dj_App_File_Util::getExt($path_info);
             $static_extensions = [ 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'css', 'js', 'ico', 'woff', 'woff2', 'ttf', 'eot', ];
 
-            if (in_array($extension, $static_extensions, true)) {
+            if (in_array($extension, $static_extensions)) {
                 http_response_code(404);
                 header('Content-Type: text/plain');
                 echo 'Djebel Error: Page Not Found (404)';
