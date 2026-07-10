@@ -1038,7 +1038,7 @@ Themes (same 2 tiers):                 djebel-<name>        dir, theme_uri, them
 CSS/id descriptors name the element by role, never abbreviated (`…-email-input`, not `…-e1`).
 Core framework CSS uses the reserved `dj-app-*` prefix; never reuse it in a plugin/theme.
 
-Full reference: `docs/plugin-guide.md` and `docs/theme-guide.md`.
+Full reference: `docs/developers/plugin-guide.md` and `docs/developers/theme-guide.md`.
 
 ---
 
