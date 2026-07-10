@@ -53,6 +53,21 @@ dev-only "recursive" operation):
 git submodule update --remote .ht_djebel/app/plugins/djebel-contact
 ```
 
+**Shared across sites?** The submodule is one working copy of a repo *other* sites also pin, so
+after you push the plugin's repo (above) every other site still points at the old commit — bump
+its pin there too:
+```bash
+cd <other site root>                                # another site that pins the same repo
+git submodule update --remote .ht_djebel/app/plugins/djebel-contact
+git add .ht_djebel/app/plugins/djebel-contact
+git commit -m "Bump djebel-contact"
+git push
+```
+Do it per site that uses it. Pin each site **independently** — a shared lib does *not* force
+every site onto the same commit: a stable site can stay on an older pin while another rides
+latest. For an *exact* commit instead of "latest `main`", `git fetch && git checkout <sha>`
+inside the submodule instead of `--remote`.
+
 ## Pin to a tag (release)
 
 Submodules pin to a **commit**; a tag is just the handle you use to land on one.
