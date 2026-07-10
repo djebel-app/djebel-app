@@ -17,6 +17,9 @@ $_SERVER['PORT'] = 443;
 
 putenv('DJEBEL_APP_CORE_RUN=0');
 
+// Enable Dj_App_Lib loading for the lib test suite.
+putenv('DJEBEL_APP_CORE_LOAD_LIBS=1');
+
 // Committed sample/fixture files used by the unit tests.
 define('DJEBEL_APP_TEST_DATA_DIR', __DIR__ . '/unit_tests/data');
 
