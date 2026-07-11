@@ -19,6 +19,7 @@ require_once $app_lib_dir . '/result.php';
 require_once $app_lib_dir . '/cache.php';
 require_once $app_lib_dir . '/hooks.php';
 require_once $app_lib_dir . '/request.php';
+require_once $app_lib_dir . '/log.php';
 
 $app_conf_dir = Dj_App_Util::getCoreConfDir();
 $config_env_file = Dj_App_Config::cfg('env_file', $app_conf_dir . '/.env');
