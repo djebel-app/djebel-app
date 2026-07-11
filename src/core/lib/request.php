@@ -26,11 +26,11 @@ class Dj_App_Request {
      * @var array
      * @see https://codex.wordpress.org/Function_Reference/wp_kses
      */
-    private $allowed_permissive_html_tags = array(
-        'a' => array(
+    private $allowed_permissive_html_tags = [
+        'a' => [
             'href' => [],
             'target' => [],
-        ),
+        ],
         'br' => [],
         'em' => [],
         'i' => [],
@@ -62,12 +62,18 @@ class Dj_App_Request {
         'h4' => [],
         'h5' => [],
         'h6' => [],
-    );
+    ];
 
     protected $data = null;
     protected $raw_data = [];
 
     private $request_data = [];
+
+    /**
+     * A unique id for the current request — generated on first read. See getRequestId().
+     * @var string
+     */
+    private $req_id = '';
 
     /**
      * Some sections of the code may pass state so it can be pulled from another spot.
@@ -270,8 +276,8 @@ class Dj_App_Request {
         }
 
         // Simple concatenation: prefix + web_path
-        $prefix_clean = !empty($prefix_to_web_prefix) ? Dj_App_Util::removeSlash($prefix_to_web_prefix) : '';
-        $web_path_clean = !empty($web_path) ? Dj_App_Util::removeSlash($web_path) : '';
+        $prefix_clean = empty($prefix_to_web_prefix) ? '' : Dj_App_Util::removeSlash($prefix_to_web_prefix);
+        $web_path_clean = empty($web_path) ? '' : Dj_App_Util::removeSlash($web_path);
         
         $result = $prefix_clean . $web_path_clean;
         $result = empty($result) ? '/' : $result;
@@ -375,9 +381,44 @@ class Dj_App_Request {
         // no need each sub class to define this method.
         if (is_null($instance)) {
             $instance = new static();
+
+            // Supply this request's id to any logger via the decoupled log filter seam. Registered
+            // here (once, on the singleton) so throwaway `new` instances don't each re-register.
+            Dj_App_Hooks::addFilter('app.core.log.req_id', [$instance, 'getRequestId']);
         }
 
         return $instance;
+    }
+
+    /**
+     * A unique id for the current request — generated and cached on first read so anything that
+     * tags a request (logs, headers, traces) can correlate its lines. Override it (e.g. from an
+     * upstream X-Request-Id) via setRequestId(). getInstance() registers this as the default
+     * supplier of the app.core.log.req_id filter, so the logger picks it up without coupling here.
+     * $req_obj = Dj_App_Request::getInstance();
+     * $req_obj->getRequestId();
+     * @return string
+     */
+    public function getRequestId()
+    {
+        if (empty($this->req_id)) {
+            $this->req_id = Dj_App_Util::generateHash();
+        }
+
+        return $this->req_id;
+    }
+
+    /**
+     * Sets the current request id (overrides the generated one); '' clears it.
+     * $req_obj->setRequestId($req_id);
+     * @param string $req_id
+     * @return string
+     */
+    public function setRequestId($req_id)
+    {
+        $this->req_id = $req_id;
+
+        return $this->req_id;
     }
 
     /**
@@ -405,7 +446,7 @@ class Dj_App_Request {
      * @return mixed
      */
     public function getRaw( $key, $default = '') {
-        $val = !empty($this->raw_data[$key]) ? $this->raw_data[$key] : $default;
+        $val = empty($this->raw_data[$key]) ? $default : $this->raw_data[$key];
         $val = Dj_App_String_Util::trim($val);
         return $val;
     }
@@ -530,7 +571,7 @@ class Dj_App_Request {
             return $default;
         }
 
-        $val = !empty($this->data[$key]) ? $this->data[$key] : $default;
+        $val = empty($this->data[$key]) ? $default : $this->data[$key];
 
         if ( $force_type & self::INT ) {
             $val = intval($val);
@@ -630,7 +671,7 @@ class Dj_App_Request {
 
             $data = trim( $data );
         } elseif ( is_array( $data ) ) {
-            $data = array_map( array( $this, 'sanitizeData' ), $data );
+            $data = array_map( [ $this, 'sanitizeData' ], $data );
         } elseif (is_null($data)) { // maybe it's run from the command line
             $data = '';
         } else {
@@ -1079,7 +1120,7 @@ CLEAR_AND_REDIRECT_HTML;
 
         // Different header is required for ajax and jsonp
         // see https://gist.github.com/cowboy/1200708
-        $callback = !empty($_REQUEST['callback']) ? preg_replace('/[^\w\$]/si', '', $_REQUEST['callback']) : false;
+        $callback = empty($_REQUEST['callback']) ? false : preg_replace('/[^\w\$]/si', '', $_REQUEST['callback']);
 
         if (!headers_sent()) {
             $this->sendCORS();
@@ -1197,7 +1238,8 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         if (empty($url)) {
-            $url = static::getInstance()->getRequestUrl();
+            $req_obj = static::getInstance();
+            $url = $req_obj->getRequestUrl();
         }
 
         $url = strip_tags( $url );
