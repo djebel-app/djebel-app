@@ -144,7 +144,7 @@ class Dj_App_Log {
         // it. Dj_App_Request registers as the default supplier; a plugin can override.
         $req_id = Dj_App_Hooks::applyFilter('app.core.log.req_id', '');
 
-        if (!empty($req_id) && strpos($label, $req_id) === false) {
+        if (!empty($req_id) && (strpos($label, $req_id) === false)) {
             $label = empty($label) ? "req:$req_id" : "$label req:$req_id";
         }
 
