@@ -155,10 +155,11 @@ class Dj_App_Util {
         if (is_scalar($data)) {
             $data_str = $data;
         } elseif (is_array($data)) {
-            $normalized = self::normalizeForSerialization($data);
+            $normalized = Dj_App_Util::normalizeForSerialization($data);
             ksort($normalized); // ensure consistent keys order
+            $data_str = Dj_App_Util::serialize($normalized);
         } else {
-            $data_str = self::serialize($data);
+            $data_str = Dj_App_Util::serialize($data);
         }
 
         $hash = sha1($data_str);
