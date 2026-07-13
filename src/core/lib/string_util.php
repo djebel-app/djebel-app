@@ -478,16 +478,18 @@ class Dj_App_String_Util
      * Dj_App_String_Util::jsonEncode();
      *
      * @param array|object $thing
-     * @param int $opts
+     * @param int $flags  json_encode() bitmask. Defaults to JSON_PRETTY_PRINT
+     *                    (human-readable — storage / logs). Pass 0 for compact
+     *                    output (an HTTP wire body, a cache/hash key).
      * @return string
      */
-    public static function jsonEncode( $thing, $opts = 1 ) {
-        $res = json_encode( $thing, defined( 'JSON_PRETTY_PRINT' ) ? JSON_PRETTY_PRINT : 0 );
+    public static function jsonEncode( $thing, $flags = JSON_PRETTY_PRINT ) {
+        $res = json_encode( $thing, $flags );
 
         // With php7+ encoding can/will fail if contents are not utf8 encoded.
         if ( empty( $res ) ) {
             $thing = Dj_App_String_Util::encodeUTF8( $thing );
-            $res = json_encode( $thing, defined( 'JSON_PRETTY_PRINT' ) ? JSON_PRETTY_PRINT : 0 );
+            $res = json_encode( $thing, $flags );
         }
 
         return $res;
