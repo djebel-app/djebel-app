@@ -572,6 +572,54 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertStringContainsString('test', $result);
     }
 
+    public function testJsonEncodeDefaultIsPrettyAndReadable()
+    {
+        // Default APP_DEFAULT_JSON_ENCODE_FLAGS: indented, literal Cyrillic
+        // (no \u escaping) and unescaped slashes.
+        $data = ['name' => 'Разбрах', 'url' => 'a/b'];
+        $result = Dj_App_String_Util::jsonEncode($data);
+
+        $this->assertStringContainsString("\n", $result);
+        $this->assertStringContainsString('Разбрах', $result);
+        $this->assertStringContainsString('a/b', $result);
+        $this->assertStringNotContainsString('\u04', $result);
+    }
+
+    public function testJsonEncodeCompactWithZeroFlags()
+    {
+        // flags=0 — compact wire body: no newline.
+        $data = ['name' => 'test', 'value' => 1];
+        $result = Dj_App_String_Util::jsonEncode($data, 0);
+
+        $this->assertStringNotContainsString("\n", $result);
+        $this->assertEquals('{"name":"test","value":1}', $result);
+    }
+
+    public function testJsonEncodeDefaultRoundTripsThroughDecode()
+    {
+        // The default flag change must stay decode-identical — the storage
+        // safety guarantee that let it become the default.
+        $data = ['name' => 'Разбрах', 'url' => 'http://x/y'];
+        $encoded = Dj_App_String_Util::jsonEncode($data);
+        $decoded = Dj_App_String_Util::jsonDecode($encoded);
+
+        $this->assertEquals($data, $decoded);
+    }
+
+    public function testJsonEncodeDefaultIsScriptInlineSafe()
+    {
+        // Injection-proof by construction: a value carrying </script> is
+        // hex-escaped (<…), so the default output can be inlined into a
+        // <script> block without a breakout — and still round-trips.
+        $data = ['evil' => "</script><script>alert(1)</script>"];
+        $encoded = Dj_App_String_Util::jsonEncode($data);
+
+        // No literal '<' anywhere → no tag (or </script>) can form. The
+        // round-trip proves the '<' was hex-escaped, not dropped.
+        $this->assertStringNotContainsString('<', $encoded);
+        $this->assertEquals($data, Dj_App_String_Util::jsonDecode($encoded));
+    }
+
     public function testJsonDecodeValidArray()
     {
         $json = '["item1","item2","item3"]';

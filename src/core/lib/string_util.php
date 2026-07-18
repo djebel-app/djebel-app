@@ -474,16 +474,39 @@ class Dj_App_String_Util
         return $page;
     }
 
+    // App-wide default json_encode() flags — pretty + legible, and injection-safe
+    // to inline into a <script> block or a single-quoted HTML attribute. (A
+    // DOUBLE-quoted attribute still needs esc_attr: JSON's own structural " are
+    // left literal by design — which also keeps substring/key searches on the
+    // JSON matching.) Decode-identical. Pass 0 for a compact wire body. Every
+    // flag below ships in PHP 5.3/5.4 — safe on the 7.4 floor.
+    const APP_DEFAULT_JSON_ENCODE_FLAGS =
+        // --- readable (PHP 5.4+) ---
+        JSON_PRETTY_PRINT           // indentation + newlines
+        | JSON_UNESCAPED_UNICODE    // unicode literal (Cyrillic readable; U+2028/9 still escaped)
+        | JSON_UNESCAPED_SLASHES    // "/" literal (URLs clean; can't form </ without an unescaped <)
+        // --- injection-proof (PHP 5.3+): hex-escape the HTML/JS metacharacters ---
+        | JSON_HEX_TAG              // escape < and > so </script> / <!-- can't form
+        | JSON_HEX_AMP              // escape & (no HTML-entity confusion)
+        | JSON_HEX_APOS             // escape ' so it can't close a single-quoted attribute
+        | JSON_HEX_QUOT;            // escape value " (defense-in-depth; structural " remain)
+
+    // Deliberately NOT included: JSON_UNESCAPED_LINE_TERMINATORS (PHP 7.1+). It
+    // emits U+2028 / U+2029 literally — those are JS line terminators, so one
+    // landing in a value inlined into a <script> breaks the JS and reopens an
+    // injection vector. Omitting it is EXACTLY why PHP keeps them escaped. Do
+    // NOT add it "for readability" — the escaped form round-trips identically.
+
     /**
      * Dj_App_String_Util::jsonEncode();
      *
      * @param array|object $thing
-     * @param int $flags  json_encode() bitmask. Defaults to JSON_PRETTY_PRINT
-     *                    (human-readable — storage / logs). Pass 0 for compact
-     *                    output (an HTTP wire body, a cache/hash key).
+     * @param int $flags  json_encode() bitmask. Defaults to
+     *                    self::APP_DEFAULT_JSON_ENCODE_FLAGS (pretty + legible
+     *                    unicode/slashes). Pass 0 for a compact wire body.
      * @return string
      */
-    public static function jsonEncode( $thing, $flags = JSON_PRETTY_PRINT ) {
+    public static function jsonEncode( $thing, $flags = self::APP_DEFAULT_JSON_ENCODE_FLAGS ) {
         $res = json_encode( $thing, $flags );
 
         // With php7+ encoding can/will fail if contents are not utf8 encoded.
