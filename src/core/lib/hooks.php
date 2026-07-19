@@ -967,11 +967,9 @@ class Dj_App_Hooks {
     {
         // Flush response + close connection BEFORE any deferred work runs, so the
         // user's browser disconnects immediately. Only meaningful for real HTTP
-        // requests — skip in CLI (PHPUnit, scripts) where there's no connection
-        // and finishRequest's ob_end_flush would close buffers it didn't open.
-        // Dj_App_Env::isWebRequest() returns true only when !isCli AND we have
-        // REQUEST_METHOD + REQUEST_URI in $_SERVER. class_exists guards against
-        // very-early shutdown calls before env.php / request.php have been loaded.
+        // requests — skip in CLI (PHPUnit, scripts), where there's no connection to
+        // close and buffers this code didn't open would be closed.
+        // class_exists guards a very-early shutdown, before the env class is loaded.
         $is_web_req = class_exists('Dj_App_Env', false) && Dj_App_Env::isWebRequest();
 
         if ($is_web_req && class_exists('Dj_App_Request', false)) {

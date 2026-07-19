@@ -49,7 +49,7 @@ class Dj_App_Lib {
 
             $lib_file = $lib_dir . '/' . $id . '/' . $entry_file;
 
-            // Absent = the graceful "load it if it's there" case — soft, like a missing plugin.php.
+            // Absent = the graceful "load it if it's there" case — soft, never an error.
             if (is_file($lib_file)) {
                 require_once $lib_file;
             }

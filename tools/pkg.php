@@ -336,7 +336,7 @@ try {
             $stub .= "?>"; // don't add new line so we don't break headers
         }
 
-        // Create the default stub from main.php entry point
+        // Create the default stub from the index.php entry point
         $default_stub = $phar->createDefaultStub('index.php');
         $stub .= $default_stub;
         $phar->setStub($stub); // Add the stub
