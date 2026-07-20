@@ -170,6 +170,16 @@ if ($condition){
    - Always add a space after the cast operator: `(string) $value`, `(int) $result`, `(array) $data`
    - This makes it immediately clear what data type the variable holds
 
+5c. **No redundant unit suffix in names**: drop `_secs` / `_bytes` when the unit is already
+   fixed by convention or by the API the value feeds:
+   - ❌ WRONG: `cache_ttl_secs`, `TIME_LIMIT_SECS`, `STREAM_CHUNK_SIZE_BYTES`
+   - ✅ CORRECT: `cache_ttl`, `TIME_LIMIT`, `STREAM_CHUNK_SIZE`
+   - TTLs, timeouts, `expires`, `max_age` are seconds everywhere; `set_time_limit()` and
+     `fread()` accept nothing else — the suffix restates what the name already implies
+   - KEEP the suffix only when the unit is a real choice the name must settle:
+     `retry_delay_ms`, `max_upload_mb`, `interval_days`
+   - Renaming a const is TWO-SIDED — grep every reference including readme/docs
+
 5b. **Arrays MUST have trailing comma and spaces**: Always add a trailing comma after the last element and spaces inside brackets:
    - ❌ WRONG: `$items = ['.', '..']` (no trailing comma, no spaces)
    - ❌ WRONG: `$data = ['key' => 'value']` (no trailing comma, no spaces)
