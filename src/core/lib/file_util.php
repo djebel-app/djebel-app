@@ -92,7 +92,7 @@ class Dj_App_File_Util {
      * @param array $params - ['flags' => FILE_APPEND] to pass custom flags
      * @return Dj_App_Result
      */
-    static public function write($file, $data, $params = [])
+    static public function write($file, $data, $extra_opts = [])
     {
         $res_obj = new Dj_App_Result();
         $tmp_file = '';
@@ -107,11 +107,14 @@ class Dj_App_File_Util {
 
             $buff = is_scalar($data) ? $data : json_encode($data, JSON_PRETTY_PRINT);
             $flags = LOCK_EX;
-            $input_flags = empty($params['flags']) ? 0 : $params['flags'];
+            $input_flags = empty($extra_opts['flags']) ? 0 : $extra_opts['flags'];
 
             if (!empty($input_flags)) {
                 $flags |= $input_flags;
             }
+
+            $secure = !empty($extra_opts['secure']);
+            $file_perm = $secure ? self::SECURE_FILE_PERM : self::DEFAULT_FILE_PERM;
 
             // Use temp file approach for existing files
             if (file_exists($file)) {
@@ -150,9 +153,11 @@ class Dj_App_File_Util {
                     throw new Dj_App_File_Util_Exception("Couldn't rename temp file", ['tmp_file' => $tmp_file, 'file' => $file]);
                 }
 
-                // Restore permissions
-                if (!empty($perms)) {
-                    $chmod_res = chmod($file, $perms);
+                // Secure writes force owner-only; otherwise keep the file's own perms.
+                $target_perm = $secure ? $file_perm : $perms;
+
+                if (!empty($target_perm)) {
+                    $chmod_res = chmod($file, $target_perm);
                 }
             } else {
                 // File doesn't exist, write directly
@@ -161,6 +166,8 @@ class Dj_App_File_Util {
                 if (empty($res)) {
                     throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
                 }
+
+                $chmod_res = chmod($file, $file_perm);
             }
 
             $res_obj->status = true;
@@ -189,7 +196,7 @@ class Dj_App_File_Util {
      * @param int $perm
      * @return Dj_App_Result
      */
-    public static function mkdir($dir, $perm = 0755) {
+    public static function mkdir($dir, $perm = self::DEFAULT_DIR_PERM) {
         $res_obj = new Dj_App_Result();
 
         try {
