@@ -105,7 +105,7 @@ class Dj_App_File_Util {
                 throw new Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
             }
 
-            $buff = is_scalar($data) ? $data : json_encode($data, JSON_PRETTY_PRINT);
+            $buff = is_scalar($data) ? $data : Dj_App_String_Util::jsonEncode($data);
             $flags = LOCK_EX;
             $input_flags = empty($extra_opts['flags']) ? 0 : $extra_opts['flags'];
 
@@ -244,7 +244,7 @@ class Dj_App_File_Util {
         }
 
         $path = (string) $path;
-        $path = trim($path);
+        $path = Dj_App_String_Util::trim($path);
 
         // convert backslashes first
         $path = str_replace('\\', '/', $path);
@@ -266,25 +266,25 @@ class Dj_App_File_Util {
      *   removeExt('/path/to/file.php') => '/path/to/file'
      *   removeExt('file.tar.gz') => 'file.tar'
      *   removeExt('file') => 'file'
-     * @param string $path
+     * @param string $file
      * @return string
      */
-    public static function removeExt($path)
+    public static function removeExt($file)
     {
-        if (empty($path)) {
+        if (empty($file)) {
             return '';
         }
 
-        $path = (string) $path;
-        $ext = pathinfo($path, PATHINFO_EXTENSION);
+        $file = (string) $file;
+        $ext = pathinfo($file, PATHINFO_EXTENSION);
 
         if (empty($ext)) {
-            return $path;
+            return $file;
         }
 
         $ext_len = strlen($ext);
         $dot_and_ext_len = $ext_len + 1;
-        $result = substr($path, 0, -$dot_and_ext_len);
+        $result = substr($file, 0, -$dot_and_ext_len);
 
         return $result;
     }
@@ -437,7 +437,8 @@ class Dj_App_File_Util {
             $home_dir = getenv('HOME');
 
             if (!empty($home_dir)) {
-                $path = str_replace([ '${HOME}', '$HOME', ], $home_dir, $path);
+                $home_placeholders = [ '${HOME}', '$HOME', ];
+                $path = str_replace($home_placeholders, $home_dir, $path);
             }
         }
 
