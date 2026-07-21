@@ -32,6 +32,27 @@ class Dj_App_Request_Test extends TestCase
      * Test web path detection with HTTP_X_FORWARDED_PREFIX header
      * This is the primary method for modern proxy setups
      */
+    public function testAddUrlParamAliasMatchesAddQueryParam()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        // The alias must answer byte-identical URLs to the method it proxies.
+        $expected_url = Dj_App_Request::addQueryParam('page', 2, '/products');
+        $alias_url = $req_obj->addUrlParam('page', 2, '/products');
+
+        $this->assertSame($expected_url, $alias_url);
+        $this->assertStringContainsString('page=2', $alias_url);
+
+        $pairs = [ 'fmt' => 'zip', 'arch' => 'x64', ];
+
+        $expected_url = Dj_App_Request::addQueryParam($pairs, '/dl/oterm');
+        $alias_url = $req_obj->addUrlParam($pairs, '/dl/oterm');
+
+        $this->assertSame($expected_url, $alias_url);
+        $this->assertStringContainsString('fmt=zip', $alias_url);
+        $this->assertStringContainsString('arch=x64', $alias_url);
+    }
+
     public function testWebPathDetectionWithForwardedPrefix()
     {
         // Test with single prefix

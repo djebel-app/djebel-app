@@ -1272,6 +1272,23 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Alias of addQueryParam() with the same signatures — reads consistently in
+     * instance-call style next to the object's other methods.
+     * $req_obj->addUrlParam('page', 2, $url);
+     * $req_obj->addUrlParam([ 'page' => 2, 'sort' => 'asc', ], $url);
+     * @param string|array $key
+     * @param string $val
+     * @param string $url
+     * @return string
+     */
+    public function addUrlParam($key, $val = '', $url = '')
+    {
+        $new_url = static::addQueryParam($key, $val, $url);
+
+        return $new_url;
+    }
+
+    /**
      * Dj_App_Request::removeQueryParam();
      * @param string|array $key
      * @param string $url
