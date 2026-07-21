@@ -1,6 +1,10 @@
 <?php
 
 class Dj_App_File_Util {
+    const DEFAULT_DIR_PERM  = 0700;
+    const DEFAULT_FILE_PERM = 0644;
+    const SECURE_FILE_PERM  = 0600;
+
     /**
      * Reads a file partially e.g. the first NN bytes.
      * Dj_App_File_Util::readFilePartially();
@@ -360,6 +364,45 @@ class Dj_App_File_Util {
 
         return $basename;
     }
+
+    /**
+     * Format a byte count into a human-readable size ('1.5 GB', '10 MB',
+     * '512 B').
+     * Dj_App_File_Util::formatSize();
+     *
+     * @param int $bytes
+     * @return string
+     */
+    public static function formatSize($bytes)
+    {
+        $bytes = (int) $bytes;
+
+        if ($bytes >= 1024 * 1024 * 1024) {
+            $gb = round($bytes / (1024 * 1024 * 1024), 1);
+            $size_fmt = "{$gb} GB";
+
+            return $size_fmt;
+        }
+
+        if ($bytes >= 1024 * 1024) {
+            $mb = round($bytes / (1024 * 1024), 1);
+            $size_fmt = "{$mb} MB";
+
+            return $size_fmt;
+        }
+
+        if ($bytes >= 1024) {
+            $kb = round($bytes / 1024, 1);
+            $size_fmt = "{$kb} KB";
+
+            return $size_fmt;
+        }
+
+        $size_fmt = "{$bytes} B";
+
+        return $size_fmt;
+    }
+
     /**
      * Resolve home directory placeholders in a path
      * Supports $HOME, ${HOME}, and ~/

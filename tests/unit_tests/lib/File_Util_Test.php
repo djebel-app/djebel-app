@@ -539,4 +539,39 @@ class Dj_App_File_Util_Test extends TestCase {
         $result = Dj_App_File_Util::normalizeExt($ext);
         $this->assertEquals('jpg', $result);
     }
+
+    public function testFormatSizeBytes() {
+        $this->assertEquals('0 B', Dj_App_File_Util::formatSize(0));
+        $this->assertEquals('512 B', Dj_App_File_Util::formatSize(512));
+        $this->assertEquals('1023 B', Dj_App_File_Util::formatSize(1023));
+    }
+
+    public function testFormatSizeKilobytes() {
+        // Exact unit boundary.
+        $this->assertEquals('1 KB', Dj_App_File_Util::formatSize(1024));
+        $this->assertEquals('1.5 KB', Dj_App_File_Util::formatSize(1536));
+        $this->assertEquals('8 KB', Dj_App_File_Util::formatSize(8192));
+    }
+
+    public function testFormatSizeMegabytes() {
+        // Exact unit boundary.
+        $this->assertEquals('1 MB', Dj_App_File_Util::formatSize(1048576));
+        $this->assertEquals('10 MB', Dj_App_File_Util::formatSize(10485760));
+
+        // A typical desktop build artifact lands in the tens of MB.
+        $this->assertEquals('36.9 MB', Dj_App_File_Util::formatSize(38700000));
+    }
+
+    public function testFormatSizeGigabytes() {
+        // Exact unit boundary.
+        $this->assertEquals('1 GB', Dj_App_File_Util::formatSize(1073741824));
+        $this->assertEquals('1.5 GB', Dj_App_File_Util::formatSize(1610612736));
+        $this->assertEquals('2 GB', Dj_App_File_Util::formatSize(2147483648));
+    }
+
+    public function testFormatSizeCastsNumericStrings() {
+        // Sizes read from JSON/config may arrive as numeric strings.
+        $this->assertEquals('2 KB', Dj_App_File_Util::formatSize('2048'));
+        $this->assertEquals('512 B', Dj_App_File_Util::formatSize('512'));
+    }
 }
