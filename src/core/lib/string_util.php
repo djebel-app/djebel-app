@@ -942,3 +942,55 @@ class Dj_App_String_Util
         return $cleaned;
     }
 }
+
+// Polyfills for the PHP 8.0 str_* functions — thin backfills so code that
+// calls the globals directly works on PHP < 8.0. Guarded, so PHP 8+ uses
+// the native built-ins.
+
+if (!function_exists('str_contains')) {
+    /**
+     * Polyfill for str_contains() on PHP < 8.0 — case-sensitive, native
+     * semantics (an empty needle is always contained). Dj_App_String_Util
+     * has a separate fuzzy, case-insensitive contains().
+     *
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    function str_contains($haystack, $needle) {
+        $result = $needle === '' || strpos($haystack, $needle) !== false;
+
+        return $result;
+    }
+}
+
+if (!function_exists('str_starts_with')) {
+    /**
+     * Polyfill for str_starts_with() on PHP < 8.0.
+     *
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    function str_starts_with($haystack, $needle) {
+        $result = strncmp($haystack, $needle, strlen($needle)) === 0;
+
+        return $result;
+    }
+}
+
+if (!function_exists('str_ends_with')) {
+    /**
+     * Polyfill for str_ends_with() on PHP < 8.0.
+     *
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    function str_ends_with($haystack, $needle) {
+        $result = substr($haystack, -strlen($needle)) === $needle;
+
+        return $result;
+    }
+}
+
