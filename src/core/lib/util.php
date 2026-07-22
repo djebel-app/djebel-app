@@ -2001,3 +2001,12 @@ class Dj_App_Exception extends \Exception
         return $this->_msg;
     }
 }
+
+/**
+ * A validation failure whose MESSAGE is SAFE to show the client (e.g. "Invalid
+ * channel", "Missing signature"). This is the ONLY exception type whose
+ * getMessage() may be surfaced to users — EVERY other exception must be answered
+ * with a GENERIC message, its real detail kept to the log. Carry a stable `code`
+ * (and any `http_code`) in the $data array, same as Dj_App_Exception.
+ */
+class Dj_App_Validation_Exception extends Dj_App_Exception {}
