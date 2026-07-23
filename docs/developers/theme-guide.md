@@ -83,6 +83,71 @@ The theme markup uses core-replaced placeholders — see `replaceMagicVars()` in
 pulled in through shortcodes like `[djebel_page_nav]`, so a theme stays pure layout/markup
 and never hard-codes content.
 
+A theme may register its own shortcodes from `functions.php` (loaded when the site sets
+`theme_load_functions = 1`) for composite blocks the markup can't express statically.
+Gotcha: a shortcode renderer's OUTPUT is never re-scanned for shortcodes — don't emit
+`[...]` tags from a renderer; keep plugin shortcodes literal in the template markup.
+
+## Whole-buffer manipulation (`app.page.full_content`)
+
+The ENTIRE rendered page passes through the `app.page.full_content` filter before output —
+core itself rides it for shortcode replacement and magic-var / asset-link rewriting. When a
+theme needs a site-specific tweak the static markup can't express, don't put PHP in the
+template — add a focused listener in `functions.php` and change ONLY the specific case via
+the filter. Templates stay static markup; the dynamic exception lives in one method.
+
+Rules for a buffer filter:
+
+- Cheapest checks first — early-return so the common case pays nearly nothing.
+- Parse only the region you need (e.g. the first 100 chars for the `<html>` tag), then
+  reassemble the buffer.
+- Always return the buffer — unchanged on any no-match or `preg_*` error.
+
+Example — the template ships static `<html lang="en">`; the theme class rewrites the
+attribute only when the site's `[site] lang` config differs:
+
+```php
+// functions.php — inside the theme class's register()
+Dj_App_Hooks::addFilter('app.page.full_content', [ $this, 'filterHtmlLang' ]);
+
+public function filterHtmlLang($buff, $ctx = [])
+{
+    if (empty($buff)) {
+        return $buff;
+    }
+
+    $options_obj = Dj_App_Options::getInstance();
+    $site_lang = $options_obj->get('site.lang', 'en');
+
+    // The theme markup already ships lang="en"
+    if ($site_lang == 'en') {
+        return $buff;
+    }
+
+    // The <html> tag sits at the very start — parse only the first 100 chars.
+    $head_chunk = substr($buff, 0, 100);
+
+    if (stripos($head_chunk, '<html') === false) {
+        return $buff;
+    }
+
+    $site_lang_esc = Djebel_App_HTML::escAttr($site_lang);
+
+    // Matches lang="..." inside the opening <html ...> tag; replaces only the value.
+    $replacement = '${1}' . $site_lang_esc . '${2}';
+    $new_head_chunk = preg_replace('#(<html\b[^>]*\blang=")[^"]*(")#i', $replacement, $head_chunk, 1);
+
+    if (empty($new_head_chunk) || $new_head_chunk == $head_chunk) {
+        return $buff;
+    }
+
+    $rest_chunk = substr($buff, 100);
+    $buff = $new_head_chunk . $rest_chunk;
+
+    return $buff;
+}
+```
+
 ## Legacy themes (migrate later)
 
 The `clear` theme's `text_domain` is already on the Tier 2 form (`djebel-theme-clear`). Still
