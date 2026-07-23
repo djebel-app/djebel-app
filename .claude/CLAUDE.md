@@ -510,6 +510,26 @@ public function __toString() {
 - ✅ Use `get()` method for nested access - it's designed for dot notation!
 - ✅ Clean, simple, ZERO hacks
 
+### JSON responses go through `Dj_App_Result` + `Dj_App_Request::json()`
+
+Every JSON/API response is the Result struct — `{status, msg, code, data}` — with the
+payload under `data`. Build a Result, hand it to `json()`:
+```php
+$res_obj = new Dj_App_Result();
+$res_obj->status(true);
+$res_obj->data($payload);
+$req_obj->json($res_obj);
+```
+- `json()` serializes a Result (any `JsonSerializable`) via `jsonSerialize()` — the
+  strict struct ONLY. It must NEVER `(array)`-cast the object: that exports mangled
+  PRIVATE properties (`\0Dj_App_Result\0expected_system_keys_regex`, an internal regex)
+  straight onto the wire.
+- `Dj_App_Result::jsonSerialize()` is a WHITELIST (`status/msg/code/data`) — not
+  `get_object_vars($this)` + `unset`. A `private` prop is already excluded by
+  `json_encode`; `get_object_vars($this)` re-includes it, so the whitelist is the only
+  reliable "don't export this field" — no per-field maintenance, nothing leaks.
+- No raw-echo of a payload, no ad-hoc envelope, no per-endpoint exception — data in `data`.
+
 ### Security Through Simplicity
 
 18. **Clean, auditable code**: No magic, no hidden behavior
@@ -766,6 +786,9 @@ This is **Djebel**, a PHP-based CMS framework (v0.0.1) with a plugin-based archi
 - Supports priority-based hook execution
 - Tracks executed hooks for debugging
 - Core integration points: `app.core.init`, `app.page.content.render`, `app.core.theme.theme_loaded`
+- `app.page.full_content` — the ENTIRE rendered page buffer as a filter; core rides it for
+  shortcode replacement + magic-var/asset rewriting, and themes/plugins tweak specific cases
+  there (see `docs/developers/theme-guide.md` → Whole-buffer manipulation)
 
 **Plugin Architecture** (`src/core/lib/plugins.php`):
 - Multi-tier plugin loading: system → shared → regular → core admin
