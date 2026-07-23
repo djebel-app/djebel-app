@@ -97,4 +97,52 @@ class Dj_App_Result_Test extends TestCase {
 
         $this->assertEquals('404', $result_obj->code());
     }
+
+    public function testJsonSerializeReturnsOnlyTheSystemKeys()
+    {
+        $result_obj = new Dj_App_Result();
+        $result_obj->status(true);
+        $result_obj->data(['x' => 1]);
+
+        $struct = $result_obj->jsonSerialize();
+        $expected_keys = ['status', 'msg', 'code', 'data'];
+
+        $this->assertSame($expected_keys, array_keys($struct));
+    }
+
+    public function testJsonSerializeDoesNotExposePrivateMembers()
+    {
+        $result_obj = new Dj_App_Result();
+
+        $struct = $result_obj->jsonSerialize();
+
+        $this->assertArrayNotHasKey('expected_system_keys_regex', $struct);
+    }
+
+    public function testJsonEncodeDoesNotLeakPrivateFields()
+    {
+        $result_obj = new Dj_App_Result();
+        $result_obj->status(true);
+        $result_obj->data(['versions' => ['1.2.0' => ['channel' => 'stable']]]);
+
+        $json = json_encode($result_obj);
+
+        // A raw (array) cast would emit the mangled private property
+        // "\0Dj_App_Result\0expected_system_keys_regex" (an internal regex).
+        $this->assertStringNotContainsString('expected_system_keys_regex', $json);
+        $this->assertStringNotContainsString("\0", $json);
+    }
+
+    public function testJsonEncodePayloadLandsUnderTheDataKey()
+    {
+        $result_obj = new Dj_App_Result();
+        $result_obj->status(true);
+        $result_obj->data(['versions' => ['1.2.0' => ['channel' => 'stable']]]);
+
+        $decoded = json_decode(json_encode($result_obj), true);
+
+        $this->assertTrue($decoded['status']);
+        $this->assertArrayHasKey('data', $decoded);
+        $this->assertSame(['1.2.0' => ['channel' => 'stable']], $decoded['data']['versions']);
+    }
 }
