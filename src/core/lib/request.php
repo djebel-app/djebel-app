@@ -1115,7 +1115,15 @@ CLEAR_AND_REDIRECT_HTML;
             'data' => [],
         ];
 
-        $struct = array_replace_recursive($default_struct, (array) $struct);
+        // A Result (or any JsonSerializable) serializes through jsonSerialize() — its
+        // STRICT struct only, no private members. A raw (array) cast would export the
+        // private properties too (mangled "\0Class\0prop" keys — e.g. an internal
+        // regex), which has no business on the wire.
+        if ($struct instanceof \JsonSerializable) {
+            $struct = (array) $struct->jsonSerialize();
+        }
+
+        $struct = array_replace_recursive($default_struct, $struct);
         $struct['status'] = (bool) $struct['status'];
 
         // Different header is required for ajax and jsonp
