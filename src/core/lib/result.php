@@ -347,20 +347,25 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     }
 
     /**
-     * This gets called when the object is about to be serialized.
-     * For some odd reason the private members also end up into the JSON?!?
-     * We'll have to remove them manually as they are not useful.
-     * @see https://stackoverflow.com/questions/7005860/php-json-encode-class-private-members
-     *
-     * JsonSerializable interface method - suppress deprecation notice for return type compatibility
-     * PHP 8.1+ expects mixed return type, but we need to maintain PHP 7.x compatibility
+     * JsonSerializable — a Result serializes to the STRICT STRUCT and nothing else.
+     * A WHITELIST (not get_object_vars) is deliberate: only these system keys ever
+     * reach the wire, so no private/helper member (the keys regex, or any field added
+     * later) can leak — visibility stops mattering and there is no per-field unset to
+     * maintain. In PHP, a private property is already excluded by json_encode; the old
+     * get_object_vars($this) re-introduced it, which this avoids entirely.
+     * PHP 8.1+ expects a mixed return type; #[ReturnTypeWillChange] keeps PHP 7.x compat.
      * @return array
      */
     #[\ReturnTypeWillChange]
     public function jsonSerialize() {
-        $vars = get_object_vars($this);
-        unset($vars['expected_system_keys_regex']);
-        return $vars;
+        $struct = [
+            'status' => $this->status,
+            'msg' => $this->msg,
+            'code' => $this->code,
+            'data' => $this->data,
+        ];
+
+        return $struct;
     }
 
     // ArrayAccess interface methods
