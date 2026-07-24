@@ -788,7 +788,7 @@ class Dj_App_Hooks {
         }
     }
 
-    public static function getActions(): array
+    public static function getActions()
     {
         return self::$actions;
     }
@@ -811,7 +811,7 @@ class Dj_App_Hooks {
         self::$actions = $actions;
     }
 
-    public static function getFilters(): array
+    public static function getFilters()
     {
         return self::$filters;
     }
@@ -897,7 +897,7 @@ class Dj_App_Hooks {
         return true;
     }
 
-    public static function getNotices(): array
+    public static function getNotices()
     {
         return self::$notices;
     }

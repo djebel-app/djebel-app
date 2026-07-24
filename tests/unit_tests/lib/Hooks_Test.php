@@ -1867,21 +1867,28 @@ class Dj_App_Hooks_Test extends TestCase {
     public function testSetFiltersSortsPriorities() {
         $hook = 'app/test/sort/set_filters';
 
-        // Deliberately unsorted priority keys — the bulk setter must establish
-        // the sorted invariant because the fire path no longer sorts.
-        $injected_filters = [
-            $hook => [
-                30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
-                10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
-                20 => [ 'cb_b' => ['Dj_App_Hooks_Test', 'orderFilterB'], ],
-            ],
-        ];
-        Dj_App_Hooks::setFilters($injected_filters);
+        try {
+            // Bulk-replacing the GLOBAL filters table — save it and restore in finally,
+            // otherwise listeners registered earlier in the process (e.g. by singletons
+            // on first getInstance()) are lost for every later test.
+            $saved_filters = Dj_App_Hooks::getFilters();
 
-        $result = Dj_App_Hooks::applyFilter($hook, '');
-        $this->assertEquals('ABC', $result);
+            // Deliberately unsorted priority keys — the bulk setter must establish
+            // the sorted invariant because the fire path no longer sorts.
+            $injected_filters = [
+                $hook => [
+                    30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
+                    10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
+                    20 => [ 'cb_b' => ['Dj_App_Hooks_Test', 'orderFilterB'], ],
+                ],
+            ];
+            Dj_App_Hooks::setFilters($injected_filters);
 
-        Dj_App_Hooks::setFilters();
+            $result = Dj_App_Hooks::applyFilter($hook, '');
+            $this->assertEquals('ABC', $result);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
     }
 
     // ============================================================
@@ -1891,30 +1898,38 @@ class Dj_App_Hooks_Test extends TestCase {
     public function testApplyFilterNonCallableAddsNoticeAndChainContinues() {
         $hook = 'app/test/notice/bad_callback';
 
-        // A non-callable can only enter via setFilters() — addFilter() validates.
-        $injected_filters = [
-            $hook => [
-                10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
-                20 => [ 'cb_bad' => ['No_Such_Class_Xyz', 'nope'], ],
-                30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
-            ],
-        ];
-        Dj_App_Hooks::setFilters($injected_filters);
-        Dj_App_Hooks::setNotices();
+        try {
+            // Bulk-replacing the GLOBAL filters + notices tables — save and restore
+            // in finally so earlier-registered listeners survive for later tests.
+            $saved_filters = Dj_App_Hooks::getFilters();
+            $saved_notices = Dj_App_Hooks::getNotices();
 
-        $result = Dj_App_Hooks::applyFilter($hook, '');
+            // A non-callable can only enter via setFilters() — addFilter() validates.
+            $injected_filters = [
+                $hook => [
+                    10 => [ 'cb_a' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
+                    20 => [ 'cb_bad' => ['No_Such_Class_Xyz', 'nope'], ],
+                    30 => [ 'cb_c' => ['Dj_App_Hooks_Test', 'orderFilterC'], ],
+                ],
+            ];
+            Dj_App_Hooks::setFilters($injected_filters);
+            Dj_App_Hooks::setNotices();
 
-        // Both valid callbacks ran and the value chained through them.
-        $this->assertEquals('AC', $result);
+            $result = Dj_App_Hooks::applyFilter($hook, '');
 
-        $notices = Dj_App_Hooks::getNotices();
-        $this->assertCount(1, $notices);
-        $this->assertStringContainsString($hook, $notices[0]['message']);
-        $this->assertStringContainsString('No_Such_Class_Xyz::nope', $notices[0]['message']);
-        $this->assertEquals($hook, $notices[0]['ctx']['hook_name']);
-        $this->assertEquals('No_Such_Class_Xyz::nope', $notices[0]['ctx']['callback']);
+            // Both valid callbacks ran and the value chained through them.
+            $this->assertEquals('AC', $result);
 
-        Dj_App_Hooks::setFilters();
+            $notices = Dj_App_Hooks::getNotices();
+            $this->assertCount(1, $notices);
+            $this->assertStringContainsString($hook, $notices[0]['message']);
+            $this->assertStringContainsString('No_Such_Class_Xyz::nope', $notices[0]['message']);
+            $this->assertEquals($hook, $notices[0]['ctx']['hook_name']);
+            $this->assertEquals('No_Such_Class_Xyz::nope', $notices[0]['ctx']['callback']);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+            Dj_App_Hooks::setNotices($saved_notices);
+        }
     }
 
     public function testApplyFilterQuickReturnStillWins() {
