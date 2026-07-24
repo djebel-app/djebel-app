@@ -24,13 +24,14 @@ require_once $app_lib_dir . '/log.php';
 $app_conf_dir = Dj_App_Util::getCoreConfDir();
 $config_env_file = Dj_App_Config::cfg('env_file', $app_conf_dir . '/.env');
 
-$app_env = Dj_App_Config::cfg('env'); // env specific conf?
+// Env specific conf? One file per env: .env_<env> fully replaces .env when it exists.
+$app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
 
 if (!empty($app_env)) {
     $app_env_fmt = Dj_App_String_Util::formatStringId($app_env);
     $config_env_file_alt = $app_conf_dir . '/.env_' . $app_env_fmt;
 
-    if (file_exists($config_env_file)) {
+    if (file_exists($config_env_file_alt)) {
         $config_env_file = $config_env_file_alt;
     }
 }
