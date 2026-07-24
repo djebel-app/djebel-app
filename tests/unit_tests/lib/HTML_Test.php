@@ -597,4 +597,71 @@ class Dj_App_HTML_Test extends TestCase {
 
         $this->assertEquals(Dj_App_HTML::encodeEntities('<b>'), $escaped);
     }
+
+    public static function interceptAppExit($ctx)
+    {
+        throw new Exception('dj_app_exit_intercepted');
+    }
+
+    /**
+     * renderPage() smart params: an array in the title slot is the options array;
+     * its optional title key becomes the page title and the page renders fully.
+     */
+    public function testRenderPageAcceptsOptionsArrayAsSecondParam()
+    {
+        Dj_App_Hooks::addAction('app.exit', ['Dj_App_HTML_Test', 'interceptAppExit']);
+        ob_start();
+
+        $buff = '';
+        $exit_msg = '';
+
+        try {
+            $smart_options = [
+                'status_code' => 404,
+                'title' => 'Smart Options Title',
+            ];
+
+            Dj_App_HTML::renderPage('Array options render test content', $smart_options);
+        } catch (Exception $e) {
+            $exit_msg = $e->getMessage();
+        } finally {
+            $buff = ob_get_clean();
+            Dj_App_Hooks::removeAction('app.exit', ['Dj_App_HTML_Test', 'interceptAppExit']);
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->resetContentOutput();
+        }
+
+        $this->assertEquals('dj_app_exit_intercepted', $exit_msg);
+        $this->assertStringContainsString('Smart Options Title', $buff);
+        $this->assertStringContainsString('Array options render test content', $buff);
+        $this->assertStringContainsString('</html>', $buff);
+    }
+
+    /**
+     * A non-scalar, non-array title (object etc.) is incorrect use — loud failure.
+     */
+    public function testRenderPageThrowsOnObjectTitle()
+    {
+        $buff = '';
+        $exception_obj = null;
+
+        try {
+            ob_start();
+            $bad_title = new stdClass();
+            Dj_App_HTML::renderPage('Object title test content', $bad_title);
+        } catch (Dj_App_Exception $e) {
+            $exception_obj = $e;
+        } finally {
+            $buff = ob_get_clean();
+        }
+
+        $this->assertNotNull($exception_obj);
+
+        $exception_data = $exception_obj->getData();
+        $this->assertEquals('core.html.render_page.invalid_title', $exception_data['code']);
+
+        // The guard fires before any rendering starts.
+        $this->assertEmpty($buff);
+    }
 }
