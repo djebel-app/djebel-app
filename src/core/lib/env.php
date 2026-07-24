@@ -17,7 +17,10 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isWindows() {
-        return preg_match('#win#si', PHP_OS);
+        // PHP_OS_FAMILY (php 7.2+) is exact — matching 'win' inside PHP_OS also hits Darwin (macOS).
+        $is_windows = PHP_OS_FAMILY == 'Windows';
+
+        return $is_windows;
     }
 
     /**
