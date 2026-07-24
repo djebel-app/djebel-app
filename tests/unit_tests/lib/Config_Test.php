@@ -30,16 +30,18 @@ class Dj_App_Config_Test extends TestCase
         $this->assertSame([], $result);
     }
 
-    public function testLoadIniFileSetsEnvVarsUppercased()
+    public function testLoadIniFileReturnsParsedData()
     {
         $env_file = DJEBEL_APP_TEST_DATA_DIR . '/config_env.ini';
 
-        Dj_App_Config::loadIniFile($env_file);
+        $result = Dj_App_Config::loadIniFile($env_file);
 
-        // The fixture key is lowercase — keys are uppercased before putenv.
-        $env_val = getenv('DJEBEL_CONFIG_TEST_KEY');
-        $this->assertEquals('cfg_val_1', $env_val);
+        // Pure loader: keys come back as parsed, untouched; no env side effects —
+        // applying them is Dj_App_Env::set()'s job.
+        $this->assertArrayHasKey('djebel_config_test_key', $result);
+        $this->assertEquals('cfg_val_1', $result['djebel_config_test_key']);
 
-        putenv('DJEBEL_CONFIG_TEST_KEY');
+        $env_val = Dj_App_Env::getEnv('djebel_config_test_key');
+        $this->assertEmpty($env_val);
     }
 }
