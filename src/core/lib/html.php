@@ -261,6 +261,24 @@ class Dj_App_HTML {
 	 * Dj_App_HTML::renderPage($content, $title, $options);
 	 */
 	public static function renderPage($content, $title = '', $options = []) {
+        // Smart params: the 2nd arg may carry the options array instead of a title.
+        if (is_array($title)) {
+            $options = $title;
+            $title = empty($options['title']) ? '' : $options['title'];
+        }
+
+        // Anything else non-scalar (object etc.) is incorrect use — fail loudly.
+        if (!is_scalar($title)) {
+            $title_type = gettype($title);
+
+            $exception_data = [
+                'code' => 'core.html.render_page.invalid_title',
+                'title_type' => $title_type,
+            ];
+
+            throw new Dj_App_Exception('Invalid renderPage title', $exception_data);
+        }
+
 		// Auto-detect error pages and set appropriate styling
         $title = empty($title) ? Dj_App::NAME : $title;
 		$is_error_page = !empty($options['status_code']) && $options['status_code'] >= 400;
@@ -303,7 +321,7 @@ class Dj_App_HTML {
 		<head>
 			<meta charset="UTF-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<title><?php echo htmlspecialchars($title); ?></title>
+			<title><?php echo Dj_App_HTML::escHtml($title); ?></title>
 			<style>
 				* { margin: 0; padding: 0; box-sizing: border-box; }
 				body { 
