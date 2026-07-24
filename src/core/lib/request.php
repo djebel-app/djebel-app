@@ -714,7 +714,7 @@ class Dj_App_Request {
 
     /**
      * Checks if current request is HEAD
-     * Uses early returns and first char check for efficiency
+     * Uses early returns for efficiency
      *
      * @return bool True if HEAD request
      */
@@ -725,13 +725,10 @@ class Dj_App_Request {
         }
 
         $req_method = $_SERVER['REQUEST_METHOD'];
-        $req_char = substr($req_method, 0, 1);
 
-        if (strcasecmp($req_char, 'h') != 0) {
-            return false;
-        }
+        $is_head = strcasecmp($req_method, 'head') == 0;
 
-        return strcasecmp($req_method, 'head') == 0;
+        return $is_head;
     }
 
     /**
@@ -745,13 +742,10 @@ class Dj_App_Request {
         }
 
         $req_method = $_SERVER['REQUEST_METHOD'];
-        $req_char = substr($req_method, 0, 1);
 
-        if (strcasecmp($req_char, 'g') != 0) {
-            return false;
-        }
+        $is_get = strcasecmp($req_method, 'get') == 0;
 
-        return strcasecmp($req_method, 'get') == 0;
+        return $is_get;
     }
 
     /**
@@ -765,9 +759,8 @@ class Dj_App_Request {
         }
 
         $req_method = $_SERVER['REQUEST_METHOD'];
-        $req_char = substr($req_method, 0, 1);
 
-        if (strcasecmp($req_char, 'p') != 0) {
+        if (strcasecmp($req_method, 'post') != 0) {
             return false;
         }
 
@@ -777,11 +770,7 @@ class Dj_App_Request {
             }
         }
 
-        if (strcasecmp($req_method, 'post') == 0) {
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
 
@@ -1407,7 +1396,7 @@ CLEAR_AND_REDIRECT_HTML;
 
     /**
      * Checks if current request is OPTIONS
-     * Uses early returns and first char check for efficiency
+     * Uses early returns for efficiency
      * Common in CORS preflight requests
      * 
      * @return bool True if OPTIONS request
@@ -1419,18 +1408,15 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $req_method = $_SERVER['REQUEST_METHOD'];
-        $req_char = substr($req_method, 0, 1);
 
-        if (strcasecmp($req_char, 'o') != 0) {
-            return false;
-        }
+        $is_options = strcasecmp($req_method, 'options') == 0;
 
-        return strcasecmp($req_method, 'options') == 0;
+        return $is_options;
     }
 
     /**
      * Checks if current request is HEAD method
-     * Uses early returns and first char check for efficiency
+     * Uses early returns for efficiency
      * 
      * @return bool True if HEAD request
      */
@@ -1441,13 +1427,10 @@ CLEAR_AND_REDIRECT_HTML;
         }
 
         $req_method = $_SERVER['REQUEST_METHOD'];
-        $req_char = substr($req_method, 0, 1);
 
-        if (strcasecmp($req_char, 'h') != 0) {
-            return false;
-        }
+        $is_head = strcasecmp($req_method, 'head') == 0;
 
-        return strcasecmp($req_method, 'head') == 0;
+        return $is_head;
     }
 
     /**

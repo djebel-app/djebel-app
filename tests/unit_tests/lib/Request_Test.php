@@ -53,6 +53,30 @@ class Dj_App_Request_Test extends TestCase
         $this->assertStringContainsString('arch=x64', $alias_url);
     }
 
+    public function testRequestMethodChecks()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $this->assertTrue($req_obj->isPost());
+        $this->assertFalse($req_obj->isGet());
+
+        // Same first letter as POST — must not pass isPost().
+        $_SERVER['REQUEST_METHOD'] = 'PUT';
+        $this->assertFalse($req_obj->isPost());
+
+        // Method checks are case-insensitive.
+        $_SERVER['REQUEST_METHOD'] = 'get';
+        $this->assertTrue($req_obj->isGet());
+
+        $_SERVER['REQUEST_METHOD'] = 'HEAD';
+        $this->assertTrue($req_obj->isHead());
+        $this->assertTrue($req_obj->isHeadMethod());
+
+        $_SERVER['REQUEST_METHOD'] = 'OPTIONS';
+        $this->assertTrue($req_obj->isOptionsMethod());
+    }
+
     public function testWebPathDetectionWithForwardedPrefix()
     {
         // Test with single prefix
