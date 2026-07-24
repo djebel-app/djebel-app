@@ -105,7 +105,6 @@ $req_obj = Dj_App_Request::getInstance();
 
 // if we're called about .css, .js that means it's missing but we don't need to handle them
 $app_process_missing_files = Dj_App_Config::cfg('app.core.process_missing_static_files', false);
-$app_load_admin = Dj_App_Config::cfg('app.core.process_missing_static_files', $app_process_missing_files);
 
 if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
     // Early 404 check for static assets (images, CSS, JS) to avoid unnecessary processing
