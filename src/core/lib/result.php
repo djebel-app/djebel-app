@@ -394,7 +394,7 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     }
 
     // Serialization methods (PHP 8.1+)
-    public function __serialize(): array {
+    public function __serialize() {
         $serialized = [
             'status' => $this->status,
             'msg' => $this->msg,
@@ -405,7 +405,7 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
         return $serialized;
     }
 
-    public function __unserialize(array $data): void {
+    public function __unserialize($data) {
         $this->status = empty($data['status']) ? false : $data['status'];
         $this->msg = empty($data['msg']) ? '' : $data['msg'];
         $this->code = empty($data['code']) ? '' : $data['code'];
