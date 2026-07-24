@@ -1688,4 +1688,43 @@ META;
         $this->assertStringStartsWith($base . '/app/', $dir);
     }
 
+    public static function interceptAppExit($ctx)
+    {
+        throw new Exception('dj_app_exit_intercepted');
+    }
+
+    /**
+     * die() smart params: the 2nd arg may carry the args array instead of a title;
+     * the error page still fully renders with the default title.
+     */
+    public function testDieAcceptsArgsArrayAsSecondParam()
+    {
+        Dj_App_Hooks::addAction('app.exit', ['Dj_App_Util_Test', 'interceptAppExit']);
+        ob_start();
+
+        $buff = '';
+        $exit_msg = '';
+
+        try {
+            $die_args = [
+                'code' => 404,
+            ];
+
+            Dj_App_Util::die('Smart param die test content', $die_args);
+        } catch (Exception $e) {
+            $exit_msg = $e->getMessage();
+        } finally {
+            $buff = ob_get_clean();
+            Dj_App_Hooks::removeAction('app.exit', ['Dj_App_Util_Test', 'interceptAppExit']);
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->resetContentOutput();
+        }
+
+        $this->assertEquals('dj_app_exit_intercepted', $exit_msg);
+        $this->assertStringContainsString('Smart param die test content', $buff);
+        $this->assertStringContainsString('Application Error', $buff);
+        $this->assertStringContainsString('</html>', $buff);
+    }
+
 }
