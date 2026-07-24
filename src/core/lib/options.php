@@ -648,7 +648,8 @@ class Dj_App_Options implements ArrayAccess, Countable {
      * Countable interface - allows count($options_obj)
      * @return int
      */
-    public function count(): int {
+    #[\ReturnTypeWillChange]
+    public function count() {
         return count($this->toArray());
     }
 
