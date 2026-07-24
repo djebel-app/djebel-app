@@ -26,7 +26,7 @@ class Dj_App_Env {
     }
 
     /**
-     * Determins if this is a dev environment.
+     * Determines if this is a dev environment.
      * Dj_App_Env::isDev();
      * @return bool
      */
@@ -75,7 +75,7 @@ class Dj_App_Env {
     }
 
     /**
-     * Returns true if the script runs on a windows machine.
+     * Returns true if the script runs from the command line (CLI).
      * Dj_App_Env::isCli();
      * @return bool
      */
@@ -86,7 +86,7 @@ class Dj_App_Env {
     }
 
     /**
-     * Returns true if the script runs on a windows machine.
+     * Returns true if the script runs as a web request.
      * Dj_App_Env::isWebRequest();
      * @return bool
      */
@@ -214,10 +214,10 @@ class Dj_App_Env {
      * Accepts CSV fallback keys — 'DJEBEL_APP_ENV,APP_ENV' — first non-empty wins.
      * Dj_App_Env::getEnvConst();
      * @param string $key
-     * @param mixed $defalt
+     * @param mixed $default
      * @return string
      */
-    public static function getEnvConst($key, $defalt = '')
+    public static function getEnvConst($key, $default = '')
     {
         $keys = [ $key, ];
 
@@ -242,7 +242,7 @@ class Dj_App_Env {
         }
 
         // strlen, not empty() — a legit '0' value must NOT fall through to the default.
-        $val = strlen($val) ? $val : $defalt;
+        $val = strlen($val) ? $val : $default;
 
         // Call replaceSystemVars from Dj_App_Config since it's available during bootstrap
         $val = Dj_App_Config::replaceSystemVars($val);
