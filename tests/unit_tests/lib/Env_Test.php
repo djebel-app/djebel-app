@@ -74,4 +74,37 @@ class Dj_App_Env_Test extends TestCase
         $result = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV', 'fallback');
         $this->assertSame('0', $result);
     }
+
+    public function testSetSingleKeyValue()
+    {
+        $result = Dj_App_Env::set('djebel_env_test_key', 'env_val_1');
+        $this->assertTrue($result);
+
+        $env_val = Dj_App_Env::getEnv('djebel_env_test_key');
+        $this->assertEquals('env_val_1', $env_val);
+
+        putenv('DJEBEL_ENV_TEST_KEY');
+    }
+
+    public function testSetArrayUppercasesKeys()
+    {
+        $env_vars = [ 'djebel_env_test_key' => 'env_val_2', ];
+
+        $result = Dj_App_Env::set($env_vars);
+        $this->assertTrue($result);
+
+        // Lowercase key — stored uppercased, which is how getEnv() finds it.
+        $env_val = Dj_App_Env::getEnv('djebel_env_test_key');
+        $this->assertEquals('env_val_2', $env_val);
+
+        putenv('DJEBEL_ENV_TEST_KEY');
+    }
+
+    public function testSetRejectsEmptyInput()
+    {
+        $env_vars = [];
+
+        $result = Dj_App_Env::set($env_vars);
+        $this->assertFalse($result);
+    }
 }

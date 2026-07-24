@@ -178,6 +178,33 @@ class Dj_App_Env {
     }
 
     /**
+     * Sets one or multiple env vars. First arg can be an array of key => value pairs.
+     * Keys are uppercased to match getEnv() lookups.
+     * Dj_App_Env::set();
+     * @param string|array $key
+     * @param string $val
+     * @return bool
+     */
+    public static function set($key, $val = '')
+    {
+        if (empty($key)) {
+            return false;
+        }
+
+        if (!is_array($key)) {
+            $key = [ $key => $val, ];
+        }
+
+        $env_vars = array_change_key_case($key, CASE_UPPER);
+
+        foreach ($env_vars as $env_key => $env_val) {
+            putenv($env_key . '=' . $env_val);
+        }
+
+        return true;
+    }
+
+    /**
      * Searches for a value in an environment variable or in a constant or defaults to a value.
      * Accepts CSV fallback keys — 'DJEBEL_APP_ENV,APP_ENV' — first non-empty wins.
      * Dj_App_Env::getEnvConst();
