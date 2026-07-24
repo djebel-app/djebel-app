@@ -279,12 +279,12 @@ class Dj_App_Shortcode {
         return $instance;
     }
 
-    public function getShortcodes(): array
+    public function getShortcodes()
     {
         return $this->shortcodes;
     }
 
-    public function setShortcodes(array $shortcodes): void
+    public function setShortcodes($shortcodes)
     {
         $this->shortcodes = $shortcodes;
     }
