@@ -456,7 +456,7 @@ class Dj_App_Request {
      * @param mixed $val
      * @return mixed
      */
-    public function set(string $key, $val) {
+    public function set($key, $val) {
         if (is_null($val)) {
             unset($this->data[$key]);
         } else {
@@ -1867,6 +1867,15 @@ CLEAR_AND_REDIRECT_HTML;
      * @param string $content Content to output (uses stored content if not provided)
      * @return void
      */
+    /**
+     * Resets the one-shot output guard so a test can render output again.
+     * @return void
+     */
+    public function resetContentOutput()
+    {
+        $this->content_output = false;
+    }
+
     public function outputContent($content = '')
     {
         if ($this->content_output) {
@@ -1914,7 +1923,7 @@ CLEAR_AND_REDIRECT_HTML;
     /**
      * @return array
      */
-    public function getDefaultHeaders(): array
+    public function getDefaultHeaders()
     {
         return $this->default_headers;
     }
@@ -1922,7 +1931,7 @@ CLEAR_AND_REDIRECT_HTML;
     /**
      * @param array $default_headers
      */
-    public function setDefaultHeaders(array $default_headers): void
+    public function setDefaultHeaders($default_headers)
     {
         $this->default_headers = $default_headers;
     }
