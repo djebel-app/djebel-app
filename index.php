@@ -36,6 +36,7 @@ if (!empty($app_env)) {
 }
 
 $env_cfg_data = Dj_App_Config::loadIniFile($config_env_file);
+Dj_App_Env::set($env_cfg_data);
 
 // Initialize global error handlers
 set_exception_handler(['Dj_App_Bootstrap', 'handleException']);
@@ -312,15 +313,14 @@ class Dj_App_Config {
         return $val;
     }
 
-    const INI_LOAD_SET_ENV = 2;
-
     /**
-     * Load an ini file and set the env vars.
+     * Load an ini file and return the parsed data. Applying values to the
+     * environment is the caller's job — Dj_App_Env::setEnvVars() owns env vars.
      * Dj_App_Config::loadIniFile()
-     * @param $file
+     * @param string $file
      * @return array
      */
-    public static function loadIniFile($file, $flags = self::INI_LOAD_SET_ENV) {
+    public static function loadIniFile($file) {
         $data = [];
 
         if (empty($file) || !file_exists($file)) {
@@ -330,19 +330,14 @@ class Dj_App_Config {
         // using INI_SCANNER_RAW because so we have any special chars like | preserved in the values.
         $env_vars = parse_ini_file($file, false, INI_SCANNER_RAW);
 
-        // A malformed ini file makes parse_ini_file return false — passing that to
-        // array_change_key_case() is a fatal TypeError, so bail on anything empty.
+        // A malformed ini file makes parse_ini_file return false (e.g. a '#'
+        // pseudo-comment with parens — '#' is NOT an ini comment); never leak that —
+        // this method always returns an array.
         if (empty($env_vars)) {
             return $data;
         }
 
-        $env_vars = array_change_key_case($env_vars, CASE_UPPER);
-
-        if ($flags & self::INI_LOAD_SET_ENV) {
-            foreach ($env_vars as $key => $val) {
-                putenv($key . '=' . $val);
-            }
-        }
+        return $env_vars;
     }
 
     /**
@@ -457,6 +452,11 @@ class Dj_App_Bootstrap {
             $log_res = error_log($log_entry, 3, $error_log_file);
         }
         
+        // Discard any partially rendered output so the error page renders alone.
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         $content = '<h1 class="djebel-app-error-title">Uncaught Exception</h1>';
         $content .= '<div class="djebel-app-error-message">' . htmlspecialchars($exception->getMessage()) . '</div>';
 
@@ -479,8 +479,15 @@ class Dj_App_Bootstrap {
         $options = [
             'status_code' => 500,
         ];
-        
-        Dj_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
+
+        // Last resort: the error page itself must never fail silently.
+        try {
+            Dj_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
+        } catch (Throwable $render_exception) {
+            $msg = $exception->getMessage();
+            $msg_esc = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
+            echo 'Djebel Error: ' . $msg_esc;
+        }
     }
 
     /**
@@ -489,13 +496,19 @@ class Dj_App_Bootstrap {
     public static function handleFatalError() {
         $error = error_get_last();
 
-        if (empty($error['type']) || !is_array($error)) {
+        // empty() safely covers null (no error occurred) and any shape without a type.
+        if (empty($error['type'])) {
             return;
         }
         
         if (in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
             $is_dev = Dj_App_Config::cfg('app.debug', false);
-            
+
+            // Discard any partially rendered output so the error page renders alone.
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
             $content = '<h1 class="djebel-app-error-title">Fatal Error</h1>';
             $content .= '<div class="djebel-app-error-message">' . htmlspecialchars($error['message']) . '</div>';
             
@@ -511,8 +524,15 @@ class Dj_App_Bootstrap {
             $options = [
                 'status_code' => 500,
             ];
-            
-            Dj_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
+
+            // Last resort: the error page itself must never fail silently.
+            try {
+                Dj_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
+            } catch (Throwable $render_exception) {
+                $msg = $error['message'];
+                $msg_esc = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
+                echo 'Djebel Fatal Error: ' . $msg_esc;
+            }
         }
     }
 
