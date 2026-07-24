@@ -9,7 +9,9 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isLinux() {
-        return preg_match('#linux#si', PHP_OS);
+        $is_linux = PHP_OS_FAMILY == 'Linux';
+
+        return $is_linux;
     }
 
     /**
