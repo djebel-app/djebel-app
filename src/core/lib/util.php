@@ -622,12 +622,19 @@ class Dj_App_Util {
     /**
      * Prints output and stops processing.
      * Dj_App_Util::die('Error message', 'Error title', ['code' => 500]);
+     * Dj_App_Util::die('Error message', ['code' => 404]);
      * @param string $content
-     * @param string $title
+     * @param string|array $title Smart param: the title or the $args array
      * @param array $args
      * @return void
      */
     public static function die($content, $title = '', $args = []) {
+        // Smart params: the 2nd arg may carry the args array instead of a title.
+        if (is_array($title)) {
+            $args = $title;
+            $title = empty($args['title']) ? '' : $args['title'];
+        }
+
         $code = empty($args['code']) ? 500 : (int) $args['code'];
         $content = Dj_App_Hooks::applyFilter('app.page.die.content', $content);
         
@@ -1980,7 +1987,7 @@ class Dj_App_Exception extends \Exception
     /**
      * @return string
      */
-    public function getErrorCode(): string
+    public function getErrorCode()
     {
         return $this->_error_code;
     }
@@ -1988,7 +1995,7 @@ class Dj_App_Exception extends \Exception
     /**
      * @param string $error_code
      */
-    public function setErrorCode(string $error_code): void
+    public function setErrorCode($error_code)
     {
         $this->_error_code = $error_code;
     }
@@ -1996,7 +2003,7 @@ class Dj_App_Exception extends \Exception
     /**
      * @return string
      */
-    public function getMsg(): string
+    public function getMsg()
     {
         return $this->_msg;
     }
