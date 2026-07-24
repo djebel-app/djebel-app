@@ -71,10 +71,9 @@ class Dj_App_Request_Test extends TestCase
 
         $_SERVER['REQUEST_METHOD'] = 'HEAD';
         $this->assertTrue($req_obj->isHead());
-        $this->assertTrue($req_obj->isHeadMethod());
 
         $_SERVER['REQUEST_METHOD'] = 'OPTIONS';
-        $this->assertTrue($req_obj->isOptionsMethod());
+        $this->assertTrue($req_obj->isOptions());
     }
 
     public function testWebPathDetectionWithForwardedPrefix()

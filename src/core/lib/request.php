@@ -1181,7 +1181,7 @@ CLEAR_AND_REDIRECT_HTML;
             }
         }
 
-        $is_options_request = $this->isOptionsMethod();
+        $is_options_request = $this->isOptions();
 
         // Access-Control headers are received during OPTIONS requests
         if ($is_options_request) {
@@ -1401,7 +1401,7 @@ CLEAR_AND_REDIRECT_HTML;
      * 
      * @return bool True if OPTIONS request
      */
-    public function isOptionsMethod()
+    public function isOptions()
     {
         if (empty($_SERVER['REQUEST_METHOD'])) {
             return false;
@@ -1412,25 +1412,6 @@ CLEAR_AND_REDIRECT_HTML;
         $is_options = strcasecmp($req_method, 'options') == 0;
 
         return $is_options;
-    }
-
-    /**
-     * Checks if current request is HEAD method
-     * Uses early returns for efficiency
-     * 
-     * @return bool True if HEAD request
-     */
-    public function isHeadMethod()
-    {
-        if (empty($_SERVER['REQUEST_METHOD'])) {
-            return false;
-        }
-
-        $req_method = $_SERVER['REQUEST_METHOD'];
-
-        $is_head = strcasecmp($req_method, 'head') == 0;
-
-        return $is_head;
     }
 
     /**
