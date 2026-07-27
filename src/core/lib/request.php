@@ -1092,9 +1092,23 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
-     * Sends JSON and exits
-     * @param array $struct
-     * @param array $params
+     * Sends JSON and exits.
+     *
+     * [http_code] sets the HTTP status. Without it this always replied 200, so every
+     * caller needing a 4xx/5xx had to call http_response_code() itself right before —
+     * which is how two sibling plugins each grew their own sendJson()/sendError()
+     * wrapper whose entire job was that one line. $params was already declared for
+     * options like this and had no implementation.
+     *
+     * [cache_control] sets the Cache-Control header — an error response usually wants
+     * `no-store`, since a cached 404 outlives whatever fixes it.
+     *
+     * Both are applied ONLY while the headers can still change. Once output has begun
+     * the status is fixed at 200, so a failure reported after that point reaches the
+     * client looking like a success; callers that can detect it should say so, because
+     * this method cannot.
+     * @param array|\JsonSerializable $struct
+     * @param array $params http_code, cache_control
      * @return void
      */
     public function json($struct = [], $params = []) {
@@ -1119,8 +1133,22 @@ CLEAR_AND_REDIRECT_HTML;
         // see https://gist.github.com/cowboy/1200708
         $callback = empty($_REQUEST['callback']) ? false : preg_replace('/[^\w\$]/si', '', $_REQUEST['callback']);
 
+        $http_code = empty($params['http_code']) ? 0 : (int) $params['http_code'];
+        $cache_control = empty($params['cache_control']) ? '' : $params['cache_control'];
+
         if (!headers_sent()) {
             $this->sendCORS();
+
+            // 0 means the caller did not ask for one — leave the status alone rather than
+            // forcing a 200, so an status set earlier by the caller still stands.
+            if ($http_code > 0) {
+                http_response_code($http_code);
+            }
+
+            if (!empty($cache_control)) {
+                header('Cache-Control: ' . $cache_control);
+            }
+
             $app_env = Dj_App_Config::cfg('env'); // env specific conf?
 
             // starts with prod
