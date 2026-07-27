@@ -1100,15 +1100,19 @@ CLEAR_AND_REDIRECT_HTML;
      * wrapper whose entire job was that one line. $params was already declared for
      * options like this and had no implementation.
      *
-     * [cache_control] sets the Cache-Control header — an error response usually wants
-     * `no-store`, since a cached 404 outlives whatever fixes it.
+     * [headers] is a plain name => value map applied as-is, so a caller sends whatever
+     * the response needs — Cache-Control, ETag, Last-Modified — without this method
+     * growing a named parameter per header. An empty value is SKIPPED, so a caller can
+     * build the map unconditionally and let the blanks fall out. Content-Type is not
+     * among them: json() owns that, and a caller overriding it would break the JSONP
+     * branch below.
      *
      * Both are applied ONLY while the headers can still change. Once output has begun
      * the status is fixed at 200, so a failure reported after that point reaches the
      * client looking like a success; callers that can detect it should say so, because
      * this method cannot.
      * @param array|\JsonSerializable $struct
-     * @param array $params http_code, cache_control
+     * @param array $params http_code, headers
      * @return void
      */
     public function json($struct = [], $params = []) {
@@ -1133,20 +1137,36 @@ CLEAR_AND_REDIRECT_HTML;
         // see https://gist.github.com/cowboy/1200708
         $callback = empty($_REQUEST['callback']) ? false : preg_replace('/[^\w\$]/si', '', $_REQUEST['callback']);
 
+        $headers = empty($params['headers']) ? [] : $params['headers'];
         $http_code = empty($params['http_code']) ? 0 : (int) $params['http_code'];
-        $cache_control = empty($params['cache_control']) ? '' : $params['cache_control'];
 
         if (!headers_sent()) {
             $this->sendCORS();
 
             // 0 means the caller did not ask for one — leave the status alone rather than
-            // forcing a 200, so an status set earlier by the caller still stands.
+            // forcing a 200, so a status set earlier by the caller still stands.
             if ($http_code > 0) {
                 http_response_code($http_code);
             }
 
-            if (!empty($cache_control)) {
-                header('Cache-Control: ' . $cache_control);
+            // Applied BEFORE the Content-Type below, so json() keeps the last word on the
+            // one header it owns. A value with a newline cannot smuggle a second header:
+            // PHP's header() rejects CRLF outright rather than emitting it.
+            foreach ($headers as $header_name => $header_value) {
+                // empty() on the NAME is fine — a header called "0" is not a thing.
+                if (empty($header_name)) {
+                    continue;
+                }
+
+                // ...but NOT on the VALUE: empty('0') is true, and "0" is a legitimate
+                // header value — Expires: 0 is the classic no-cache idiom, plus Age: 0
+                // and Content-Length: 0. empty() here would silently drop them. Only a
+                // blank or unset value means "the caller left this one out".
+                if (is_null($header_value) || $header_value === '') {
+                    continue;
+                }
+
+                header($header_name . ': ' . $header_value);
             }
 
             $app_env = Dj_App_Config::cfg('env'); // env specific conf?
