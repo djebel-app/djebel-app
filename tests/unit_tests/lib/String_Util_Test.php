@@ -1661,4 +1661,66 @@ class Dj_App_String_Util_Test extends TestCase {
         $result_true = Dj_App_String_Util::isEmail(true);
         $this->assertFalse($result_true);
     }
+
+    // encodeUTF8 is the recovery path jsonEncode() falls back to when json_encode()
+    // returns false on non-UTF8 input. It used utf8_encode(), which PHP 8.2 deprecated
+    // and PHP 9 REMOVES — so these pin the conversion itself, independently of which
+    // function performs it.
+
+    public function testEncodeUtf8ConvertsLatin1BytesToValidUtf8()
+    {
+        // 0xE9 is 'é' in ISO-8859-1 and is NOT valid UTF-8 on its own.
+        $latin1_text = "caf\xE9";
+
+        $encoded = Dj_App_String_Util::encodeUTF8($latin1_text);
+
+        $this->assertSame('café', $encoded);
+        $this->assertTrue(mb_check_encoding($encoded, 'UTF-8'));
+    }
+
+    public function testEncodeUtf8LeavesPlainAsciiUnchanged()
+    {
+        $ascii_text = 'oterm-1.2.0-linux-x64.zip';
+
+        $encoded = Dj_App_String_Util::encodeUTF8($ascii_text);
+
+        // ASCII is a subset of both encodings, so a round trip must be a no-op —
+        // otherwise every ordinary filename would be rewritten on the recovery path.
+        $this->assertSame($ascii_text, $encoded);
+    }
+
+    public function testEncodeUtf8RecursesIntoArrays()
+    {
+        $mixed_data = ['name' => "caf\xE9", 'nested' => ['x' => "na\xEFve"]];
+
+        $encoded = Dj_App_String_Util::encodeUTF8($mixed_data);
+
+        $this->assertSame('café', $encoded['name']);
+        $this->assertSame('naïve', $encoded['nested']['x']);
+    }
+
+    public function testEncodeUtf8RecursesIntoObjects()
+    {
+        $payload_obj = new stdClass();
+        $payload_obj->name = "caf\xE9";
+
+        $encoded = Dj_App_String_Util::encodeUTF8($payload_obj);
+
+        $this->assertSame('café', $encoded->name);
+    }
+
+    public function testEncodeUtf8MakesJsonEncodeSucceedOnLatin1Input()
+    {
+        $latin1_data = ['name' => "caf\xE9"];
+
+        // THE REASON THIS FUNCTION EXISTS: raw json_encode() cannot represent these
+        // bytes and returns false, which a caller then echoes as an empty body.
+        $this->assertFalse(json_encode($latin1_data));
+
+        $recovered_json = Dj_App_String_Util::jsonEncode($latin1_data);
+        $recovered_data = json_decode($recovered_json, true);
+
+        $this->assertNotEmpty($recovered_json);
+        $this->assertSame('café', $recovered_data['name']);
+    }
 }
