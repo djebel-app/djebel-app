@@ -7,6 +7,9 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     const CONVERT_DATA_KEYS_TO_UPPER_CASE = 16;
 
     // Allowed extra chars when sanitizing the error code (alphanumeric + underscore).
+    // NO LONGER READ: code() now formats via Dj_App_String_Util::formatStringId(), which
+    // owns its own allowed-character set. Left in place rather than deleted — say the
+    // word and it goes.
     const CODE_EXTRA_ALLOWED_CHARS = [ '_', ];
 
     // I put them as public even though I need them private.
@@ -82,11 +85,19 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
      */
     public function code( $code = '' ) {
         if ( ! empty( $code ) ) {
-            // Sanitize via the shared helper — fast-paths clean input, regex only on dirty.
-            $code = Dj_App_String_Util::sanitizeAlphaNumericExt($code, self::CODE_EXTRA_ALLOWED_CHARS);
-
-            $code = trim( $code, '_- ' );
-            $code = strtoupper($code);
+            // ONE shared formatter, not a hand-rolled sanitize/trim/case chain here.
+            // formatStringId() already does every step a code needs: replaces anything
+            // that is not allowed, collapses repeated separators, trims stray -_. from
+            // the edges, and lowercases.
+            //
+            // ALLOW_DOT is the whole reason a flag is passed. Codes are written
+            // app.<module>.<name> (app.oterm.dl.unknown_endpoint), so the dot is the
+            // NAMESPACE SEPARATOR; without the flag every dot collapses to an underscore
+            // and the boundary between namespace and name is lost.
+            //
+            // Lowercase is formatStringId's default and is the canonical form — it is
+            // what the docs publish and what a client branches on.
+            $code = Dj_App_String_Util::formatStringId( $code, Dj_App_String_Util::ALLOW_DOT );
             $this->code = $code;
         }
 
@@ -366,6 +377,34 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
         ];
 
         return $struct;
+    }
+
+    /**
+     * Dj_App_Result::toJson();
+     *
+     * The Result as a JSON string — the same STRICT STRUCT jsonSerialize() defines, so
+     * a Result written to a log, a CLI's STDOUT or an API body is the one shape
+     * everywhere and cannot drift per call site.
+     *
+     * WHY IT EXISTS rather than each caller writing json_encode( $res_obj ): a caller
+     * that reaches for the raw function also has to pick flags, and picking them
+     * per-site is how one endpoint ends up escaping unicode while another does not.
+     * Worse, a plain json_encode() returns FALSE on non-UTF8 input and the caller
+     * silently echoes an empty body — jsonEncode() re-encodes and recovers instead.
+     * Delegating keeps that single decision in one place.
+     *
+     * NOT a replacement for json_encode( $res_obj ) elsewhere — that still works,
+     * because the JsonSerializable contract is what both go through. This is the
+     * shorthand for the common case.
+     *
+     * @param int $flags json_encode() bitmask, defaulting to the app-wide flags.
+     *                   Pass 0 for a compact wire body.
+     * @return string
+     */
+    public function toJson( $flags = Dj_App_String_Util::APP_DEFAULT_JSON_ENCODE_FLAGS ) {
+        $json = Dj_App_String_Util::jsonEncode( $this, $flags );
+
+        return $json;
     }
 
     // ArrayAccess interface methods
