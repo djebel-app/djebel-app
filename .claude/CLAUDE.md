@@ -46,6 +46,14 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 - Test dependencies are managed in `tests/composer.json`
 - Install test dependencies: `cd tests && composer install`
 
+### Benchmarking — never trust the host CLI
+
+**Read `.claude/benchmarking.md` BEFORE making or believing any perf claim.** The host
+CLI has Xdebug loaded and macOS syscalls are several times slower than Linux — both
+distort the *ratios*, not just the absolute numbers, so a conclusion drawn on the dev box
+can be backwards. Measure in the `php:8.3-cli` container, report minimums, and
+sanity-check the sign before reporting a delta.
+
 ### CLI Tools (`tools/`)
 
 Three CLI tools live in `tools/`:
@@ -510,6 +518,34 @@ public function __toString() {
 - ✅ Use `get()` method for nested access - it's designed for dot notation!
 - ✅ Clean, simple, ZERO hacks
 
+**Boolean options: `$options_obj->isEnabled($key)` — never nest `isEnabled(get())`**
+
+`Dj_App_Options` already ships `isEnabled($key, $default = false)` and
+`isDisabled($key, $default = true)`; each is exactly
+`Dj_App_Util::isEnabled($this->get($key, $default))`. Nesting the two violates rule 8
+(no nested function calls) and reads worse:
+
+```php
+// ✅ CORRECT
+$load_theme_func_file = $options_obj->isEnabled('site.theme_load_functions');
+
+// ❌ WRONG - nested call
+$load_theme_func_file = Dj_App_Util::isEnabled($options_obj->get('site.theme_load_functions'));
+```
+
+Rule 24 ("call utilities directly - NO wrapper methods!") forbids *creating* new
+forwarding wrappers. It does NOT mean bypassing a convenience method that already
+exists on the object that holds the data.
+
+Speed is not a reason to nest. Measured on Linux (php 8.3, opcache, 200k iterations
+x 9 reps, comparing minimums): `get()` alone 5,260 ns, nested form 5,333 ns,
+convenience method 5,360 ns. The method costs ~27 ns (one call frame, ~0.5%) and
+~97% of the total sits inside `get()` — dot-notation string parsing plus 4
+`applyFilter` dispatches per lookup. Optimize `get()`, not the call shape.
+
+Use the `$default` param for "on unless the site says otherwise" — it distinguishes
+an ABSENT key from an explicit `0`, which `get()` alone cannot (both come back falsy).
+
 ### JSON responses go through `Dj_App_Result` + `Dj_App_Request::json()`
 
 Every JSON/API response is the Result struct — `{status, msg, code, data}` — with the
@@ -791,8 +827,8 @@ This is **Djebel**, a PHP-based CMS framework (v0.0.1) with a plugin-based archi
   there (see `docs/developers/theme-guide.md` → Whole-buffer manipulation)
 
 **Plugin Architecture** (`src/core/lib/plugins.php`):
-- Multi-tier plugin loading: system → shared → regular → core admin
-- Plugin directories: `/plugins`, `/system_plugins`, `/shared_plugins`, admin `/plugins`
+- Multi-tier plugin loading: system → shared → regular
+- Plugin directories: `/plugins`, `/system_plugins`, `/shared_plugins`
 - Conditional plugin loading based on URL patterns
 - Safe loading with `include_once` to prevent crashes
 
@@ -842,6 +878,9 @@ The system uses a cascading configuration approach:
 
 Key configuration points:
 - `app.debug`: Debug mode toggle
-- `app.core.load_admin`: Admin area loading
 - `app.core.plugins.load_plugins`: Plugin system toggle
 - `app.core.theme.load_theme`: Theme system toggle
+- `app.core.theme.load_theme_functions`: overrides the site's `theme_load_functions`
+
+There is NO admin area — it was removed from index.php ("lean and mean web app"), so
+there is no `app.core.load_admin` to configure.
