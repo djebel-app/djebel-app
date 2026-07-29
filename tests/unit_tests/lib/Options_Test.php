@@ -1406,4 +1406,256 @@ EOT;
 
         putenv('DJ_TEST_APP_ENV');
     }
+
+    /**
+     * Records the ctx the pre_option filter receives.
+     * @param mixed $val
+     * @param array $ctx
+     * @return mixed
+     */
+    public static function recordPreOptionCtx($val, $ctx = [])
+    {
+        self::$seen_pre_option_ctx[] = $ctx;
+
+        return $val;
+    }
+
+    /**
+     * Records the ctx the option filter receives.
+     * @param mixed $val
+     * @param array $ctx
+     * @return mixed
+     */
+    public static function recordOptionCtx($val, $ctx = [])
+    {
+        self::$seen_option_ctx[] = $ctx;
+
+        return $val;
+    }
+
+    public static $seen_pre_option_ctx = [];
+    public static $seen_option_ctx = [];
+
+    /**
+     * Builds the nested fixture the memo tests read from.
+     * @return array
+     */
+    private function buildMemoFixture()
+    {
+        $data = [
+            'site' => [
+                'site_title' => 'Memo Site',
+                'theme_load_functions' => 1,
+                'debug' => 0,
+                'empty_val' => '',
+            ],
+            'theme' => [
+                'theme_id' => 'djebel-clear',
+            ],
+            'plugins' => [
+                'djebel_mailer' => [
+                    'from_email' => 'mailer@example.com',
+                    'nested' => [
+                        'deep_key' => 'deep value',
+                    ],
+                ],
+            ],
+            'top_level' => 'top value',
+        ];
+
+        return $data;
+    }
+
+    /**
+     * The parsed-key memo must cache the PARSE only — never a value.
+     */
+    public function testGetMemoNeverCachesValues()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+
+        $changed_data = $this->buildMemoFixture();
+        $changed_data['site']['site_title'] = 'Changed Title';
+        $options_obj->setData($changed_data);
+
+        $this->assertEquals('Changed Title', $options_obj->get('site.site_title'), 'A cached parse must not pin the old value');
+
+        $options_obj->clear();
+        $this->assertEmpty($options_obj->get('site.site_title'), 'clear() must still empty the data');
+    }
+
+    /**
+     * Distinct keys sharing a prefix must not collide in the memo.
+     */
+    public function testGetMemoDoesNotCollideAcrossKeys()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+        $this->assertEquals(1, $options_obj->get('site.theme_load_functions'));
+        $this->assertEquals('djebel-clear', $options_obj->get('theme.theme_id'));
+        $this->assertEquals('mailer@example.com', $options_obj->get('plugins.djebel_mailer.from_email'));
+        $this->assertEquals('deep value', $options_obj->get('plugins.djebel_mailer.nested.deep_key'));
+        $this->assertEquals('top value', $options_obj->get('top_level'));
+
+        // second pass, reverse order — every key must still resolve to its own value
+        $this->assertEquals('top value', $options_obj->get('top_level'));
+        $this->assertEquals('deep value', $options_obj->get('plugins.djebel_mailer.nested.deep_key'));
+        $this->assertEquals('mailer@example.com', $options_obj->get('plugins.djebel_mailer.from_email'));
+        $this->assertEquals('djebel-clear', $options_obj->get('theme.theme_id'));
+        $this->assertEquals(1, $options_obj->get('site.theme_load_functions'));
+        $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+    }
+
+    /**
+     * Whitespace and case variants must resolve identically whether cached or not.
+     */
+    public function testGetMemoNormalizesKeyVariants()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+        $this->assertEquals('Memo Site', $options_obj->get('  site.site_title  '));
+        $this->assertEquals('Memo Site', $options_obj->get("\tsite.site_title\n"));
+        $this->assertEquals('Memo Site', $options_obj->get('SITE.SITE_TITLE'));
+
+        // dashes normalize to underscores through formatKey
+        $this->assertEquals('mailer@example.com', $options_obj->get('plugins.djebel-mailer.from_email'));
+        $this->assertEquals('mailer@example.com', $options_obj->get('plugins.djebel_mailer.from_email'));
+    }
+
+    /**
+     * Repeated lookups must not drift once the parse is cached.
+     */
+    public function testGetMemoStableAcrossRepeatedLookups()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        for ($i = 0; $i < 50; $i++) {
+            $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+            $this->assertEquals('deep value', $options_obj->get('plugins.djebel_mailer.nested.deep_key'));
+        }
+    }
+
+    /**
+     * Falsy-but-present values must never fall through to the default.
+     */
+    public function testGetMemoKeepsFalsyValuesDistinctFromDefault()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        // present but 0 — the default must NOT win
+        $this->assertEquals(0, $options_obj->get('site.debug', 'FALLBACK'));
+        $this->assertEquals(0, $options_obj->get('site.debug', 'FALLBACK'));
+
+        // genuinely missing — the default applies
+        $this->assertEquals('FALLBACK', $options_obj->get('site.no_such_key', 'FALLBACK'));
+        $this->assertEquals('FALLBACK', $options_obj->get('missing.section', 'FALLBACK'));
+    }
+
+    /**
+     * Multi-key fallback must work through the memo for every separator.
+     */
+    public function testGetMemoMultiKeyFallbackSeparators()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $this->assertEquals('djebel-clear', $options_obj->get('theme.theme,theme.theme_id,site.theme'));
+        $this->assertEquals('djebel-clear', $options_obj->get('theme.theme;theme.theme_id;site.theme'));
+        $this->assertEquals('djebel-clear', $options_obj->get('theme.theme|theme.theme_id|site.theme'));
+        $this->assertEquals('Memo Site', $options_obj->get('missing.one,site.site_title'));
+
+        $array_keys = [ 'missing.one', 'site.site_title', ];
+        $this->assertEquals('Memo Site', $options_obj->get($array_keys));
+    }
+
+    /**
+     * A non-scalar key must be rejected, cached parse or not.
+     */
+    public function testGetMemoRejectsNonScalarKey()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $this->assertEmpty($options_obj->get(new stdClass()));
+        $this->assertEmpty($options_obj->get(''));
+    }
+
+    /**
+     * pre_option sees the trimmed FULL key; option sees the split key plus levels.
+     * The memo must not change what either hook receives.
+     */
+    public function testGetMemoPreservesFilterContext()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        Dj_App_Hooks::addFilter('app.core.filter.pre_option', ['Dj_App_Options_Test', 'recordPreOptionCtx']);
+        Dj_App_Hooks::addFilter('app.core.filter.option', ['Dj_App_Options_Test', 'recordOptionCtx']);
+
+        // run twice so the second pass reads a CACHED parse
+        for ($i = 0; $i < 2; $i++) {
+            self::$seen_pre_option_ctx = [];
+            self::$seen_option_ctx = [];
+
+            $options_obj->get('  plugins.djebel_mailer.nested.deep_key  ');
+
+            $this->assertCount(1, self::$seen_pre_option_ctx);
+            $this->assertCount(1, self::$seen_option_ctx);
+
+            $pre_ctx = self::$seen_pre_option_ctx[0];
+            $this->assertEquals('plugins.djebel_mailer.nested.deep_key', $pre_ctx['key'], 'pre_option gets the trimmed FULL key');
+
+            $option_ctx = self::$seen_option_ctx[0];
+            $this->assertEquals('deep_key', $option_ctx['key'], 'option gets the split key');
+            $this->assertEquals('plugins', $option_ctx['level1']);
+            $this->assertEquals('djebel_mailer', $option_ctx['level2']);
+            $this->assertEquals('nested', $option_ctx['level3']);
+        }
+
+        Dj_App_Hooks::removeFilter('app.core.filter.pre_option', ['Dj_App_Options_Test', 'recordPreOptionCtx']);
+        Dj_App_Hooks::removeFilter('app.core.filter.option', ['Dj_App_Options_Test', 'recordOptionCtx']);
+
+        self::$seen_pre_option_ctx = [];
+        self::$seen_option_ctx = [];
+    }
+
+    /**
+     * A flood of unique keys must not break lookups once the memo hits its cap.
+     */
+    public function testGetMemoStillCorrectPastCacheCap()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->clear();
+        $options_obj->setData($this->buildMemoFixture());
+
+        $flood_cnt = Dj_App_Options::MAX_PARSED_KEY_CACHE + 50;
+
+        for ($i = 0; $i < $flood_cnt; $i++) {
+            $options_obj->get('plugins.flood_' . $i . '.some_key');
+        }
+
+        // real keys must still resolve after the cap is reached
+        $this->assertEquals('Memo Site', $options_obj->get('site.site_title'));
+        $this->assertEquals('deep value', $options_obj->get('plugins.djebel_mailer.nested.deep_key'));
+        $this->assertEquals('top value', $options_obj->get('top_level'));
+
+        // an uncached key parsed after the cap must still be correct
+        $this->assertEquals('mailer@example.com', $options_obj->get('plugins.djebel-mailer.from_email'));
+    }
 }

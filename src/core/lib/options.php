@@ -7,6 +7,11 @@
 class Dj_App_Options implements ArrayAccess, Countable {
     const SECTION_SEP = '::';
 
+    // Upper bound for the parsed-key memo in get(). Config keys are a bounded set, so
+    // this is only a backstop against a caller building keys from user data
+    // (e.g. "plugins.x.$user_id") and growing the map without limit.
+    const MAX_PARSED_KEY_CACHE = 512;
+
     protected $data = null;
     protected $extra_opts_data = [];
 
@@ -452,6 +457,15 @@ class Dj_App_Options implements ArrayAccess, Countable {
      */
     public function get($key, $default = '')
     {
+        // Parsed-key memo: trimming and the dot-split/formatKey normalization depend
+        // ONLY on the key string, and profiled at roughly half the cost of a lookup.
+        // Consumed in the single-key section further down.
+        //
+        // INVARIANT — cache the PARSE, never a VALUE. Pinning a resolved value here
+        // would make later setData() writes invisible AND would skip the option
+        // filters, since a cache hit would return before they ever run.
+        static $parsed_key_cache = [];
+
         // Support array of fallback keys directly
         if (is_array($key)) {
             $keys = $key;
@@ -495,37 +509,71 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
         // Single key - trim and continue with normal logic
         $key = $keys[0];
-        $key = Dj_App_String_Util::trim($key);
+
+        // Keyed on the RAW incoming key: $key is reassigned to the short post-split key
+        // below, so by then it can no longer identify its own cache entry.
+        $cache_key = $key;
+
+        if (isset($parsed_key_cache[$cache_key])) {
+            $parsed_key = $parsed_key_cache[$cache_key];
+            $trimmed_key = $parsed_key['trimmed_key'];
+            $key = $parsed_key['key'];
+            $level1 = $parsed_key['level1'];
+            $level2 = $parsed_key['level2'];
+            $level3 = $parsed_key['level3'];
+        } else {
+            // Tracked separately from $key because the split below overwrites $key with
+            // the short key, while the pre_option filter still needs the full one.
+            $trimmed_key = Dj_App_String_Util::trim($key);
+            $key = $trimmed_key;
+
+            $level1 = '';
+            $level2 = '';
+            $level3 = '';
+
+            // if key has dots, split into levels
+            if (strpos($key, '.') !== false) {
+                $parts = explode('.', $key);
+                $parts = array_map('Dj_App_String_Util::formatKey', $parts);
+                $level1 = array_shift($parts);
+
+                if (count($parts) > 1) {
+                    $level2 = array_shift($parts);
+                }
+
+                if (count($parts) > 1) {
+                    $level3 = array_shift($parts);
+                }
+
+                $key = implode('.', $parts);
+            }
+
+            // Stop growing past the backstop rather than evicting — a thrashing cache
+            // would cost more than the parse it is meant to save.
+            if (count($parsed_key_cache) < self::MAX_PARSED_KEY_CACHE) {
+                $parsed_key = [
+                    'trimmed_key' => $trimmed_key,
+                    'key' => $key,
+                    'level1' => $level1,
+                    'level2' => $level2,
+                    'level3' => $level3,
+                ];
+
+                $parsed_key_cache[$cache_key] = $parsed_key;
+            }
+        }
 
         $data = $this->data;
-        $ctx = [ 'key' => $key, 'default' => $default, ];
+
+        // pre_option gets the trimmed FULL key ('site.theme_id'), NOT the short
+        // post-split key — plugins hooking it match on the whole key.
+        $ctx = [ 'key' => $trimmed_key, 'default' => $default, ];
 
         // some plugins might want to override the value
         $val = Dj_App_Hooks::applyFilter( 'app.core.filter.pre_option', false, $ctx );
 
         if ($val !== false) {
             return $val;
-        }
-
-        $level1 = '';
-        $level2 = '';
-        $level3 = '';
-
-        // if key has dots, split into levels
-        if (strpos($key, '.') !== false) {
-            $parts = explode('.', $key);
-            $parts = array_map('Dj_App_String_Util::formatKey', $parts);
-            $level1 = array_shift($parts);
-
-            if (count($parts) > 1) {
-                $level2 = array_shift($parts);
-            }
-
-            if (count($parts) > 1) {
-                $level3 = array_shift($parts);
-            }
-
-            $key = implode('.', $parts);
         }
 
         $ctx['key'] = $key;
