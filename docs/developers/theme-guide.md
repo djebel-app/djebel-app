@@ -83,10 +83,36 @@ The theme markup uses core-replaced placeholders — see `replaceMagicVars()` in
 pulled in through shortcodes like `[djebel_page_nav]`, so a theme stays pure layout/markup
 and never hard-codes content.
 
-A theme may register its own shortcodes from `functions.php` (loaded when the site sets
-`theme_load_functions = 1`) for composite blocks the markup can't express statically.
-Gotcha: a shortcode renderer's OUTPUT is never re-scanned for shortcodes — don't emit
-`[...]` tags from a renderer; keep plugin shortcodes literal in the template markup.
+A theme may register its own shortcodes from `functions.php` (see the section below for
+enabling it) for composite blocks the markup can't express statically. Gotcha: a shortcode
+renderer's OUTPUT is never re-scanned for shortcodes — don't emit `[...]` tags from a
+renderer; keep plugin shortcodes literal in the template markup.
+
+## `functions.php` is OPT-IN — a theme that ships one will fatal without it
+
+Core does NOT load a theme's `functions.php` by default. It is loaded only when the site's
+`app.ini` opts in:
+
+```ini
+[site]
+theme_load_functions = 1
+```
+
+This is deliberate — Djebel enables what a site actually needs rather than paying for it
+everywhere. The consequence to plan for: if `index.php` (or any template) references a
+class or function defined in `functions.php` and the site has NOT set the flag, core
+silently skips the file and the page dies with a bare
+`Class "Your_Theme_Class" not found` — with nothing pointing at the missing config key.
+
+So, when a theme ships a `functions.php`:
+
+- Say so in the theme's readme, and state that `theme_load_functions = 1` is REQUIRED.
+- Set it in every site that uses the theme, at the same time you set `theme_id`.
+- Adding a class reference to a template is a TWO-SIDED change — the flag is the other side.
+
+`theme_load_main_file` is a separate flag with the OPPOSITE default: the theme's main file
+loads unless a site sets it to `0`. Sites that render entirely from a plugin (a downloads
+or API endpoint, say) turn both off and no theme file is loaded at all.
 
 ## Whole-buffer manipulation (`app.page.full_content`)
 
