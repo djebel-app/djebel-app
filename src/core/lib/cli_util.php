@@ -71,6 +71,22 @@ class Dj_App_Cli_Util {
     /**
      * Parse command-line arguments with defaults
      *
+     * Handles every form a CLI tool actually receives:
+     *
+     *   --key=value        →  [ 'key' => 'value', ]
+     *   --key value        →  [ 'key' => 'value', ]       (space separated)
+     *   --flag             →  [ 'flag' => true, ]         (value-less switch)
+     *   --tag=a --tag=b    →  [ 'tag' => [ 'a', 'b', ], ] (repeated key)
+     *   -k value           →  [ 'k' => 'value', ]         (short option)
+     *   -abc               →  [ 'a' => true, 'b' => true, 'c' => true, ]
+     *   positional         →  [ 0 => 'positional', ]      (numeric key)
+     *
+     * It previously read ONLY `--key=value` and silently dropped everything else, so
+     * a value-less `--run` never arrived and callers had to re-scan argv themselves
+     * to find it. Value-less switches and space-separated values are the two
+     * commonest CLI forms; dropping them pushed the same workaround into every tool
+     * instead of solving it once, here.
+     *
      * @param array $expected_params Associative array of param_name => default_value
      * @param array $args Raw arguments from $_SERVER['argv'] (optional, defaults to $_SERVER['argv'])
      * @return array Parsed parameters with values
@@ -83,32 +99,98 @@ class Dj_App_Cli_Util {
         }
 
         // Normalize arguments (convert hyphens to underscores)
-        $args = self::normalizeArgs($args);
+        $args = Dj_App_Cli_Util::normalizeArgs($args);
 
         // Initialize with defaults
         $params = $expected_params;
         $known_params = array_keys($expected_params);
         $has_expected_params = !empty($expected_params);
         $help_args = [ '--help', '-h', '-help', 'help', ];
+        $skip_positions = [];
 
-        foreach ($args as $arg) {
+        foreach ($args as $idx => $arg) {
+            // Already consumed as the previous option's value
+            if (isset($skip_positions[$idx])) {
+                continue;
+            }
+
+            if (!is_scalar($arg)) {
+                continue;
+            }
+
+            // Shell normally strips quotes; this handles re-quoted input.
+            $arg = Dj_App_String_Util::trim($arg, "\"'");
+
+            // '' and NOT empty(): a literal '0' is a legitimate positional arg and a
+            // legitimate value in `--key 0`, and empty() would eat both.
+            if ($arg === '') {
+                continue;
+            }
+
             // Skip help arguments - cheap check first
             if ((strpos($arg, 'h') !== false) && in_array($arg, $help_args)) {
                 continue;
             }
 
-            // Skip invalid format: must be --key=value
-            if ((strpos($arg, '--') !== 0) || (strpos($arg, '=') === false)) {
+            // Cheap single-char test before any substr(): most args are not options.
+            if ($arg[0] !== '-') {
+                $params[] = $arg;
                 continue;
             }
 
-            // Parse --key=value format
-            $equals_pos = strpos($arg, '=');
-            $key = substr($arg, 2, $equals_pos - 2);
-            $value = substr($arg, $equals_pos + 1);
+            $is_long_option = isset($arg[1]) && $arg[1] === '-';
+            $option_body = $is_long_option ? substr($arg, 2) : substr($arg, 1);
+            $equals_pos = strpos($option_body, '=');
+            $body_length = strlen($option_body);
+
+            // -abc → three flags. SHORT options only, no '=', more than one char.
+            $is_short_cluster = empty($is_long_option) && ($equals_pos === false) && ($body_length > 1);
+
+            if ($is_short_cluster) {
+                $flag_chars = str_split($option_body);
+
+                foreach ($flag_chars as $flag_char) {
+                    $params[$flag_char] = isset($params[$flag_char]) ? $params[$flag_char] : true;
+                }
+
+                continue;
+            }
+
+            if ($equals_pos !== false) {
+                $key = substr($option_body, 0, $equals_pos);
+                $value = substr($option_body, $equals_pos + 1);
+            } else {
+                $key = $option_body;
+                $next_idx = $idx + 1;
+                $next_arg = isset($args[$next_idx]) ? $args[$next_idx] : '';
+
+                // '' not empty(): `--key 0` must keep the 0 rather than read --key as
+                // a value-less flag. A next arg starting with '-' is the NEXT option.
+                $next_is_value = is_scalar($next_arg) && ($next_arg !== '') && ($next_arg[0] !== '-');
+
+                if ($next_is_value) {
+                    $value = Dj_App_String_Util::trim($next_arg, "\"'");
+                    $skip_positions[$next_idx] = true;
+                } else {
+                    $value = true;
+                }
+            }
 
             // Skip unknown keys if we have expected params
             if ($has_expected_params && !in_array($key, $known_params)) {
+                continue;
+            }
+
+            // A repeated key COLLECTS rather than overwrites, so `--tag=a --tag=b`
+            // keeps both. Guarded on the key not being an expected one, because a
+            // DEFAULT must be replaced by the first real value, never appended to.
+            $is_expected_key = in_array($key, $known_params);
+            $has_prior_value = isset($params[$key]) && empty($is_expected_key);
+
+            if ($has_prior_value) {
+                $existing_values = (array) $params[$key];
+                $existing_values[] = $value;
+                $params[$key] = $existing_values;
                 continue;
             }
 

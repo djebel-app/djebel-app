@@ -21,6 +21,14 @@ require_once $app_lib_dir . '/hooks.php';
 require_once $app_lib_dir . '/request.php';
 require_once $app_lib_dir . '/log.php';
 
+// CLI only — a web request has no argv to parse, so it pays one stripos and no file
+// read. Loaded HERE rather than by each tool: every CLI tool needs it, and three of
+// them were already requiring the same file by hand (djebel's own tools/pkg.php and
+// tools/release.php, plus oterm's release bootstrap).
+if (Dj_App_Env::isCli()) {
+    require_once $app_lib_dir . '/cli_util.php';
+}
+
 $app_conf_dir = Dj_App_Util::getCoreConfDir();
 $config_env_file = Dj_App_Config::cfg('env_file', $app_conf_dir . '/.env');
 
