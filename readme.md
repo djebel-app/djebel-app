@@ -263,8 +263,8 @@ meta_title = My Awesome App
 meta_keywords = fast, web, app
 meta_description = Built with Djebel framework
 
-[themes]
-theme = default
+[theme]
+theme_id = default
 
 [page_nav]
 home.title = Home
@@ -288,7 +288,35 @@ djebel-faq.load_if_url = /faq
 ```
 
 ### Accessing Configuration in Code
-Use the `Dj_App_Options` class to access configuration values throughout your application with simple, intuitive methods.
+
+`Dj_App_Options` is a singleton. Use `get()` with dot notation — `section.key` — rather
+than property chaining:
+
+```php
+$options_obj = Dj_App_Options::getInstance();
+
+$site_title = $options_obj->get('site.site_title');
+$to_email   = $options_obj->get('plugins.djebel-plugin-contact.to_email', 'admin@localhost');
+
+// First non-empty key wins — comma, semicolon or pipe separated
+$theme_id = $options_obj->get('theme.theme,theme.theme_id,site.theme_id,site.theme');
+```
+
+For on/off options use `isEnabled()` / `isDisabled()` instead of comparing the raw value —
+they understand `1`, `true`, `yes`, `on`, `enabled` and their negatives:
+
+```php
+$load_functions = $options_obj->isEnabled('site.theme_load_functions');
+$cache_off      = $options_obj->isDisabled('plugins.djebel-cache.active');
+```
+
+The second argument is the default used when the key is **absent** — which is how you say
+"on unless the site turns it off". It is not the same as a key present with value `0`:
+
+```php
+// absent => true; explicitly `= 0` => false
+$enabled = $options_obj->isEnabled('site.some_flag', 1);
+```
 
 ## 🆚 Why Choose Djebel Over Other Frameworks?
 
