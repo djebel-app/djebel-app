@@ -114,7 +114,7 @@ class Dj_App_Themes {
             $default_theme_file = $current_theme_dir . '/index.php';
 
             // should we load theme's functions file?
-            $load_theme_func_file = Dj_App_Util::isEnabled($options_obj->get('site.theme_load_functions'));
+            $load_theme_func_file = $options_obj->isEnabled('site.theme_load_functions');
             $load_theme_func_file = Dj_App_Config::cfg('app.core.theme.load_theme_functions', $load_theme_func_file);
             $load_theme_func_file = Dj_App_Hooks::applyFilter('app.core.theme.load_theme_functions', $load_theme_func_file, $ctx);
 
