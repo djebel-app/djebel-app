@@ -76,11 +76,10 @@ if ($app_load_options) {
     Dj_App_Hooks::doAction( 'app.core.options.loaded' );
 }
 
-// Lib loading — two independent toggles (per-app in app.ini; env/const default via cfg; filter override):
-//   [app] load_lib_loader — make Dj_App_Lib available for ON-DEMAND loadLib() calls; nothing loads yet.
-//   [app] load_libs        — EAGER-load libs at bootstrap: "1"/"on" loads every lib in the lib dir; a
-//                            comma list ("djebel-core-lib-http, foo") loads exactly those. Implies the loader.
-// Either one requires the loader class; load_libs then loads through it. Both default off.
+// Lib loading — two independent app.ini toggles (env/const default via cfg; filter override).
+//   [app] load_lib_loader — require the loader class (Dj_App_Lib) so on-demand loadLib() calls work.
+//   [app] load_libs        — also eager-load at bootstrap by handing its value to loadLib().
+// Either one requires the loader; both default off.
 $load_lib_loader = $options_obj->get('app.load_lib_loader', Dj_App_Config::cfg('app.core.load_lib_loader'));
 $load_lib_loader = Dj_App_Hooks::applyFilter('app.core.load_lib_loader', $load_lib_loader);
 
@@ -95,12 +94,7 @@ if ($loader_enabled || $eager_load_libs) {
 }
 
 if ($eager_load_libs) {
-    // "1"/"on"/truthy → every lib ('*'); any other value is a separator-delimited list of ids that
-    // loadLib() splits itself.
-    $load_all_libs = Dj_App_Util::isEnabled($load_libs);
-    $lib_ids = empty($load_all_libs) ? $load_libs : '*';
-
-    Dj_App_Lib::loadLib($lib_ids);
+    Dj_App_Lib::loadLib($load_libs);
 }
 
 // should we run?
