@@ -1723,4 +1723,57 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertNotEmpty($recovered_json);
         $this->assertSame('café', $recovered_data['name']);
     }
+
+    public function testMatchesPattern()
+    {
+        // Exact.
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('dev', 'dev'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('development', 'dev'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('live', 'dev'));
+
+        // Starts with ("val*").
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('development', 'dev*'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('dev', 'dev*'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('production', 'dev*'));
+
+        // Ends with ("*val").
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('development', '*ment'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('deployment', '*ment'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('developer', '*ment'));
+
+        // Contains ("*val*").
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('development', '*vel*'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('staging', '*stag*'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('production', '*stag*'));
+
+        // Pipe = OR (plain, wildcarded, spaced, and a truthy list).
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('dev', 'dev|staging'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('staging', 'dev|staging'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('production', 'dev|staging'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('development', 'dev*|stag*'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('dev', ' dev | staging '));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('on', '1|true|yes|on'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('0', '1|true|yes|on'));
+
+        // "*" alone matches anything.
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('anything', '*'));
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('', '*'));
+
+        // Lib-id style globs (the new caller).
+        $this->assertTrue(Dj_App_String_Util::matchesPattern('orbisius-lib-http', 'orbisius*'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('djebel-core-lib-http', 'orbisius*'));
+
+        // Non-string operands are cast, so int 0 vs "0" matches (no 0-!==-"0" trap); but a strict
+        // string exact match still refuses numeric coercion ("01" is not "1").
+        $this->assertTrue(Dj_App_String_Util::matchesPattern(0, '0'));
+        $this->assertFalse(Dj_App_String_Util::matchesPattern('01', '1'));
+    }
+
+    public function testMatchesPatternThrowsOnNonScalarInput()
+    {
+        $this->expectException(Dj_App_Validation_Exception::class);
+
+        $non_scalar = [ 'a', 'b', ];
+        Dj_App_String_Util::matchesPattern($non_scalar, 'dev*');
+    }
 }

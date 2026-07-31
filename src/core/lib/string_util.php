@@ -215,6 +215,77 @@ class Dj_App_String_Util
     }
 
     /**
+     * Match a value against a glob pattern: exact, starts-with ("val*"), ends-with ("*val"),
+     * contains ("*val*"), or a pipe-OR list ("a|b|c" — matches if any alternative does). "*"
+     * alone matches anything.
+     * Dj_App_String_Util::matchesPattern('development', 'dev*');
+     * @param string $value
+     * @param string $pattern
+     * @return bool
+     * @throws Dj_App_Validation_Exception when $value or $pattern is not scalar
+     */
+    public static function matchesPattern($value, $pattern)
+    {
+        if (!is_scalar($value)) {
+            $value_type = gettype($value);
+
+            throw new Dj_App_Validation_Exception('matchesPattern value must be scalar', ['type' => $value_type]);
+        }
+
+        if (!is_scalar($pattern)) {
+            $pattern_type = gettype($pattern);
+
+            throw new Dj_App_Validation_Exception('matchesPattern pattern must be scalar', ['type' => $pattern_type]);
+        }
+
+        $value = (string) $value;
+        $pattern = (string) $pattern;
+
+        // Pipe = OR: "dev|staging" matches if any alternative matches.
+        $has_pipe = strpos($pattern, '|') !== false;
+
+        if ($has_pipe) {
+            $alternatives = explode('|', $pattern);
+            $alternatives = Dj_App_String_Util::trim($alternatives);
+
+            foreach ($alternatives as $alternative) {
+                if (Dj_App_String_Util::matchesPattern($value, $alternative)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $has_leading_star = strpos($pattern, '*') === 0;
+        $last_char = substr($pattern, -1);
+        $has_trailing_star = $last_char === '*';
+        $needle = trim($pattern, '*');
+
+        // "*val*" = contains.
+        if ($has_leading_star && $has_trailing_star) {
+            if (str_contains($value, $needle)) {
+                return true;
+            }
+        } elseif ($has_trailing_star) {
+            // "val*" = starts with.
+            if (str_starts_with($value, $needle)) {
+                return true;
+            }
+        } elseif ($has_leading_star) {
+            // "*val" = ends with.
+            if (str_ends_with($value, $needle)) {
+                return true;
+            }
+        } elseif ($value === $pattern) {
+            // No wildcards = exact match.
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Dj_App_String_Util::isAlphaNumeric();
      * Strict alphanumeric check (a-z, A-Z, 0-9 only — no underscores, no dashes).
      * Accepts any scalar input — int 42 is treated the same as string '42'.
