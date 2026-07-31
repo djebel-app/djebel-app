@@ -879,6 +879,8 @@ The system uses a cascading configuration approach:
 Key configuration points:
 - `app.debug`: Debug mode toggle
 - `app.core.plugins.load_plugins`: Plugin system toggle
+- `app.core.load_lib_loader`: make the on-demand lib loader (`Dj_App_Lib`) available (`[app] load_lib_loader`)
+- `app.core.load_libs`: eager-load libs at bootstrap — `1`/`on` = every lib in `app/lib/`, or a list of ids (`[app] load_libs`)
 - `app.core.theme.load_theme`: Theme system toggle
 - `app.core.theme.load_theme_functions`: overrides the site's `theme_load_functions`
 
