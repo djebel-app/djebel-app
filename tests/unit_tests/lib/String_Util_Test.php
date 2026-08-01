@@ -373,6 +373,11 @@ class Dj_App_String_Util_Test extends TestCase {
 
         $result_array = Dj_App_String_Util::isAlphaNumeric([ 'a', 'b', ]);
         $this->assertFalse($result_array);
+
+        // An object is the only non-scalar empty() calls truthy, so it is the case that
+        // actually reaches the is_scalar() half of the guard.
+        $result_obj = Dj_App_String_Util::isAlphaNumeric(new stdClass());
+        $this->assertFalse($result_obj);
     }
 
     // ============================================================
@@ -429,10 +434,15 @@ class Dj_App_String_Util_Test extends TestCase {
     public function testSanitizeAlphaNumericExtWithNonScalarReturnsEmpty()
     {
         $result_null = Dj_App_String_Util::sanitizeAlphaNumericExt(null);
-        $this->assertEquals('', $result_null);
+        $this->assertEmpty($result_null);
 
         $result_array = Dj_App_String_Util::sanitizeAlphaNumericExt([ 'a', ]);
-        $this->assertEquals('', $result_array);
+        $this->assertEmpty($result_array);
+
+        // An object is the only non-scalar empty() calls truthy, so it is the case that
+        // actually reaches the is_scalar() half of the guard.
+        $result_obj = Dj_App_String_Util::sanitizeAlphaNumericExt(new stdClass());
+        $this->assertEmpty($result_obj);
     }
 
     public function testSanitizeAlphaNumericExtWithIntegerCoerced()
