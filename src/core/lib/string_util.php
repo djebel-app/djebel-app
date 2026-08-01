@@ -289,12 +289,12 @@ class Dj_App_String_Util
      * Dj_App_String_Util::isAlphaNumeric();
      * Strict alphanumeric check (a-z, A-Z, 0-9 only — no underscores, no dashes).
      * Accepts any scalar input — int 42 is treated the same as string '42'.
-     * @param scalar $str
+     * @param string|int|float|bool $str
      * @return bool
      */
     public static function isAlphaNumeric($str)
     {
-        if (!is_scalar($str) || empty($str)) {
+        if (empty($str) || !is_scalar($str)) {
             return false;
         }
 
@@ -307,13 +307,13 @@ class Dj_App_String_Util
      * Dj_App_String_Util::isAlphaNumericExt();
      * a-z, A-Z, 0-9 plus extra allowed chars (default: _ and -).
      * Accepts any scalar input — int 42 is treated the same as string '42'.
-     * @param scalar $str
-     * @param array|string $extra_chars Extra chars to allow. Default ['_', '-']. Pass '_' or ['_'] for underscore only, [] for strict alphanumeric.
+     * @param string|int|float|bool $str
+     * @param array|string $extra_chars Extra chars to allow. Default [ '_', '-', ]. Pass '_' or ['_'] for underscore only, [] for strict alphanumeric.
      * @return bool
      */
-    public static function isAlphaNumericExt($str, $extra_chars = ['_', '-'])
+    public static function isAlphaNumericExt($str, $extra_chars = [ '_', '-', ])
     {
-        if (!is_scalar($str) || empty($str)) {
+        if (empty($str) || !is_scalar($str)) {
             return false;
         }
 
@@ -354,17 +354,19 @@ class Dj_App_String_Util
      *
      * Use this anywhere you'd write the pattern:
      *   if (!isAlphaNumericExt($str, $extra_chars)) {
-     *       $str = preg_replace('#[^\w'.$extra_chars_escaped.']+#', $replacement, $str);
+     *       $str = preg_replace('#[^a-z\d'.$extra_chars_escaped.']+#i', $replacement, $str);
      *   }
+     * The base class is [a-z\d] with the i flag, NOT \w — \w always includes the
+     * underscore, so it would keep underscores even when they aren't in $extra_chars.
      *
-     * @param scalar $str
-     * @param array|string $extra_chars Extra chars to allow. Default ['_', '-'].
+     * @param string|int|float|bool $str
+     * @param array|string $extra_chars Extra chars to allow. Default [ '_', '-', ].
      * @param string $replacement Replacement char/string for runs of bad chars. Default '_'.
      * @return string Sanitized string. Empty string for non-scalar/empty input.
      */
-    public static function sanitizeAlphaNumericExt($str, $extra_chars = ['_', '-'], $replacement = '_')
+    public static function sanitizeAlphaNumericExt($str, $extra_chars = [ '_', '-', ], $replacement = '_')
     {
-        if (!is_scalar($str) || empty($str)) {
+        if (empty($str) || !is_scalar($str)) {
             return '';
         }
 
