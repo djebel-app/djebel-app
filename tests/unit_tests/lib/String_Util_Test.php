@@ -1776,4 +1776,75 @@ class Dj_App_String_Util_Test extends TestCase {
         $non_scalar = [ 'a', 'b', ];
         Dj_App_String_Util::matchesPattern($non_scalar, 'dev*');
     }
+
+    public function testParseQueryStringBasic()
+    {
+        $result = Dj_App_String_Util::parseQueryString('rel=icon&type=image/png&sizes=32x32');
+
+        $this->assertCount(3, $result);
+        $this->assertEquals('icon', $result['rel']);
+        $this->assertEquals('image/png', $result['type']);
+        $this->assertEquals('32x32', $result['sizes']);
+    }
+
+    public function testParseQueryStringSinglePair()
+    {
+        $result = Dj_App_String_Util::parseQueryString('template_file=blog.php');
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('blog.php', $result['template_file']);
+    }
+
+    public function testParseQueryStringUrlDecodesValues()
+    {
+        $result = Dj_App_String_Util::parseQueryString('color=%23000000&q=a%26b');
+
+        $this->assertEquals('#000000', $result['color']);
+        $this->assertEquals('a&b', $result['q']);
+    }
+
+    public function testParseQueryStringKeepsUrlValueIntact()
+    {
+        $result = Dj_App_String_Util::parseQueryString('rel=preload&href=https://cdn.example.com/f.woff2');
+
+        $this->assertEquals('https://cdn.example.com/f.woff2', $result['href']);
+    }
+
+    public function testParseQueryStringEmptyInput()
+    {
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString(''));
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString('   '));
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString(null));
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString(0));
+    }
+
+    public function testParseQueryStringNonScalarReturnsEmpty()
+    {
+        $non_scalar = [ 'a' => 'b', ];
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString($non_scalar));
+
+        $obj = new stdClass();
+        $this->assertEmpty(Dj_App_String_Util::parseQueryString($obj));
+    }
+
+    public function testParseQueryStringValueWithoutKeyIsIgnored()
+    {
+        $result = Dj_App_String_Util::parseQueryString('justtext');
+
+        $this->assertArrayHasKey('justtext', $result);
+        $this->assertEmpty($result['justtext']);
+    }
+
+    /**
+     * php's parser turns a dot or a space in a KEY into an underscore. Documented in the
+     * method; pinned here so the behaviour can't change unnoticed.
+     */
+    public function testParseQueryStringManglesDottedKeys()
+    {
+        $result = Dj_App_String_Util::parseQueryString('og.image=x.png&my key=1');
+
+        $this->assertArrayHasKey('og_image', $result);
+        $this->assertArrayHasKey('my_key', $result);
+        $this->assertArrayNotHasKey('og.image', $result);
+    }
 }

@@ -259,7 +259,7 @@ class Dj_App_String_Util
 
         $has_leading_star = strpos($pattern, '*') === 0;
         $last_char = substr($pattern, -1);
-        $has_trailing_star = $last_char === '*';
+        $has_trailing_star = $last_char == '*';
         $needle = trim($pattern, '*');
 
         // "*val*" = contains.
@@ -614,6 +614,31 @@ class Dj_App_String_Util
     }
 
     /**
+     * Parses a "key=val&key2=val2" string into an array. Config values that carry a few
+     * params use this shape, as do query strings.
+     * Dj_App_String_Util::parseQueryString();
+     * Values are URL-decoded, so a literal & inside a value must be written %26 (# is
+     * %23). Keys go through php's own mangling — a dot or a space becomes an underscore,
+     * and a trailing [] builds a nested array — so don't rely on an exotic key surviving
+     * verbatim.
+     * @param string $str
+     * @return array empty when there is nothing to parse
+     */
+    public static function parseQueryString($str)
+    {
+        $params = [];
+
+        if (empty($str) || !is_scalar($str)) {
+            return $params;
+        }
+
+        parse_str($str, $params);
+        $params = empty($params) ? [] : $params;
+
+        return $params;
+    }
+
+    /**
      * This is needed when doing JSON encode as decoding may not work with php 7+
      * Dj_App_String_Util::encodeUTF8();
      * @param mixed $d
@@ -807,7 +832,7 @@ class Dj_App_String_Util
         for ($i = 0; $i < $len; $i++) {
             $char = $str[$i];
 
-            if ($char === '[') {
+            if ($char == '[') {
                 $next_char = ($i + 1 < $len) ? $str[$i + 1] : '';
 
                 if (ctype_alpha($next_char)) {
