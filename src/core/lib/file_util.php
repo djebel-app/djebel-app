@@ -225,6 +225,90 @@ class Dj_App_File_Util {
     }
 
     /**
+     * Removes a folder and everything in it.
+     * Dj_App_File_Util::rmdir();
+     *
+     * A missing dir counts as SUCCESS: the caller asked for it to be gone.
+     * Check $res_obj->deleted when you need to know whether anything was there.
+     *
+     * Symlinks are UNLINKED, never followed. Recursing into one would delete the
+     * contents of whatever it points at, which is how a delete of a scratch folder
+     * turns into a delete of someone's home dir.
+     *
+     * @param string $dir
+     * @return Dj_App_Result
+     */
+    public static function rmdir($dir) {
+        $res_obj = new Dj_App_Result();
+        $res_obj->deleted = false;
+
+        try {
+            if (empty($dir)) {
+                throw new Dj_App_File_Util_Exception("Empty dir");
+            }
+
+            // A recursive delete of / or a drive root is never a real request, and it
+            // is the one mistake with no undo. Checked on the RESOLVED location so a
+            // link or a '..' cannot walk up to it.
+            $real_dir = realpath($dir);
+
+            if (empty($real_dir)) { // gone already: nothing to do
+                $res_obj->status = true;
+
+                return $res_obj;
+            }
+
+            $parent_dir = dirname($real_dir);
+
+            if ($parent_dir === $real_dir) {
+                throw new Dj_App_File_Util_Exception("Refusing to remove a filesystem root", [ 'dir' => $real_dir ]);
+            }
+
+            if (!is_dir($real_dir)) {
+                throw new Dj_App_File_Util_Exception("Not a dir", [ 'dir' => $real_dir ]);
+            }
+
+            $dir_it_obj = new RecursiveDirectoryIterator($real_dir, FilesystemIterator::SKIP_DOTS);
+            $it_obj = new RecursiveIteratorIterator($dir_it_obj, RecursiveIteratorIterator::CHILD_FIRST);
+
+            foreach ($it_obj as $entry_obj) {
+                $entry = $entry_obj->getPathname();
+
+                // isDir() FOLLOWS a link, so the link test comes first — otherwise a
+                // symlink to a dir is rmdir'd (which fails) instead of unlinked.
+                if ($entry_obj->isLink() || !$entry_obj->isDir()) {
+                    $unlink_res = unlink($entry);
+
+                    if (!$unlink_res) {
+                        throw new Dj_App_File_Util_Exception("Couldn't remove file", [ 'file' => $entry ]);
+                    }
+
+                    continue;
+                }
+
+                $rmdir_res = rmdir($entry);
+
+                if (!$rmdir_res) {
+                    throw new Dj_App_File_Util_Exception("Couldn't remove dir", [ 'dir' => $entry ]);
+                }
+            }
+
+            $rmdir_res = rmdir($real_dir);
+
+            if (!$rmdir_res) {
+                throw new Dj_App_File_Util_Exception("Couldn't remove dir", [ 'dir' => $real_dir ]);
+            }
+
+            $res_obj->deleted = true;
+            $res_obj->status = true;
+        } catch (Exception $e) {
+            $res_obj->msg = $e->getMessage();
+        }
+
+        return $res_obj;
+    }
+
+    /**
      * Dj_App_File_Util::normalizePath();
      * Normalize a filesystem/web path:
      *  - convert "\" to "/"

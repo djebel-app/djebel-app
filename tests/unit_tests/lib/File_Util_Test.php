@@ -574,4 +574,70 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertEquals('2 KB', Dj_App_File_Util::formatSize('2048'));
         $this->assertEquals('512 B', Dj_App_File_Util::formatSize('512'));
     }
+
+    public function testRmdirRemovesNestedTree() {
+        $dir = $this->test_dir . '/tree';
+        mkdir($dir . '/a/b', 0755, true);
+        file_put_contents($dir . '/top.txt', 'x');
+        file_put_contents($dir . '/a/mid.txt', 'x');
+        file_put_contents($dir . '/a/b/deep.txt', 'x');
+
+        $res_obj = Dj_App_File_Util::rmdir($dir);
+
+        $this->assertTrue($res_obj->isSuccess(), $res_obj->msg());
+        $this->assertTrue($res_obj->deleted);
+        $this->assertDirectoryDoesNotExist($dir);
+    }
+
+    public function testRmdirOnMissingDirReportsSuccessWithNothingDeleted() {
+        $dir = $this->test_dir . '/never_existed';
+
+        $res_obj = Dj_App_File_Util::rmdir($dir);
+
+        // "make sure it is gone" is satisfied by it already being gone.
+        $this->assertTrue($res_obj->isSuccess(), $res_obj->msg());
+        $this->assertFalse($res_obj->deleted);
+    }
+
+    public function testRmdirUnlinksSymlinkWithoutDeletingItsTarget() {
+        $keep_dir = $this->test_dir . '/keep';
+        mkdir($keep_dir, 0755, true);
+        file_put_contents($keep_dir . '/precious.txt', 'do not delete me');
+
+        $doomed_dir = $this->test_dir . '/doomed';
+        mkdir($doomed_dir, 0755, true);
+        symlink($keep_dir, $doomed_dir . '/link_to_keep');
+
+        $res_obj = Dj_App_File_Util::rmdir($doomed_dir);
+
+        $this->assertTrue($res_obj->isSuccess(), $res_obj->msg());
+        $this->assertDirectoryDoesNotExist($doomed_dir);
+
+        // THE point of the test: following the link would have wiped this.
+        $this->assertDirectoryExists($keep_dir);
+        $this->assertFileExists($keep_dir . '/precious.txt');
+    }
+
+    public function testRmdirRefusesEmptyDir() {
+        $res_obj = Dj_App_File_Util::rmdir('');
+
+        $this->assertFalse($res_obj->isSuccess());
+    }
+
+    public function testRmdirRefusesFilesystemRoot() {
+        $res_obj = Dj_App_File_Util::rmdir('/');
+
+        $this->assertFalse($res_obj->isSuccess());
+        $this->assertDirectoryExists('/');
+    }
+
+    public function testRmdirRefusesAFile() {
+        $file = $this->test_dir . '/a_file.txt';
+        file_put_contents($file, 'x');
+
+        $res_obj = Dj_App_File_Util::rmdir($file);
+
+        $this->assertFalse($res_obj->isSuccess());
+        $this->assertFileExists($file);
+    }
 }
