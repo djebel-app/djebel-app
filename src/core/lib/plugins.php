@@ -96,7 +96,7 @@ class Dj_App_Plugins {
                 // @todo check for a prefix(es) for plugins $options_obj; /contact form plugins must run on /contact page onnly
 
                 $plugin_file = $plugin_dir . '/plugin.php';
-                $plugin_file_rel = Dj_App_Plugins::getRelPath($plugin_file);
+                $plugin_file_rel = Dj_App_Plugins::getRelFile($plugin_file);
 
                 $prefix = "[$idx] plugin [$plugin_file_rel]";
 
@@ -217,15 +217,16 @@ class Dj_App_Plugins {
     }
 
     /**
-     * Dj_App_Plugins::getRelPath
-     * @param $path
+     * Dj_App_Plugins::getRelFile
+     * @param string $file
      * @return string
      */
-    public static function getRelPath($path)
+    public static function getRelFile($file)
     {
         $plugins_dir = Dj_App_Plugins::getPluginsDir();
-        $rel_path = $path;
-        $rel_path = str_replace($plugins_dir, '', $rel_path);
-        return $rel_path;
+        $rel_file = $file;
+        $rel_file = str_replace($plugins_dir, '', $rel_file);
+
+        return $rel_file;
     }
 }

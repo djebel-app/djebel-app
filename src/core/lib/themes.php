@@ -302,7 +302,7 @@ class Dj_App_Themes {
 
         foreach ($page_file_candiates as $loop_file) {
             // If path doesn't start with /, treat as relative and prepend pages_dir
-            if (Dj_App_String_Util::getFirstChar($loop_file) !== '/') {
+            if (Dj_App_String_Util::getFirstChar($loop_file) != '/') {
                 $loop_file = $pages_dir . '/' . $loop_file;
             }
 
@@ -368,7 +368,7 @@ class Dj_App_Themes {
         $local_ctx['ext'] = $ext;
 
         // Load content based on file type
-        if ($ext === 'php') {
+        if ($ext == 'php') {
             ob_start();
             include_once $file;
             $buff = ob_get_clean();
@@ -437,7 +437,7 @@ class Dj_App_Themes {
         }
 
         // Home page: check templates/home.php
-        $is_home = empty($page_fmt) || $page_fmt === '/';
+        $is_home = empty($page_fmt) || $page_fmt == '/';
 
         if ($is_home) {
             $home_template = $templates_dir . '/home.php';
@@ -453,16 +453,16 @@ class Dj_App_Themes {
                 return $result;
             }
         } else {
-            // Traverse path hierarchy: exact match, then parent, grandparent, etc.
+            // Traverse the slug hierarchy: exact match, then parent, grandparent, etc.
             // e.g. services/web-monitoring/wordpress -> services/web-monitoring -> services
-            $check_path = $page_fmt;
+            $check_slug = $page_fmt;
 
-            while (!empty($check_path) && $check_path !== '.') {
-                $file_path = $templates_dir . '/' . $check_path . '.php';
+            while (!empty($check_slug) && $check_slug != '.') {
+                $template_file = $templates_dir . '/' . $check_slug . '.php';
 
-                if (file_exists($file_path)) {
+                if (file_exists($template_file)) {
                     $result = [
-                        'file' => $file_path,
+                        'file' => $template_file,
                         'ext' => 'php',
                     ];
 
@@ -471,7 +471,7 @@ class Dj_App_Themes {
                     return $result;
                 }
 
-                $check_path = dirname($check_path);
+                $check_slug = dirname($check_slug);
             }
         }
 
@@ -487,16 +487,17 @@ class Dj_App_Themes {
     }
 
     /**
-     * Dj_App_Themes::getRelPath
-     * @param $path
+     * Dj_App_Themes::getRelFile
+     * @param string $file
      * @return string
      */
-    public function getRelPath($path)
+    public function getRelFile($file)
     {
         $themes_dir = $this->getThemesDir();
-        $rel_path = $path;
-        $rel_path = str_replace($themes_dir, '', $rel_path);
-        return $rel_path;
+        $rel_file = $file;
+        $rel_file = str_replace($themes_dir, '', $rel_file);
+
+        return $rel_file;
     }
 
     /**
