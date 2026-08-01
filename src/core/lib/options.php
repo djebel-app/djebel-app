@@ -123,7 +123,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         }
 
         // Dispatch based on namespace
-        if ($ns === 'env') {
+        if ($ns == 'env') {
             return $this->evaluateEnvCondition($condition, $result);
         }
 
@@ -155,7 +155,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
         }
 
         // Check prev char for negation
-        $negate = ($eq_pos > 0 && $condition[$eq_pos - 1] === '!');
+        $negate = ($eq_pos > 0 && $condition[$eq_pos - 1] == '!');
         $var_end = $negate ? $eq_pos - 1 : $eq_pos;
         $env_var = substr($condition, 0, $var_end);
         $env_var = trim($env_var);
