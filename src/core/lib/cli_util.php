@@ -4,6 +4,68 @@
  * Provides argument parsing and normalization
  */
 class Dj_App_Cli_Util {
+    // 2 hours. Long enough for a slow upload or a big build, short enough that a wedged
+    // job cannot sit there forever — see init() for why a ceiling is required rather
+    // than optional. Written as arithmetic, not 7200, so the duration is readable
+    // without doing the division.
+    const DEFAULT_TIME_LIMIT = 2 * 60 * 60;
+
+    // 24 hours, the ceiling a caller cannot raise past. Anything longer is a daemon
+    // rather than a CLI command, and PHP is the wrong tool to keep one alive.
+    const MAX_TIME_LIMIT = 24 * 60 * 60;
+
+    /**
+     * Prepare the process for a long-running CLI command: unbuffered output, survive a
+     * closed terminal, and a hard ceiling.
+     *
+     * Returns false on non-CLI rather than throwing, so a caller can invoke it blindly.
+     *
+     * @param array $params time_limit (seconds; 0/absent = DEFAULT_TIME_LIMIT)
+     * @return bool true when applied, false when not running under CLI
+     */
+    static function init($params = []) {
+        if (php_sapi_name() != 'cli') {
+            return false;
+        }
+
+        // Report progress AS IT HAPPENS. A buffered long job looks hung for minutes and
+        // then dumps everything at once, which is indistinguishable from a crash while
+        // you are watching it. CLI usually defaults this way already, but a caller or a
+        // php.ini can have changed it, and this is the one place that guarantees it.
+        ini_set('implicit_flush', 1);
+        ini_set('output_buffering', 0);
+        ob_implicit_flush(true);
+
+        // zlib.output_compression is INI_ALL, but PHP LOCKS it the moment output starts
+        // and then ini_set() raises a warning that reaches error_log even behind @ — the
+        // same trap Dj_App_Request::finishRequest() guards. A tool that printed a banner
+        // before calling init() would otherwise log a warning on every run. It is also a
+        // response-compression setting, so on CLI clearing it is belt-and-braces anyway.
+        if (!headers_sent()) {
+            ini_set('zlib.output_compression', 0);
+        }
+
+        // Survive a closed terminal or a dropped SSH session: a job that is midway
+        // through writing a file or streaming an upload must finish rather than leave
+        // the other side holding a truncated result.
+        ignore_user_abort(true);
+
+        // REQUIRED, not optional, and precisely BECAUSE of the line above: with the
+        // abort ignored, Ctrl+C and a hangup no longer stop this process, so an
+        // unlimited runtime (PHP CLI's default) means a wedged job runs until the box
+        // is rebooted. The ceiling is what keeps "cannot be interrupted" from becoming
+        // "cannot be stopped".
+        $time_limit = empty($params['time_limit']) ? self::DEFAULT_TIME_LIMIT : (int) $params['time_limit'];
+
+        if ($time_limit > self::MAX_TIME_LIMIT) {
+            $time_limit = self::MAX_TIME_LIMIT;
+        }
+
+        set_time_limit($time_limit);
+
+        return true;
+    }
+
     /**
      * Normalize CLI arguments by converting hyphens to underscores in argument names
      * This allows --bundle-id and --bundle_id to work interchangeably
