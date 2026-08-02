@@ -1534,22 +1534,28 @@ MSG_EOF;
             return $buff;
         }
 
-        $search = [];
-        $replace = [];
+        // Every tag form opens with { or %, so a buffer carrying neither has nothing to
+        // replace — bail before building the search arrays rather than after.
+        if (strpbrk($buff, '{%') === false) {
+            return $buff;
+        }
+
+        $search_arr = [];
+        $replace_arr = [];
 
         // %%TAG%% is queued BEFORE %TAG% deliberately: str_ireplace walks the search list in
         // order, and %%TAG%% CONTAINS %TAG%, so replacing the single-% form first would eat
         // the inner part of a %%TAG%% and leave a stray % on each side.
         foreach ($tags as $tag => $val) {
-            $search[] = '{' . $tag . '}';
-            $replace[] = $val;
-            $search[] = '%%' . $tag . '%%';
-            $replace[] = $val;
-            $search[] = '%' . $tag . '%';
-            $replace[] = $val;
+            $search_arr[] = '{' . $tag . '}';
+            $replace_arr[] = $val;
+            $search_arr[] = '%%' . $tag . '%%';
+            $replace_arr[] = $val;
+            $search_arr[] = '%' . $tag . '%';
+            $replace_arr[] = $val;
         }
 
-        $buff = str_ireplace($search, $replace, $buff);
+        $buff = str_ireplace($search_arr, $replace_arr, $buff);
 
         return $buff;
     }
