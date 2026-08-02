@@ -5,6 +5,11 @@ class Dj_App_File_Util {
     const DEFAULT_FILE_PERM = 0644;
     const SECURE_FILE_PERM  = 0600;
 
+    // Dot entries are config or metadata, and a caller listing a data dir almost never
+    // means to act on one. Read by [isSkippable] and by [listFiles], which needs the same
+    // answer to decide whether to prune dot dirs before descending.
+    const SKIP_DOT_FILES_DEFAULT = 1;
+
     /**
      * Reads a file partially e.g. the first NN bytes.
      * Dj_App_File_Util::readFilePartially();
@@ -268,6 +273,62 @@ class Dj_App_File_Util {
      *         across directories. An unreadable dir is an ERROR; a readable one that
      *         matched nothing is a SUCCESS with none, so the two are never confused.
      */
+    /**
+     * Whether an entry is skipped on its NAME alone.
+     *
+     * THE one place that rule lives, so the flat listing and the recursive prune cannot
+     * disagree — and the place to grow it when there is a second thing worth skipping
+     * everywhere. Name-only on purpose: it must be answerable without touching the
+     * filesystem, which is what lets a caller reject an entry before paying for a stat.
+     *
+     * Takes the same $filters [listFiles] was given, so the DECISION lives here and a
+     * caller never has to test a flag before asking.
+     *
+     * @param string $name a basename, not a path
+     * @param array $filters skip_dot_files (absent = on)
+     * @return bool
+     */
+    public static function isSkippable($name, $filters = [])
+    {
+        if (empty($name)) {
+            return true;
+        }
+
+        $skip_dot_files = self::SKIP_DOT_FILES_DEFAULT;
+
+        if (array_key_exists('skip_dot_files', $filters)) {
+            $skip_dot_files = empty($filters['skip_dot_files']) ? 0 : 1;
+        }
+
+        if (empty($skip_dot_files)) {
+            return false;
+        }
+
+        $is_dot_entry = $name[0] === '.';
+
+        return $is_dot_entry;
+    }
+
+    /**
+     * The accept-callback RecursiveCallbackFilterIterator takes — it keeps what returns
+     * TRUE, which is why this exists rather than handing it [isSkippable] directly.
+     *
+     * A named method because a closure is not allowed as a callback here.
+     *
+     * @param SplFileInfo $file_info
+     * @param string $key
+     * @param Iterator $iterator
+     * @return bool
+     */
+    public static function isEntryAllowed($file_info, $key, $iterator)
+    {
+        $name = $file_info->getFilename();
+        $is_skippable = Dj_App_File_Util::isSkippable($name);
+        $is_allowed = !$is_skippable;
+
+        return $is_allowed;
+    }
+
     public static function listFiles($dir, $filters = [])
     {
         $res_obj = new Dj_App_Result();
@@ -302,7 +363,7 @@ class Dj_App_File_Util {
 
         // On unless the caller says otherwise: a dot file is config or metadata, and a
         // caller listing a data dir almost never means to act on one.
-        $skip_dot_files = 1;
+        $skip_dot_files = self::SKIP_DOT_FILES_DEFAULT;
 
         if (array_key_exists('skip_dot_files', $filters)) {
             $skip_dot_files = empty($filters['skip_dot_files']) ? 0 : 1;
@@ -339,6 +400,15 @@ class Dj_App_File_Util {
                 $dir_iterator = new FilesystemIterator($base_dir, $flags);
             } else {
                 $child_iterator = new RecursiveDirectoryIterator($base_dir, $flags);
+
+                // PRUNE dot directories before descending, rather than dropping their
+                // contents afterwards. Skipping `.git` from the listing while still
+                // walking it leaked `.git/config`, whose own name starts with no dot —
+                // and it cost a full walk of a tree nobody asked about.
+                if (!empty($skip_dot_files)) {
+                    $child_iterator = new RecursiveCallbackFilterIterator($child_iterator, [ __CLASS__, 'isEntryAllowed', ]);
+                }
+
                 $dir_iterator = new RecursiveIteratorIterator($child_iterator);
             }
 
@@ -348,7 +418,10 @@ class Dj_App_File_Util {
                 // NAME FIRST, every time. These are string tests on something already in
                 // hand; the isDir/isFile below reach the filesystem. Rejecting by name
                 // first means the entries that lose never cost a stat at all.
-                if (!empty($skip_dot_files) && (strpos($name, '.') === 0)) {
+                // NAME FIRST, and through the shared rule so this and the recursive prune
+                // above cannot drift apart. The filters go WITH it — whether dot entries
+                // count is its decision, not something to test before asking.
+                if (Dj_App_File_Util::isSkippable($name, $filters)) {
                     continue;
                 }
 

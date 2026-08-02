@@ -834,6 +834,55 @@ class Dj_App_File_Util_Test extends TestCase {
     }
 
     /**
+     * A dot DIRECTORY must not be descended into, not merely dropped from the result.
+     * It leaked the other way: `.git` was skipped by name while the walk still entered
+     * it, so `.git/config` — whose own name starts with no dot — came back anyway.
+     */
+    public function testListFilesRecursivePrunesDotDirs() {
+        mkdir($this->test_dir . '/.git');
+        mkdir($this->test_dir . '/normal');
+        file_put_contents($this->test_dir . '/.git/config', 'x');
+        file_put_contents($this->test_dir . '/normal/ok.txt', 'x');
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'recursive' => 1, ]);
+
+        $this->assertArrayHasKey('normal/ok.txt', $res_obj->files);
+        $this->assertArrayNotHasKey('.git/config', $res_obj->files);
+    }
+
+    /**
+     * ...and the other way round: asking for dot files must reach INSIDE a dot dir too.
+     */
+    public function testListFilesRecursiveReachesIntoDotDirsWhenAsked() {
+        mkdir($this->test_dir . '/.git');
+        file_put_contents($this->test_dir . '/.git/config', 'x');
+
+        $filters = [
+            'recursive' => 1,
+            'skip_dot_files' => 0,
+        ];
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, $filters);
+
+        $this->assertArrayHasKey('.git/config', $res_obj->files);
+    }
+
+    /**
+     * The base dir's OWN name is irrelevant — only the names of the entries are tested,
+     * so a dot-named dir lists its contents normally.
+     */
+    public function testListFilesListsInsideADotNamedDir() {
+        $dot_dir = $this->test_dir . '/.config';
+        mkdir($dot_dir);
+        file_put_contents($dot_dir . '/settings.ini', 'x');
+
+        $res_obj = Dj_App_File_Util::listFiles($dot_dir);
+
+        $this->assertTrue($res_obj->isSuccess());
+        $this->assertArrayHasKey('settings.ini', $res_obj->files);
+    }
+
+    /**
      * Filters still apply at depth — recursion widens WHAT is looked at, not what passes.
      */
     public function testListFilesRecursiveStillHonoursFilters() {
