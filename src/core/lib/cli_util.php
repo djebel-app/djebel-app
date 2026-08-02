@@ -17,12 +17,32 @@ class Dj_App_Cli_Util {
      * Returns false on non-CLI rather than throwing, so a caller can invoke it blindly.
      *
      * @param array $params time_limit (seconds; 0/absent = DEFAULT_TIME_LIMIT, capped at
-     *        MAX_TIME_LIMIT), ignore_user_abort (absent = on; pass 0 to stay abortable)
+     *        MAX_TIME_LIMIT), ignore_user_abort (absent = on; pass 0 to stay abortable),
+     *        display_errors (absent = 'stderr'; pass 0 to silence),
+     *        report_all_errors (absent = off; on = E_ALL + log_errors)
      * @return bool true when applied, false when not running under CLI
      */
     static function init($params = []) {
         if (php_sapi_name() != 'cli') {
             return false;
+        }
+
+        // Errors to STDERR, because STDOUT carries the RESULT a caller pipes onward and
+        // an error printed there corrupts it. Pass display_errors => 0 to silence them,
+        // or any value php takes.
+        $display_errors = 'stderr';
+
+        if (array_key_exists('display_errors', $params)) {
+            $display_errors = $params['display_errors'];
+        }
+
+        ini_set('display_errors', $display_errors);
+
+        // How much to report, and whether to log it, is an environment decision — opt-in
+        // rather than forced on every deployment.
+        if (!empty($params['report_all_errors'])) {
+            error_reporting(E_ALL);
+            ini_set('log_errors', 1);
         }
 
         // Report progress as it happens: a buffered long job looks hung, then dumps
