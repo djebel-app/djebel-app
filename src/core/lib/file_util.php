@@ -239,12 +239,16 @@ class Dj_App_File_Util {
      * @return Dj_App_Result
      */
     /**
-     * The entries directly inside a directory, keyed by name, narrowed by $filters.
+     * The entries inside a directory, narrowed by $filters.
      *
      * One lister rather than a glob() at every call site, each with its own idea of what
-     * to skip. Non-recursive by design: a caller that wants a tree walks it itself.
+     * to skip. Flat by default; pass recursive to walk the tree.
+     *
+     * The name-based filters are applied BEFORE the type ones, so an entry rejected by
+     * its name never costs a filesystem call.
      *
      * Filters, all optional and ANDed:
+     *   recursive      walk sub-directories too (default: off)
      *   dirs_only      only directories
      *   files_only     only files
      *   ext            extension, or a list of them, matched case-insensitively
@@ -259,9 +263,10 @@ class Dj_App_File_Util {
      *
      * @param string $dir
      * @param array $filters
-     * @return Dj_App_Result ->files as [ name => full path ]. An unreadable dir is an
-     *         ERROR; a readable one that matched nothing is a SUCCESS with none, so the
-     *         two are never confused for each other.
+     * @return Dj_App_Result ->files as [ key => full path ], keyed by NAME when flat and
+     *         by the path RELATIVE to $dir when recursive, since a basename repeats
+     *         across directories. An unreadable dir is an ERROR; a readable one that
+     *         matched nothing is a SUCCESS with none, so the two are never confused.
      */
     public static function listFiles($dir, $filters = [])
     {
@@ -280,6 +285,16 @@ class Dj_App_File_Util {
             return $res_obj;
         }
 
+        // ONE seam for the whole set rather than a hook per value: a site can add an
+        // extension, force recursion off, or attach a skip_callback for a kind of file
+        // it never wants listed, wherever the call was made from.
+        $filter_ctx = [
+            'dir' => $dir,
+        ];
+
+        $filters = Dj_App_Hooks::applyFilter('app.core.file_util.list_files_filters', $filters, $filter_ctx);
+        $filters = empty($filters) ? [] : (array) $filters;
+
         $dirs_only = empty($filters['dirs_only']) ? 0 : 1;
         $files_only = empty($filters['files_only']) ? 0 : 1;
         $name_pattern = empty($filters['name_pattern']) ? '' : $filters['name_pattern'];
@@ -293,24 +308,7 @@ class Dj_App_File_Util {
             $skip_dot_files = empty($filters['skip_dot_files']) ? 0 : 1;
         }
 
-        $found_entries = glob($dir . '/*');
-        $found_entries = empty($found_entries) ? [] : $found_entries;
-
-        // glob() does not return dot entries for `*`, so wanting them means asking for
-        // them separately. `.[!.]*` is the idiom that excludes `.` and `..` themselves.
-        if (empty($skip_dot_files)) {
-            $dot_entries = glob($dir . '/.[!.]*');
-            $dot_entries = empty($dot_entries) ? [] : $dot_entries;
-            $found_entries = array_merge($found_entries, $dot_entries);
-        }
-
-        if (empty($found_entries)) {
-            $res_obj->status = true;
-
-            return $res_obj;
-        }
-
-        $entries = [];
+        $recursive = empty($filters['recursive']) ? 0 : 1;
 
         $allowed_extensions = [];
 
@@ -319,41 +317,87 @@ class Dj_App_File_Util {
             $allowed_extensions = array_map('strtolower', $allowed_extensions);
         }
 
-        foreach ($found_entries as $entry) {
-            $name = basename($entry);
+        // SPL, not glob(): glob('*') silently omits dot entries, so honouring
+        // skip_dot_files=0 meant a SECOND glob for '.[!.]*' and merging the two.
+        // SKIP_DOTS drops only '.' and '..', so real dot files arrive like anything else.
+        $flags = FilesystemIterator::SKIP_DOTS | FilesystemIterator::CURRENT_AS_FILEINFO;
 
-            if (!empty($skip_dot_files) && strpos($name, '.') === 0) {
-                continue;
+        // Filterable for the cases the filters above cannot reach — FOLLOW_SYMLINKS on a
+        // tree of links, or UNIX_PATHS on Windows. CURRENT_AS_FILEINFO is what the loop
+        // below is written against, so a listener that drops it breaks the walk.
+        $flags_ctx = $filter_ctx;
+        $flags_ctx['filters'] = $filters;
+
+        $flags = Dj_App_Hooks::applyFilter('app.core.file_util.list_files_flags', $flags, $flags_ctx);
+        $flags = (int) $flags;
+
+        $base_dir = rtrim($dir, '/');
+        $entries = [];
+
+        try {
+            if (empty($recursive)) {
+                $dir_iterator = new FilesystemIterator($base_dir, $flags);
+            } else {
+                $child_iterator = new RecursiveDirectoryIterator($base_dir, $flags);
+                $dir_iterator = new RecursiveIteratorIterator($child_iterator);
             }
 
-            if (!empty($dirs_only) && !is_dir($entry)) {
-                continue;
-            }
+            foreach ($dir_iterator as $file_info) {
+                $name = $file_info->getFilename();
 
-            if (!empty($files_only) && !is_file($entry)) {
-                continue;
-            }
-
-            if (!empty($allowed_extensions)) {
-                $ext = Dj_App_File_Util::getExt($name);
-                $ext = strtolower($ext);
-
-                if (!in_array($ext, $allowed_extensions)) {
+                // NAME FIRST, every time. These are string tests on something already in
+                // hand; the isDir/isFile below reach the filesystem. Rejecting by name
+                // first means the entries that lose never cost a stat at all.
+                if (!empty($skip_dot_files) && (strpos($name, '.') === 0)) {
                     continue;
                 }
-            }
 
-            if (!empty($name_pattern) && !preg_match($name_pattern, $name)) {
-                continue;
-            }
+                if (!empty($name_pattern) && !preg_match($name_pattern, $name)) {
+                    continue;
+                }
 
-            // LAST, so it only ever sees what the cheap tests above kept — and it is the
-            // only test that costs a function call per entry.
-            if (!empty($skip_callback) && call_user_func($skip_callback, $name, $entry)) {
-                continue;
-            }
+                if (!empty($allowed_extensions)) {
+                    $ext = Dj_App_File_Util::getExt($name);
+                    $ext = strtolower($ext);
 
-            $entries[$name] = $entry;
+                    if (!in_array($ext, $allowed_extensions)) {
+                        continue;
+                    }
+                }
+
+                // Only now, on what survived the free tests.
+                if (!empty($dirs_only) && !$file_info->isDir()) {
+                    continue;
+                }
+
+                if (!empty($files_only) && !$file_info->isFile()) {
+                    continue;
+                }
+
+                $full_file = $file_info->getPathname();
+
+                // LAST: the only test that costs a call into the caller's own code.
+                if (!empty($skip_callback) && call_user_func($skip_callback, $name, $full_file)) {
+                    continue;
+                }
+
+                // Flat listing keys by name. A RECURSIVE one cannot: two dirs may hold
+                // the same basename and one would quietly overwrite the other, so the key
+                // is the path relative to $dir, which is unique by construction.
+                $key = $name;
+
+                if (!empty($recursive)) {
+                    $key = substr($full_file, strlen($base_dir) + 1);
+                }
+
+                $entries[$key] = $full_file;
+            }
+        } catch (Exception $e) {
+            // An unreadable dir throws rather than returning nothing — report it as the
+            // error it is instead of an empty listing that reads like "nothing here".
+            $res_obj->msg = $e->getMessage();
+
+            return $res_obj;
         }
 
         $res_obj->files = $entries;

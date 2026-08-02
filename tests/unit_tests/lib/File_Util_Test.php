@@ -789,7 +789,7 @@ class Dj_App_File_Util_Test extends TestCase {
     }
 
     /**
-     * Non-recursive on purpose: a caller that wants a tree walks it itself.
+     * Flat by default: a nested file is not reported unless recursion is asked for.
      */
     public function testListFilesDoesNotRecurse() {
         mkdir($this->test_dir . '/outer');
@@ -799,5 +799,56 @@ class Dj_App_File_Util_Test extends TestCase {
 
         $this->assertArrayHasKey('outer', $res_obj->files);
         $this->assertArrayNotHasKey('inner.txt', $res_obj->files);
+    }
+
+    public function testListFilesRecursiveReachesNestedEntries() {
+        mkdir($this->test_dir . '/outer/deeper', 0755, true);
+        file_put_contents($this->test_dir . '/top.txt', 'x');
+        file_put_contents($this->test_dir . '/outer/inner.txt', 'x');
+        file_put_contents($this->test_dir . '/outer/deeper/deep.txt', 'x');
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'recursive' => 1, ]);
+
+        $this->assertTrue($res_obj->isSuccess());
+        $this->assertArrayHasKey('top.txt', $res_obj->files);
+        $this->assertArrayHasKey('outer/inner.txt', $res_obj->files);
+        $this->assertArrayHasKey('outer/deeper/deep.txt', $res_obj->files);
+    }
+
+    /**
+     * The reason a recursive listing cannot key by basename: the same name in two
+     * directories would collide and one would be lost without a word.
+     */
+    public function testListFilesRecursiveKeepsSameNamedFilesApart() {
+        mkdir($this->test_dir . '/a');
+        mkdir($this->test_dir . '/b');
+        file_put_contents($this->test_dir . '/a/dup.txt', 'from a');
+        file_put_contents($this->test_dir . '/b/dup.txt', 'from b');
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'recursive' => 1, ]);
+
+        $this->assertArrayHasKey('a/dup.txt', $res_obj->files);
+        $this->assertArrayHasKey('b/dup.txt', $res_obj->files);
+        $this->assertSame('from a', file_get_contents($res_obj->files['a/dup.txt']));
+        $this->assertSame('from b', file_get_contents($res_obj->files['b/dup.txt']));
+    }
+
+    /**
+     * Filters still apply at depth — recursion widens WHAT is looked at, not what passes.
+     */
+    public function testListFilesRecursiveStillHonoursFilters() {
+        mkdir($this->test_dir . '/nested');
+        file_put_contents($this->test_dir . '/nested/keep.zip', 'x');
+        file_put_contents($this->test_dir . '/nested/drop.txt', 'x');
+
+        $filters = [
+            'recursive' => 1,
+            'ext' => 'zip',
+        ];
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, $filters);
+
+        $this->assertArrayHasKey('nested/keep.zip', $res_obj->files);
+        $this->assertArrayNotHasKey('nested/drop.txt', $res_obj->files);
     }
 }
