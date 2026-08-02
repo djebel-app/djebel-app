@@ -23,8 +23,22 @@ class Dj_App_Cli_Util {
      * @return bool true when applied, false when not running under CLI
      */
     static function init($params = []) {
+        // Refusing is the default: everything below shapes a CLI PROCESS, so reaching it
+        // from the web means the caller is wrong about where it is running. Pass
+        // require_cli => 0 to get a plain false instead.
+        $require_cli = 1;
+
+        if (array_key_exists('require_cli', $params)) {
+            $require_cli = empty($params['require_cli']) ? 0 : 1;
+        }
+
         if (php_sapi_name() != 'cli') {
-            return false;
+            if (empty($require_cli)) {
+                return false;
+            }
+
+            http_response_code(403);
+            die('Cannot run');
         }
 
         // Errors to STDERR, because STDOUT carries the RESULT a caller pipes onward and
@@ -38,11 +52,33 @@ class Dj_App_Cli_Util {
 
         ini_set('display_errors', $display_errors);
 
-        // How much to report, and whether to log it, is an environment decision — opt-in
-        // rather than forced on every deployment.
+        // Always. Logging corrupts no output and bothers nobody — an error that happened
+        // should be recorded whatever the environment.
+        ini_set('log_errors', 1);
+
+        // Where those logged errors land. With no destination PHP falls back to the SAPI
+        // default, stderr on CLI, so every error prints twice and none survives the run.
+        // Redirected ONLY when a caller names a file. Left alone otherwise, so whatever
+        // php.ini or the site already decided keeps standing.
+        $error_log_file = empty($params['error_log']) ? '' : $params['error_log'];
+        $error_log_file = Dj_App_Hooks::applyFilter('app.core.cli.error_log_file', $error_log_file);
+
+        if ($error_log_file != '') {
+            $error_log_dir = dirname($error_log_file);
+            $has_error_log_dir = is_dir($error_log_dir);
+
+            // Only into a directory that already exists: error_log() to a missing one
+            // fails silently and the errors are gone, while PHP's default keeps them on
+            // stderr where they can still be seen. Nothing is created here.
+            if ($has_error_log_dir) {
+                ini_set('error_log', $error_log_file);
+            }
+        }
+
+        // How MUCH to report is the environment's call, so raising it is opt-in rather
+        // than forced on every deployment.
         if (!empty($params['report_all_errors'])) {
             error_reporting(E_ALL);
-            ini_set('log_errors', 1);
         }
 
         // Report progress as it happens: a buffered long job looks hung, then dumps
@@ -76,6 +112,8 @@ class Dj_App_Cli_Util {
         // Bound the run. CLI is unlimited by default, so an unattended job that wedges
         // (cron, a scheduler) sits there until someone notices.
         $time_limit = empty($params['time_limit']) ? self::DEFAULT_TIME_LIMIT : (int) $params['time_limit'];
+        $time_limit = Dj_App_Hooks::applyFilter('app.core.cli.time_limit', $time_limit);
+        $time_limit = (int) $time_limit;
 
         if ($time_limit > self::MAX_TIME_LIMIT) {
             $time_limit = self::MAX_TIME_LIMIT;
