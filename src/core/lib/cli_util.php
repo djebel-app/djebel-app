@@ -63,14 +63,13 @@ class Dj_App_Cli_Util {
         $error_log_file = empty($params['error_log']) ? '' : $params['error_log'];
         $error_log_file = Dj_App_Hooks::applyFilter('app.core.cli.error_log_file', $error_log_file);
 
-        if ($error_log_file != '') {
+        if (!empty($error_log_file)) {
             $error_log_dir = dirname($error_log_file);
-            $has_error_log_dir = is_dir($error_log_dir);
 
             // Only into a directory that already exists: error_log() to a missing one
             // fails silently and the errors are gone, while PHP's default keeps them on
             // stderr where they can still be seen. Nothing is created here.
-            if ($has_error_log_dir) {
+            if (is_dir($error_log_dir)) {
                 ini_set('error_log', $error_log_file);
             }
         }
