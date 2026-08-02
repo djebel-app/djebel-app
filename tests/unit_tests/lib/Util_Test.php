@@ -248,9 +248,28 @@ BUFF_EOF;
         $out = Dj_App_Util::replaceTags('{YYYY}/%%MM%%/x_{DD}-%%YYYY%%.csv', $tags);
         $this->assertEquals('2026/07/x_03-2026.csv', $out);
 
+        // %TAG% form (single percent)
+        $out = Dj_App_Util::replaceTags('data_%YYYY%-%MM%-%DD%.csv', $tags);
+        $this->assertEquals('data_2026-07-03.csv', $out);
+
+        // all three delimiter forms in one string
+        $out = Dj_App_Util::replaceTags('{YYYY}/%%MM%%/%DD%.csv', $tags);
+        $this->assertEquals('2026/07/03.csv', $out);
+
+        // ORDER GUARD: %%TAG%% must be consumed before %TAG%, or the single-% form eats the
+        // inner part and leaves a stray % on each side ('%2026%' instead of '2026').
+        $out = Dj_App_Util::replaceTags('%%YYYY%%', $tags);
+        $this->assertEquals('2026', $out);
+        $out = Dj_App_Util::replaceTags('a_%%YYYY%%_b_%MM%_c', $tags);
+        $this->assertEquals('a_2026_b_07_c', $out);
+
+        // a lone % that isn't a known tag is left alone
+        $out = Dj_App_Util::replaceTags('100% done in {YYYY}', $tags);
+        $this->assertEquals('100% done in 2026', $out);
+
         // case-insensitive (str_ireplace) — a lowercase tag in the template still matches
-        $out = Dj_App_Util::replaceTags('y={yyyy} m=%%mm%%', $tags);
-        $this->assertEquals('y=2026 m=07', $out);
+        $out = Dj_App_Util::replaceTags('y={yyyy} m=%%mm%% d=%dd%', $tags);
+        $this->assertEquals('y=2026 m=07 d=03', $out);
 
         // no matching tag -> buffer returned unchanged
         $out = Dj_App_Util::replaceTags('nothing here', $tags);

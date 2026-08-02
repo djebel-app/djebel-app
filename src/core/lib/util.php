@@ -1520,9 +1520,9 @@ MSG_EOF;
     }
 
     /**
-     * Replaces {tag} and %%tag%% placeholders in a string (case-insensitive). Pass BARE tag
-     * names as keys — both delimiter forms are matched, so a template may use either.
-     * Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%-{DD}.csv', ['YYYY' => '2026', 'MM' => '07', 'DD' => '03']);
+     * Replaces {tag}, %%tag%% and %tag% placeholders in a string (case-insensitive). Pass
+     * BARE tag names as keys — every delimiter form is matched, so a template may use any.
+     * Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%-%DD%.csv', ['YYYY' => '2026', 'MM' => '07', 'DD' => '03']);
      *
      * @param string $buff The string containing the tags
      * @param array $tags Map of bare-tag-name => replacement value
@@ -1537,11 +1537,15 @@ MSG_EOF;
         $search = [];
         $replace = [];
 
-        // Each bare tag matches both {TAG} and %%TAG%%
+        // %%TAG%% is queued BEFORE %TAG% deliberately: str_ireplace walks the search list in
+        // order, and %%TAG%% CONTAINS %TAG%, so replacing the single-% form first would eat
+        // the inner part of a %%TAG%% and leave a stray % on each side.
         foreach ($tags as $tag => $val) {
             $search[] = '{' . $tag . '}';
             $replace[] = $val;
             $search[] = '%%' . $tag . '%%';
+            $replace[] = $val;
+            $search[] = '%' . $tag . '%';
             $replace[] = $val;
         }
 
