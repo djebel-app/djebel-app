@@ -4,23 +4,20 @@
  * Provides argument parsing and normalization
  */
 class Dj_App_Cli_Util {
-    // 2 hours. Long enough for a slow upload or a big build, short enough that a wedged
-    // job cannot sit there forever — see init() for why a ceiling is required rather
-    // than optional. Written as arithmetic, not 7200, so the duration is readable
-    // without doing the division.
+    // How long a run may take when the caller names no limit. 2 hours.
     const DEFAULT_TIME_LIMIT = 2 * 60 * 60;
 
-    // 24 hours, the ceiling a caller cannot raise past. Anything longer is a daemon
-    // rather than a CLI command, and PHP is the wrong tool to keep one alive.
+    // The most a caller can ask for. Past this it is a daemon, not a CLI command.
     const MAX_TIME_LIMIT = 24 * 60 * 60;
 
     /**
      * Prepare the process for a long-running CLI command: unbuffered output, survive a
-     * closed terminal, and a hard ceiling.
+     * dead output reader, and a hard ceiling.
      *
      * Returns false on non-CLI rather than throwing, so a caller can invoke it blindly.
      *
-     * @param array $params time_limit (seconds; 0/absent = DEFAULT_TIME_LIMIT)
+     * @param array $params time_limit (seconds; 0/absent = DEFAULT_TIME_LIMIT, capped at
+     *        MAX_TIME_LIMIT), ignore_user_abort (absent = on; pass 0 to stay abortable)
      * @return bool true when applied, false when not running under CLI
      */
     static function init($params = []) {
@@ -28,33 +25,36 @@ class Dj_App_Cli_Util {
             return false;
         }
 
-        // Report progress AS IT HAPPENS. A buffered long job looks hung for minutes and
-        // then dumps everything at once, which is indistinguishable from a crash while
-        // you are watching it. CLI usually defaults this way already, but a caller or a
-        // php.ini can have changed it, and this is the one place that guarantees it.
+        // Report progress as it happens: a buffered long job looks hung, then dumps
+        // everything at the end. Usually the CLI default — guaranteed here.
         ini_set('implicit_flush', 1);
         ini_set('output_buffering', 0);
         ob_implicit_flush(true);
 
-        // zlib.output_compression is INI_ALL, but PHP LOCKS it the moment output starts
-        // and then ini_set() raises a warning that reaches error_log even behind @ — the
-        // same trap Dj_App_Request::finishRequest() guards. A tool that printed a banner
-        // before calling init() would otherwise log a warning on every run. It is also a
-        // response-compression setting, so on CLI clearing it is belt-and-braces anyway.
+        // Only before output starts — setting it later warns into error_log, even with @.
+        // Same guard as [Dj_App_Request::finishRequest].
         if (!headers_sent()) {
             ini_set('zlib.output_compression', 0);
         }
 
-        // Survive a closed terminal or a dropped SSH session: a job that is midway
-        // through writing a file or streaming an upload must finish rather than leave
-        // the other side holding a truncated result.
-        ignore_user_abort(true);
+        // Keep running when the output reader goes away (`cmd | head`, a `tee` that
+        // dies), instead of stopping halfway and leaving partial work behind.
+        //
+        // ⚠️ Signals are NOT affected — Ctrl+C, a closed terminal and SIGTERM all still
+        // kill the process (verified). Outliving a hangup needs nohup/setsid/tmux.
+        // On by default; pass ignore_user_abort => 0 to stay abortable.
+        $ignore_abort = 1;
 
-        // REQUIRED, not optional, and precisely BECAUSE of the line above: with the
-        // abort ignored, Ctrl+C and a hangup no longer stop this process, so an
-        // unlimited runtime (PHP CLI's default) means a wedged job runs until the box
-        // is rebooted. The ceiling is what keeps "cannot be interrupted" from becoming
-        // "cannot be stopped".
+        if (array_key_exists('ignore_user_abort', $params)) {
+            $ignore_abort = empty($params['ignore_user_abort']) ? 0 : 1;
+        }
+
+        if (!empty($ignore_abort)) {
+            ignore_user_abort(true);
+        }
+
+        // Bound the run. CLI is unlimited by default, so an unattended job that wedges
+        // (cron, a scheduler) sits there until someone notices.
         $time_limit = empty($params['time_limit']) ? self::DEFAULT_TIME_LIMIT : (int) $params['time_limit'];
 
         if ($time_limit > self::MAX_TIME_LIMIT) {
