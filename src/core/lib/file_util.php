@@ -238,6 +238,130 @@ class Dj_App_File_Util {
      * @param string $dir
      * @return Dj_App_Result
      */
+    /**
+     * The entries directly inside a directory, keyed by name, narrowed by $filters.
+     *
+     * One lister rather than a glob() at every call site, each with its own idea of what
+     * to skip. Non-recursive by design: a caller that wants a tree walks it itself.
+     *
+     * Filters, all optional and ANDed:
+     *   dirs_only      only directories
+     *   files_only     only files
+     *   ext            extension, or a list of them, matched case-insensitively
+     *   name_pattern   a preg pattern the NAME must match — the strict one, for a caller
+     *                  that knows the shape it expects (a version, an id, a date)
+     *   skip_dot_files drop names beginning with a dot (default: on)
+     *   skip_callback  a NAMED callable — 'my_func' or [ $obj, 'method' ], never a
+     *                  closure — receiving ($name, $full_path) and returning true to drop
+     *                  the entry. For what the filters above cannot express: an in-flight
+     *                  upload temp, a lock file, anything the caller alone recognises.
+     *                  Runs LAST, on the survivors only.
+     *
+     * @param string $dir
+     * @param array $filters
+     * @return Dj_App_Result ->files as [ name => full path ]. An unreadable dir is an
+     *         ERROR; a readable one that matched nothing is a SUCCESS with none, so the
+     *         two are never confused for each other.
+     */
+    public static function listFiles($dir, $filters = [])
+    {
+        $res_obj = new Dj_App_Result();
+        $res_obj->files = [];
+
+        if (empty($dir)) {
+            $res_obj->msg = 'Empty dir';
+
+            return $res_obj;
+        }
+
+        if (!is_dir($dir)) {
+            $res_obj->msg = 'No such dir: ' . $dir;
+
+            return $res_obj;
+        }
+
+        $dirs_only = empty($filters['dirs_only']) ? 0 : 1;
+        $files_only = empty($filters['files_only']) ? 0 : 1;
+        $name_pattern = empty($filters['name_pattern']) ? '' : $filters['name_pattern'];
+        $skip_callback = empty($filters['skip_callback']) ? '' : $filters['skip_callback'];
+
+        // On unless the caller says otherwise: a dot file is config or metadata, and a
+        // caller listing a data dir almost never means to act on one.
+        $skip_dot_files = 1;
+
+        if (array_key_exists('skip_dot_files', $filters)) {
+            $skip_dot_files = empty($filters['skip_dot_files']) ? 0 : 1;
+        }
+
+        $found_entries = glob($dir . '/*');
+        $found_entries = empty($found_entries) ? [] : $found_entries;
+
+        // glob() does not return dot entries for `*`, so wanting them means asking for
+        // them separately. `.[!.]*` is the idiom that excludes `.` and `..` themselves.
+        if (empty($skip_dot_files)) {
+            $dot_entries = glob($dir . '/.[!.]*');
+            $dot_entries = empty($dot_entries) ? [] : $dot_entries;
+            $found_entries = array_merge($found_entries, $dot_entries);
+        }
+
+        if (empty($found_entries)) {
+            $res_obj->status = true;
+
+            return $res_obj;
+        }
+
+        $entries = [];
+
+        $allowed_extensions = [];
+
+        if (!empty($filters['ext'])) {
+            $allowed_extensions = (array) $filters['ext'];
+            $allowed_extensions = array_map('strtolower', $allowed_extensions);
+        }
+
+        foreach ($found_entries as $entry) {
+            $name = basename($entry);
+
+            if (!empty($skip_dot_files) && strpos($name, '.') === 0) {
+                continue;
+            }
+
+            if (!empty($dirs_only) && !is_dir($entry)) {
+                continue;
+            }
+
+            if (!empty($files_only) && !is_file($entry)) {
+                continue;
+            }
+
+            if (!empty($allowed_extensions)) {
+                $ext = Dj_App_File_Util::getExt($name);
+                $ext = strtolower($ext);
+
+                if (!in_array($ext, $allowed_extensions)) {
+                    continue;
+                }
+            }
+
+            if (!empty($name_pattern) && !preg_match($name_pattern, $name)) {
+                continue;
+            }
+
+            // LAST, so it only ever sees what the cheap tests above kept — and it is the
+            // only test that costs a function call per entry.
+            if (!empty($skip_callback) && call_user_func($skip_callback, $name, $entry)) {
+                continue;
+            }
+
+            $entries[$name] = $entry;
+        }
+
+        $res_obj->files = $entries;
+        $res_obj->status = true;
+
+        return $res_obj;
+    }
+
     public static function rmdir($dir) {
         $res_obj = new Dj_App_Result();
         $res_obj->deleted = false;

@@ -640,4 +640,164 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertFalse($res_obj->isSuccess());
         $this->assertFileExists($file);
     }
+
+    /**
+     * A dir holding one of each thing the filters have to tell apart.
+     */
+    private function seedListFilesDir() {
+        mkdir($this->test_dir . '/1.0.0');
+        mkdir($this->test_dir . '/2.1.0-rc.1');
+        mkdir($this->test_dir . '/zzz_1.0.0.old.20260802-174338');
+
+        file_put_contents($this->test_dir . '/a.zip', 'x');
+        file_put_contents($this->test_dir . '/b.TXT', 'x');
+        file_put_contents($this->test_dir . '/c.tar.xz', 'x');
+        file_put_contents($this->test_dir . '/.hidden', 'x');
+        file_put_contents($this->test_dir . '/d.zip.dj_upload.tmp', 'x');
+    }
+
+    /**
+     * Named, because a closure is not allowed as a callback here.
+     */
+    public static function skipUploadTemps($name, $file) {
+        $is_temp = strpos($name, '.dj_upload.') !== false;
+
+        return $is_temp;
+    }
+
+    public function testListFilesReturnsEveryEntryKeyedByName() {
+        $this->seedListFilesDir();
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir);
+
+        $this->assertTrue($res_obj->isSuccess());
+        $this->assertArrayHasKey('1.0.0', $res_obj->files);
+        $this->assertArrayHasKey('a.zip', $res_obj->files);
+        $this->assertSame($this->test_dir . '/a.zip', $res_obj->files['a.zip']);
+    }
+
+    /**
+     * The distinction a plain array could not make: nothing to list is a SUCCESS, while
+     * a dir that is not there is an ERROR. Confusing them hides a typo'd path.
+     */
+    public function testListFilesSeparatesEmptyFromMissing() {
+        $empty_dir = $this->test_dir . '/empty';
+        mkdir($empty_dir);
+
+        $empty_res_obj = Dj_App_File_Util::listFiles($empty_dir);
+
+        $this->assertTrue($empty_res_obj->isSuccess());
+        $this->assertEmpty($empty_res_obj->files);
+
+        $missing_res_obj = Dj_App_File_Util::listFiles($this->test_dir . '/nope');
+
+        $this->assertFalse($missing_res_obj->isSuccess());
+        $this->assertEmpty($missing_res_obj->files);
+
+        $empty_arg_res_obj = Dj_App_File_Util::listFiles('');
+
+        $this->assertFalse($empty_arg_res_obj->isSuccess());
+    }
+
+    public function testListFilesDirsOnly() {
+        $this->seedListFilesDir();
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'dirs_only' => 1, ]);
+
+        $this->assertArrayHasKey('1.0.0', $res_obj->files);
+        $this->assertArrayNotHasKey('a.zip', $res_obj->files);
+    }
+
+    public function testListFilesFilesOnly() {
+        $this->seedListFilesDir();
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'files_only' => 1, ]);
+
+        $this->assertArrayHasKey('a.zip', $res_obj->files);
+        $this->assertArrayNotHasKey('1.0.0', $res_obj->files);
+    }
+
+    /**
+     * The extension is matched case-insensitively, and takes a list as readily as one.
+     */
+    public function testListFilesFiltersByExtension() {
+        $this->seedListFilesDir();
+
+        $zip_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'ext' => 'zip', ]);
+
+        $this->assertArrayHasKey('a.zip', $zip_res_obj->files);
+        $this->assertArrayNotHasKey('c.tar.xz', $zip_res_obj->files);
+
+        $many_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'ext' => [ 'zip', 'XZ', ], ]);
+
+        $this->assertArrayHasKey('a.zip', $many_res_obj->files);
+        $this->assertArrayHasKey('c.tar.xz', $many_res_obj->files);
+
+        // Upper-case ON DISK, lower-case in the filter.
+        $txt_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'ext' => 'txt', ]);
+
+        $this->assertArrayHasKey('b.TXT', $txt_res_obj->files);
+    }
+
+    /**
+     * Regression guard for the bug this was built for: a directory whose name merely
+     * CONTAINS a version — a parked `zzz_1.0.0.old.<ts>` — was treated as a release and
+     * published, because the old test only asked whether the name held safe characters.
+     */
+    public function testListFilesNamePatternRejectsALookalike() {
+        $this->seedListFilesDir();
+
+        $filters = [
+            'dirs_only' => 1,
+            'name_pattern' => '#^\d+\.\d+\.\d+(-[\w.]+)?$#',
+        ];
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, $filters);
+
+        $this->assertArrayHasKey('1.0.0', $res_obj->files);
+        $this->assertArrayHasKey('2.1.0-rc.1', $res_obj->files);
+        $this->assertArrayNotHasKey('zzz_1.0.0.old.20260802-174338', $res_obj->files);
+    }
+
+    public function testListFilesSkipsDotFilesUnlessAsked() {
+        $this->seedListFilesDir();
+
+        $default_res_obj = Dj_App_File_Util::listFiles($this->test_dir);
+
+        $this->assertArrayNotHasKey('.hidden', $default_res_obj->files);
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'skip_dot_files' => 0, ]);
+
+        $this->assertArrayHasKey('.hidden', $res_obj->files);
+    }
+
+    /**
+     * For what the built-in filters cannot express — here, an in-flight upload temp.
+     */
+    public function testListFilesSkipCallbackDropsEntries() {
+        $this->seedListFilesDir();
+
+        $filters = [
+            'files_only' => 1,
+            'skip_callback' => [ __CLASS__, 'skipUploadTemps', ],
+        ];
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, $filters);
+
+        $this->assertArrayNotHasKey('d.zip.dj_upload.tmp', $res_obj->files);
+        $this->assertArrayHasKey('a.zip', $res_obj->files);
+    }
+
+    /**
+     * Non-recursive on purpose: a caller that wants a tree walks it itself.
+     */
+    public function testListFilesDoesNotRecurse() {
+        mkdir($this->test_dir . '/outer');
+        file_put_contents($this->test_dir . '/outer/inner.txt', 'x');
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir);
+
+        $this->assertArrayHasKey('outer', $res_obj->files);
+        $this->assertArrayNotHasKey('inner.txt', $res_obj->files);
+    }
 }
