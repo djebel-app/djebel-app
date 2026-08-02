@@ -22,8 +22,8 @@ if (php_sapi_name() !== 'cli') {
 $tool_name = basename(__FILE__);
 $app_dir = dirname(__DIR__);
 
-// Load core libs
-require_once $app_dir . '/src/core/lib/cli_util.php';
+// Load core libs. index.php loads them in dependency order and pulls in cli_util itself
+// when running under CLI, so requiring that one by hand would only load it half-built.
 putenv('DJEBEL_APP_CORE_RUN=0');
 require_once $app_dir . '/index.php';
 

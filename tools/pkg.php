@@ -13,9 +13,12 @@ if (php_sapi_name() !== 'cli') {
 // Get tool name for usage messages
 $tool_name = basename(__FILE__);
 
-// Load CLI utilities
+// Load core libs. Through index.php, which loads them in dependency order — cli_util
+// sits on Dj_App_Hooks and Dj_App_Util, so requiring it alone leaves it half-built.
+// CORE_RUN=0 keeps it to the libraries; nothing is served.
 $app_dir = dirname(__DIR__);
-require_once $app_dir . '/src/core/lib/cli_util.php';
+putenv('DJEBEL_APP_CORE_RUN=0');
+require_once $app_dir . '/index.php';
 
 // Get command line arguments
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
