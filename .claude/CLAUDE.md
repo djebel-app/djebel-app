@@ -27,7 +27,7 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 ### Testing
 
 **Read `docs/developers/testing.md` BEFORE writing a test or any test infrastructure.** It carries
-the rules: one runner for the framework AND every addon (`php tools/test.php [addon-dir]`,
+the rules: one runner for the framework AND every addon (`php tools/testing/run.php [addon-dir]`,
 dir optional, defaults to the cwd), an addon ships test files ONLY (never its own
 `tests/bootstrap.php`), never invent a per-addon "am I testing" env var
 (`Dj_App_Env::isInRunningUnitTests()` already answers it), semantic assertions, asserted
@@ -37,7 +37,7 @@ How to RUN the suites — every flag and invocation form — is in `tests/readme
 
 Quick reference:
 - Framework suite the plain way: `cd tests && ./vendor/bin/phpunit`
-- Anything, framework or addon: `php tools/test.php [addon-dir]`
+- Anything, framework or addon: `php tools/testing/run.php [addon-dir]`
 - Test configuration: `tests/phpunit.xml`
 
 ### Dependencies
@@ -58,7 +58,7 @@ Four CLI tools live in `tools/`:
 - **pkg.php** — Builds PHAR and/or source ZIP of djebel-app (uses PHP ZipArchive)
 - **bundle.php** — Creates site bundles with plugins, themes, PHAR, and manifest
 - **release.php** — Fast ozip-based packaging for djebel-app, plugins, and themes
-- **test.php** — Runs the test suite of the framework or of any addon (see Testing above)
+- **testing/run.php** — Runs the test suite of the framework or of any addon (see Testing above)
 
 **Every tool calls `Dj_App_Cli_Util::init()` right after loading `index.php`** — never a
 hand-rolled `php_sapi_name()` check. One call refuses non-CLI (403 + die), routes errors
