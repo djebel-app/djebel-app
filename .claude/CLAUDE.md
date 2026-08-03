@@ -892,6 +892,14 @@ Key configuration points:
 - `app.core.load_libs`: eager-load libs at bootstrap — `1`/`true`/`*` = every lib, or a list of ids/globs like `orbisius*` (`[app] load_libs`)
 - `app.core.theme.load_theme`: Theme system toggle
 - `app.core.theme.load_theme_functions`: overrides the site's `theme_load_functions`
+- `app.core.shortcodes.full_page_replace`: replace shortcodes in the whole buffer, not
+  just from `<body>` (default off)
+- `app.core.shortcodes.process_all`: call the callback for EVERY occurrence instead of
+  rendering once and reusing the result (`[app] shortcodes.process_all`).
+  **Off by default and should stay off** — same tag + same params yields the same output,
+  so N identical tags normally cost ONE call. Turn it on only for a shortcode that must
+  differ per occurrence (a counter, a random pick) and accept N calls for every shortcode
+  on the site.
 
 There is NO admin area — it was removed from index.php ("lean and mean web app"), so
 there is no `app.core.load_admin` to configure.
