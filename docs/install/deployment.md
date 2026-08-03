@@ -35,15 +35,27 @@ mysite/
 | vhost | `DocumentRoot /home/user/mysite/public` | you control the vhost — simplest, no symlinks involved |
 | symlink | `public_html -> mysite/public` | shared hosting with a fixed docroot name |
 | home-dir split | `~/.ht_djebel` + loader in `~/public_html/` | shared hosting where symlinks are blocked — the loader scans one level up and finds it |
+| all-in-one (flat) | docroot = the site dir; `.ht_djebel/` sits INSIDE it | no vhost control, subdir installs, quick drops — convenient, but read the warning below |
 
-⚠️ **Do not put `.ht_djebel/` inside the docroot** (the retired flat layout). Apache's
-default `.ht*` protection matches file *basenames* only, so `/.ht_djebel/conf/app.ini`
-(basename `app.ini`) is served on a stock server. If a legacy flat site can't be
-migrated yet, drop a deny-all `.htaccess` inside `.ht_djebel/`:
+⚠️ **The flat layout's security depends 100% on the web server blocking `.ht`-prefixed
+names.** That is exactly what the `.ht_` prefix is for — hardened servers deny anything
+starting with `.ht`, and the private dir rides the same convention as `.htaccess`/
+`.htpasswd`. But don't assume it — two stock-config gaps are common:
+
+- Apache's shipped rule (`<Files ".ht*">`) matches file *basenames* only: it denies
+  `/.ht_djebel` itself but NOT `/.ht_djebel/conf/app.ini` (basename `app.ini`).
+- nginx ships NO dotfile block at all — distro configs usually add one, stock doesn't.
+
+Make the site self-protecting instead of hoping — one line in the site's own
+`.htaccess` blocks the whole `.ht*` subtree:
 
 ```apache
-Require all denied
+RedirectMatch 404 "/\.ht"
 ```
+
+(nginx: `location ~ /\.ht { deny all; }` in the server block.) Belt and suspenders:
+a deny-all `.htaccess` inside `.ht_djebel/` too (`Require all denied`), and verify
+after deploy — `curl -I https://example.com/.ht_djebel/conf/app.ini` must NOT be 200.
 
 ## The loader contract
 
