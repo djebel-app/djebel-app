@@ -13,12 +13,6 @@
  *   php release.php --help                           # Show usage
  */
 
-// CLI only
-if (php_sapi_name() !== 'cli') {
-    http_response_code(403);
-    die('Cannot run');
-}
-
 $tool_name = basename(__FILE__);
 $app_dir = dirname(__DIR__);
 
@@ -26,6 +20,11 @@ $app_dir = dirname(__DIR__);
 // when running under CLI, so requiring that one by hand would only load it half-built.
 putenv('DJEBEL_APP_CORE_RUN=0');
 require_once $app_dir . '/index.php';
+
+// Refuses to run outside CLI (403 + die), routes errors to stderr so stdout keeps only
+// the tool's own output, unbuffers so a long build reports as it goes, and bounds the
+// run. Replaces the hand-rolled sapi check every tool used to carry.
+Dj_App_Cli_Util::init();
 
 // Get command line arguments
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
