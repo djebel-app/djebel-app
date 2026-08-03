@@ -138,6 +138,14 @@ class Dj_App_Shortcode {
         // by default we'll only replace shortcodes starting from <body>
         $full_page_replace = Dj_App_Config::cfg('app.core.shortcodes.full_page_replace', false);
 
+        // OFF by default: the same tag with the same params yields the same output, so it is
+        // rendered once and reused for every occurrence — N identical tags cost one call, not
+        // N. Turn it on ([app] shortcodes.process_all) only for a shortcode that must run per
+        // occurrence (a counter, a random pick), and pay N calls for it.
+        $options_obj = Dj_App_Options::getInstance();
+        $process_all_default = Dj_App_Config::cfg('app.core.shortcodes.process_all', false);
+        $process_all = $options_obj->isEnabled('app.shortcodes.process_all', $process_all_default);
+
         if ($full_page_replace) {
             $content = $buff;
         } else {
@@ -218,7 +226,16 @@ class Dj_App_Shortcode {
                     $result = $output;
                 }
 
-                $content = str_replace($tag_and_params_str, $result, $content);
+                if ($process_all) {
+                    // Only the occurrence just found is consumed, so the next pass calls the
+                    // callback again for the next one.
+                    $tag_len = strlen($tag_and_params_str);
+                    $content = substr_replace($content, $result, $current_short_code_start_pos, $tag_len);
+                } else {
+                    // Same tag and same params produce the same output, so one call covers
+                    // every occurrence and the next strpos finds none of them left.
+                    $content = str_replace($tag_and_params_str, $result, $content);
+                }
             }
         }
 

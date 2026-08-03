@@ -5,9 +5,14 @@ use PHPUnit\Framework\TestCase;
 class Dj_App_Shortcode_Test extends TestCase 
 {
     private $shortcode;
-    
+
+    // Counts renderTestCounter() calls so a test can tell one invocation from two.
+    private $counter_calls = 0;
+
     public function setUp(): void
     {
+        $this->counter_calls = 0;
+
         $app_lib_dir = Dj_App_Config::cfg('app.sys.app_lib_dir');
 
         // we load this because run=0 and shortcode is not loaded.
@@ -22,6 +27,7 @@ class Dj_App_Shortcode_Test extends TestCase
         $this->shortcode->addShortcode('test_with_params', [$this, 'renderTestWithParams']);
         $this->shortcode->addShortcode('test_output_buffer', [$this, 'renderTestOutputBuffer']);
         $this->shortcode->addShortcode('test_empty', [$this, 'renderTestEmpty']);
+        $this->shortcode->addShortcode('test_counter', [$this, 'renderTestCounter']);
     }
     
     public function tearDown(): void 
@@ -99,9 +105,100 @@ class Dj_App_Shortcode_Test extends TestCase
     }
     
     /**
+     * Renders differently on every call, so a test can count invocations.
+     */
+    public function renderTestCounter($params = [])
+    {
+        $this->counter_calls++;
+        $output = 'CALL_' . $this->counter_calls;
+
+        return $output;
+    }
+
+    /**
+     * Default: same tag + same params renders once and the result is reused for every
+     * occurrence, so N identical tags cost ONE call.
+     */
+    public function testIdenticalShortcodesRenderOnceByDefault()
+    {
+        $html = '<html><body>[test_counter] and [test_counter] and [test_counter]</body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        $this->assertEquals(1, $this->counter_calls, 'three identical tags must share one render');
+
+        $expected = '<html><body>CALL_1 and CALL_1 and CALL_1</body></html>';
+        $this->assertEquals($expected, $result);
+    }
+
+    /**
+     * Different params are a different tag string, so they render separately even with the
+     * flag off — the reuse is per tag+params, not per shortcode name.
+     */
+    public function testDifferentParamsRenderSeparatelyByDefault()
+    {
+        $html = '<html><body>[test_counter] [test_counter a="1"]</body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        $this->assertEquals(2, $this->counter_calls, 'distinct params each get their own render');
+        $this->assertStringContainsString('CALL_1', $result);
+        $this->assertStringContainsString('CALL_2', $result);
+    }
+
+    /**
+     * app.shortcodes.process_all = 1 makes every occurrence call the callback,
+     * so a shortcode that must differ per occurrence can.
+     */
+    public function testProcessAllCallsBackPerOccurrence()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $saved_data = $options_obj->toArray();
+
+        try {
+            $data = $saved_data;
+            $data['app']['shortcodes']['process_all'] = 1;
+            $options_obj->setData($data);
+
+            $html = '<html><body>[test_counter] and [test_counter] and [test_counter]</body></html>';
+            $result = $this->shortcode->replaceShortCodes($html);
+
+            $this->assertEquals(3, $this->counter_calls, 'each occurrence gets its own render');
+
+            $expected = '<html><body>CALL_1 and CALL_2 and CALL_3</body></html>';
+            $this->assertEquals($expected, $result);
+        } finally {
+            $options_obj->setData($saved_data);
+        }
+    }
+
+    /**
+     * An explicitly disabled flag keeps the reuse behaviour — absent and 0 agree.
+     */
+    public function testProcessAllDisabledKeepsReuse()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $saved_data = $options_obj->toArray();
+
+        try {
+            $data = $saved_data;
+            $data['app']['shortcodes']['process_all'] = 0;
+            $options_obj->setData($data);
+
+            $html = '<html><body>[test_counter] and [test_counter]</body></html>';
+            $result = $this->shortcode->replaceShortCodes($html);
+
+            $this->assertEquals(1, $this->counter_calls, 'an explicit 0 must not enable it');
+
+            $expected = '<html><body>CALL_1 and CALL_1</body></html>';
+            $this->assertEquals($expected, $result);
+        } finally {
+            $options_obj->setData($saved_data);
+        }
+    }
+
+    /**
      * Test multiple shortcodes in same content
      */
-    public function testReplaceMultipleShortCodes() 
+    public function testReplaceMultipleShortCodes()
     {
         $html = '<html><body>[test_simple] and [test_simple] again</body></html>';
         $expected = '<html><body>SIMPLE_SHORTCODE_OUTPUT and SIMPLE_SHORTCODE_OUTPUT again</body></html>';
