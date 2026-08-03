@@ -7,7 +7,7 @@ tests and test infrastructure here.
 ## One runner, for the framework and every addon
 
 ```bash
-php tools/test.php [addon-dir ...] [options]
+php tools/testing/run.php [addon-dir ...] [options]
 ```
 
 The dir is optional and defaults to the current directory, so running it from inside an
@@ -16,7 +16,7 @@ djebel-app dir and it runs the framework's own suite.
 
 ## An addon ships test files ONLY
 
-Never add a `tests/bootstrap.php` to a plugin, theme or lib. `tests/addon_bootstrap.php`
+Never add a `tests/bootstrap.php` to a plugin, theme or lib. `tools/testing/bootstrap.php`
 does the setup once — framework headless, then the addon — and the runner wires it up.
 
 This is not a style preference. Before it existed there were **four byte-identical
