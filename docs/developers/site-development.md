@@ -123,6 +123,10 @@ Repeat per folder being converted; afterwards the regular deploy two-liner handl
 
 ## Deploy (prod via git)
 
+> Server-side layout, docroot wiring, symlink policy, release strategies, and
+> per-environment config live in [../install/deployment.md](../install/deployment.md).
+> This section covers only the git mechanics.
+
 ⚠️ A plain `git pull` updates the **site** repo but **does not touch submodules** — you'd ship
 new site code with *stale* plugins and not notice. Always pair it:
 ```bash
