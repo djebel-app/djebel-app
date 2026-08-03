@@ -4,22 +4,12 @@
 // Author: Svetoslav Marinov | https://orbisius.com
 // Copyright: All Rights Reserved
 
-// Security: Only allow CLI execution
-if (php_sapi_name() !== 'cli') {
-    http_response_code(403);
-    die('Cannot run');
-}
-
 // Get tool name for usage messages
 $tool_name = basename(__FILE__);
 
 // Check command line arguments first
 $args = empty($_SERVER['argv']) ? [] : $_SERVER['argv'];
 array_shift($args); // Remove script name from arguments
-
-// Load CLI utilities
-$app_dir = dirname(__DIR__);
-require_once $app_dir . '/src/core/lib/cli_util.php';
 
 $tool = new Djebel_Tool_Bundle();
 
@@ -61,6 +51,12 @@ try {
     $app_dir = dirname(__DIR__);
     putenv('DJEBEL_APP_CORE_RUN=0'); // Don't execute, just load classes
     require_once $app_dir . '/index.php';
+
+    // Refuses to run outside CLI (403 + die), routes errors to stderr so stdout keeps
+    // only the tool's own output, unbuffers so a long bundle reports as it goes, and
+    // bounds the run. Replaces the hand-rolled sapi check every tool used to carry.
+    // Called here, not at the top: it needs Dj_App_Hooks, which index.php loads.
+    Dj_App_Cli_Util::init();
 
     // Parse command-line parameters with defaults
     $expected_params = [
