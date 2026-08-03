@@ -25,22 +25,20 @@ Djebel is developed by **10x PHP engineers** who live and breathe:
 ## Development Commands
 
 ### Testing
-- Run all tests: `cd tests && ./vendor/bin/phpunit`
-- Run specific test suite: `cd tests && ./vendor/bin/phpunit --testsuite unit`
+
+**Read `docs/developers/testing.md` BEFORE writing a test or any test infrastructure.** It carries
+the rules: one runner for the framework AND every addon (`php tools/test.php [addon-dir]`,
+dir optional, defaults to the cwd), an addon ships test files ONLY (never its own
+`tests/bootstrap.php`), never invent a per-addon "am I testing" env var
+(`Dj_App_Env::isInRunningUnitTests()` already answers it), semantic assertions, asserted
+fixture writes, restored globals, and multi-byte cases.
+
+How to RUN the suites — every flag and invocation form — is in `tests/readme_tests.md`.
+
+Quick reference:
+- Framework suite the plain way: `cd tests && ./vendor/bin/phpunit`
+- Anything, framework or addon: `php tools/test.php [addon-dir]`
 - Test configuration: `tests/phpunit.xml`
-
-### Testing Best Practices
-
-**Use semantic assertions** - Choose the most expressive assertion for what you're testing:
-- ❌ WRONG: `$this->assertEquals('', $result)` - comparing to empty string
-- ❌ WRONG: `$this->assertEquals(true, $status)` - comparing to boolean
-- ❌ WRONG: `$this->assertEquals(false, $result)` - comparing to boolean
-- ✅ CORRECT: `$this->assertEmpty($result)` - checking if empty
-- ✅ CORRECT: `$this->assertTrue($status)` - checking if true
-- ✅ CORRECT: `$this->assertFalse($result)` - checking if false
-- ✅ CORRECT: `$this->assertNull($value)` - checking if null
-- ✅ CORRECT: `$this->assertCount(5, $array)` - checking array size
-- Semantic assertions make test intent clear and provide better error messages
 
 ### Dependencies
 - Test dependencies are managed in `tests/composer.json`
@@ -56,10 +54,21 @@ sanity-check the sign before reporting a delta.
 
 ### CLI Tools (`tools/`)
 
-Three CLI tools live in `tools/`:
+Four CLI tools live in `tools/`:
 - **pkg.php** — Builds PHAR and/or source ZIP of djebel-app (uses PHP ZipArchive)
 - **bundle.php** — Creates site bundles with plugins, themes, PHAR, and manifest
 - **release.php** — Fast ozip-based packaging for djebel-app, plugins, and themes
+- **test.php** — Runs the test suite of the framework or of any addon (see Testing above)
+
+**Every tool calls `Dj_App_Cli_Util::init()` right after loading `index.php`** — never a
+hand-rolled `php_sapi_name()` check. One call refuses non-CLI (403 + die), routes errors
+to stderr so stdout stays pipeable, unbuffers output, survives a dead output reader, and
+bounds the run. It needs `Dj_App_Hooks`, so it goes AFTER the core load, not at the top.
+
+**Exit codes: `$exit_code` before the `try`, `finally { exit($exit_code); }` at the end.**
+Do NOT call `exit()` inside the `try` — `finally` still runs and overwrites the code with
+the initial value, silently turning a failure into a success. Failure paths throw a
+`Dj_App_Exception` carrying `exit_code` in its data; the catch reads it.
 
 #### Environment Variable Prefix Convention
 
