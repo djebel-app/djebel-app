@@ -47,15 +47,17 @@ starting with `.ht`, and the private dir rides the same convention as `.htaccess
 - nginx ships NO dotfile block at all — distro configs usually add one, stock doesn't.
 
 Make the site self-protecting instead of hoping — one line in the site's own
-`.htaccess` blocks the whole `.ht*` subtree:
+`.htaccess` blocks the `.ht*`, `.env*`, and `.git*` subtrees (private dir, env files,
+and the repo — a served `/.git/` leaks the entire site source, config included):
 
 ```apache
-RedirectMatch 404 "/\.ht"
+RedirectMatch 404 "/\.(ht|env|git)"
 ```
 
-(nginx: `location ~ /\.ht { deny all; }` in the server block.) Belt and suspenders:
-a deny-all `.htaccess` inside `.ht_djebel/` too (`Require all denied`), and verify
-after deploy — `curl -I https://example.com/.ht_djebel/conf/app.ini` must NOT be 200.
+(nginx: `location ~ /\.(ht|env|git) { return 404; }` in the server block. 404, not
+403 — a probe shouldn't even learn the name exists.) Belt and suspenders: a deny-all
+`.htaccess` inside `.ht_djebel/` too (`Require all denied`), and verify after
+deploy — `curl -I https://example.com/.ht_djebel/conf/app.ini` must NOT be 200.
 
 ## The loader contract
 
@@ -91,6 +93,28 @@ current          -> releases/20260803-1                 # release flip
 djebel-app       -> /opt/djebel/djebel-app-0.0.5        # shared core, pinned per site
 djebel-app.phar  -> djebel-app-0.0.5.phar               # the loader wants the exact name
 ```
+
+## Dot-prefixed files are easy to lose
+
+Half of a djebel site starts with a dot — `.ht_djebel/`, `.htaccess`, `.env*` — and
+most file managers and FTP clients HIDE dot entries by default. A "complete" copy or
+upload that silently skipped them is the classic broken deploy: the site renders, but
+config, private plugins, and rewrites are gone.
+
+Show hidden files first:
+
+| Where | How |
+|---|---|
+| macOS Finder | `Cmd+Shift+.` (toggles, remembered per user) |
+| Windows Explorer | View → Show → Hidden items (Windows hides by file *attribute*, not by the dot — dot names show by default, but enable it anyway for attribute-hidden files) |
+| Linux — GNOME Files / Dolphin / Thunar | `Ctrl+H` (toggle) |
+| FileZilla | Server → Force showing hidden files |
+| Cyberduck | View → Show Hidden Files |
+| any shell | `ls -la` |
+
+⚠️ Shell globs skip dot entries too: `cp -r site/*`, `zip -r site.zip *`, `mv *` all
+miss `.ht_djebel` and `.htaccess`. Copy the *directory*, not its glob — `cp -r site/
+dest/`, `zip -r site.zip site/`, or `rsync -a site/ dest/` (rsync includes dot files).
 
 ## Deployment strategies
 
