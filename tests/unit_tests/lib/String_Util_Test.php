@@ -789,6 +789,72 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertEquals('#$%', $result);
     }
 
+    public function testTruncateShorterThanMaxIsUntouched()
+    {
+        $string = 'hello';
+        $result = Dj_App_String_Util::truncate($string, 100);
+
+        $this->assertEquals('hello', $result);
+    }
+
+    public function testTruncateCutsAtMaxLength()
+    {
+        $string = 'hello world';
+        $result = Dj_App_String_Util::truncate($string, 5);
+
+        $this->assertEquals('hello', $result);
+    }
+
+    public function testTruncateEmptyString()
+    {
+        $result = Dj_App_String_Util::truncate('');
+
+        $this->assertEmpty($result);
+    }
+
+    public function testTruncateAppendsSuffixOnlyWhenCut()
+    {
+        $result = Dj_App_String_Util::truncate('hello world', 5, '...');
+        $this->assertEquals('hello...', $result);
+
+        // Short enough to keep -> the suffix must NOT be appended.
+        $result = Dj_App_String_Util::truncate('hi', 5, '...');
+        $this->assertEquals('hi', $result);
+    }
+
+    /**
+     * Cyrillic is 2 bytes per character in UTF-8. A byte-level substr($str, 0, 5)
+     * would land mid-character and emit invalid UTF-8; truncate() counts characters.
+     */
+    public function testTruncateDoesNotSplitCyrillic()
+    {
+        $string = 'Светослав';
+        $result = Dj_App_String_Util::truncate($string, 5);
+
+        $this->assertEquals('Свето', $result);
+        $this->assertEquals(5, mb_strlen($result, 'UTF-8'));
+        $this->assertNotFalse(mb_check_encoding($result, 'UTF-8'));
+    }
+
+    public function testTruncateCountsCharactersNotBytes()
+    {
+        // 9 characters, 18 bytes — a max of 9 must keep the whole string.
+        $string = 'Светослав';
+        $result = Dj_App_String_Util::truncate($string, 9);
+
+        $this->assertEquals($string, $result);
+        $this->assertEquals(18, strlen($string));
+    }
+
+    public function testTruncateDoesNotSplitEmoji()
+    {
+        $string = 'ab🐘cd';
+        $result = Dj_App_String_Util::truncate($string, 3);
+
+        $this->assertEquals('ab🐘', $result);
+        $this->assertNotFalse(mb_check_encoding($result, 'UTF-8'));
+    }
+
     public function testNormalizeNewLinesWithWindowsLineEndings()
     {
         $text = "Line 1\r\nLine 2\r\nLine 3";

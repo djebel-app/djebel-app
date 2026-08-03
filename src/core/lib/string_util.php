@@ -732,6 +732,42 @@ class Dj_App_String_Util
     }
 
     /**
+     * Truncate a string to a maximum number of characters (UTF-8 safe).
+     * Dj_App_String_Util::truncate();
+     *
+     * Unlike PHP's built-in substr(), this cuts at CHARACTER boundaries,
+     * not byte boundaries — so it never produces invalid UTF-8 in the
+     * middle of a multi-byte sequence (Cyrillic, CJK, emoji, etc.).
+     *
+     * @param string $str Input string
+     * @param int $max_length Maximum length in characters (not bytes)
+     * @param string $suffix Suffix to append when truncated (e.g. '…')
+     * @return string
+     */
+    public static function truncate($str, $max_length = 100, $suffix = '')
+    {
+        if (empty($str)) {
+            return '';
+        }
+
+        // Encoding is passed explicitly so a plugin changing mb_internal_encoding()
+        // can't silently alter where this cuts.
+        $str_len = mb_strlen($str, 'UTF-8');
+
+        if ($str_len <= $max_length) {
+            return $str;
+        }
+
+        $truncated_str = mb_substr($str, 0, $max_length, 'UTF-8');
+
+        if (!empty($suffix)) {
+            $truncated_str .= $suffix;
+        }
+
+        return $truncated_str;
+    }
+
+    /**
      * Normalize newlines to Unix-style (\n) and remove null bytes
      * Dj_App_String_Util::normalizeNewLines();
      *
