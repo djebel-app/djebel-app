@@ -353,6 +353,35 @@ This is a **production framework** running on live sites. Breaking changes break
   ```
   **Why K&R style**: More compact, easier to read, standard PHP convention
 
+- **Markup output: ALTERNATIVE syntax, never braces.** When PHP wraps HTML, use
+  `if (...) :` / `endif;`, `foreach (...) :` / `endforeach;` — braces there force the
+  reader to match a `{` against a `}` that sits several tags away, on its own
+  `<?php } ?>` line, and one stray tag silently reparents the markup.
+  ```php
+  // ✅ CORRECT - the tag says which block it closes
+  <?php if (!empty($theme_css)) : ?>
+      <style><?php echo $theme_css; ?></style>
+  <?php endif; ?>
+
+  <?php foreach ($items as $item) :
+      $item_id = empty($item['id']) ? '' : $item['id'];
+      ?>
+      <div id="<?php echo dj_esc_attr($item_id); ?>"><?php echo dj_esc($item['title']); ?></div>
+  <?php endforeach; ?>
+
+  // ❌ WRONG - dangling braces on their own PHP lines
+  <?php
+  if (!empty($theme_css)) {
+  ?>
+      <style><?php echo $theme_css; ?></style>
+  <?php
+  }
+  ?>
+  ```
+  Locals the block needs are declared right after the `:` in the SAME php tag, so
+  the loop opens once instead of opening, closing, and reopening.
+  **This is markup only** — pure PHP (methods, guards, logic) keeps K&R braces.
+
 - **Type casting**: Always include space after cast operators
   ```php
   // CORRECT
