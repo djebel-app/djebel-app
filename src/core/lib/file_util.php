@@ -257,6 +257,8 @@ class Dj_App_File_Util {
      *   dirs_only      only directories
      *   files_only     only files
      *   ext            extension, or a list of them, matched case-insensitively
+     *   exclude_ext    the deny counterpart of ext — same shape, dropped instead of kept.
+     *                  Both may be given; a name has to pass each
      *   name_pattern   a preg pattern the NAME must match — the strict one, for a caller
      *                  that knows the shape it expects (a version, an id, a date)
      *   skip_dot_files drop names beginning with a dot (default: on)
@@ -378,6 +380,13 @@ class Dj_App_File_Util {
             $allowed_extensions = array_map('strtolower', $allowed_extensions);
         }
 
+        $skipped_extensions = [];
+
+        if (!empty($filters['exclude_ext'])) {
+            $skipped_extensions = (array) $filters['exclude_ext'];
+            $skipped_extensions = array_map('strtolower', $skipped_extensions);
+        }
+
         // SPL, not glob(): glob('*') silently omits dot entries, so honouring
         // skip_dot_files=0 meant a SECOND glob for '.[!.]*' and merging the two.
         // SKIP_DOTS drops only '.' and '..', so real dot files arrive like anything else.
@@ -429,11 +438,17 @@ class Dj_App_File_Util {
                     continue;
                 }
 
-                if (!empty($allowed_extensions)) {
+                // Read once when either extension filter is in play, since both ask the
+                // same question of the same name.
+                if (!empty($allowed_extensions) || !empty($skipped_extensions)) {
                     $ext = Dj_App_File_Util::getExt($name);
                     $ext = strtolower($ext);
 
-                    if (!in_array($ext, $allowed_extensions)) {
+                    if (!empty($allowed_extensions) && !in_array($ext, $allowed_extensions)) {
+                        continue;
+                    }
+
+                    if (!empty($skipped_extensions) && in_array($ext, $skipped_extensions)) {
                         continue;
                     }
                 }

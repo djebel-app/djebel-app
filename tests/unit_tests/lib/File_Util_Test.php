@@ -740,6 +740,28 @@ class Dj_App_File_Util_Test extends TestCase {
     }
 
     /**
+     * The deny counterpart of ext. Both together is the real case: "artifacts, but not
+     * their .sha256 sidecars".
+     */
+    public function testListFilesExcludesByExtension() {
+        $this->seedListFilesDir();
+        file_put_contents($this->test_dir . '/a.zip.sha256', 'x');
+
+        $res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'exclude_ext' => 'sha256', ]);
+
+        $this->assertArrayHasKey('a.zip', $res_obj->files);
+        $this->assertArrayNotHasKey('a.zip.sha256', $res_obj->files);
+
+        $both_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [
+            'ext' => [ 'zip', 'sha256', ],
+            'exclude_ext' => 'sha256',
+        ]);
+
+        $this->assertArrayHasKey('a.zip', $both_res_obj->files);
+        $this->assertArrayNotHasKey('a.zip.sha256', $both_res_obj->files);
+    }
+
+    /**
      * Regression guard for the bug this was built for: a directory whose name merely
      * CONTAINS a version — a parked `zzz_1.0.0.old.<ts>` — was treated as a release and
      * published, because the old test only asked whether the name held safe characters.
