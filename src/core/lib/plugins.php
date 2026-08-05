@@ -165,10 +165,21 @@ class Dj_App_Plugins {
                     $load_time = Dj_App_Util::microtime($plugin_file);
                     include_once $plugin_file;
                 } catch (Throwable $e) {
-                    // some plugin failed or crashed
-                    // @todo log this
+                    // A crashed plugin must leave a trace — full detail (message,
+                    // file, line, trace) goes to the app error log. The page shows
+                    // the raw message only on a dev/debug setup.
+                    $log_ok = Dj_App_Log::logAppError($e);
+
+                    $is_dev = Dj_App_Config::cfg('app.debug', false);
                     $basename = basename($plugin_file);
-                    $msg = $e->getMessage();
+
+                    if (empty($is_dev)) {
+                        $msg = empty($log_ok) ? 'error' : 'error logged';
+                    } else {
+                        $msg = $e->getMessage();
+                        $msg = dj_esc_html($msg);
+                    }
+
                     echo "Plugin [$basename] crashed: Error: " . Dj_App_Util::msg($msg);
                 } finally {
                     $load_time = Dj_App_Util::microtime($plugin_file);
