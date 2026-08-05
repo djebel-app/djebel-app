@@ -125,27 +125,60 @@ class Dj_App_Log {
 
     /**
      * Writes a timestamped, labelled line to the log file (creating the dated dir first), retrying
-     * a few times if the write fails. Non-scalar $msg is dumped + redacted. Returns the line.
+     * a few times if the write fails. Non-scalar $msg is dumped + redacted. When the file write
+     * keeps failing, the line falls back to PHP's default error log so it is never lost.
+     * Returns the line, or '' when the file write failed (the fallback doesn't count as success).
      * Dj_App_Log::msg($msg, $label);
      * @param string|mixed $msg
      * @param string $label
-     * @param string $file
+     * @param string|array $file Target file — or the $extra_opts array (smart slot:
+     *                           an array here IS the options, no '' placeholder needed;
+     *                           error()/info()/warn() forward it, so they get it too).
+     * @param array $extra_opts Optional. 'raw' => 1 writes $msg VERBATIM — no redaction,
+     *                          no req_id, no timestamp/label prefix, no appended newline
+     *                          (the caller owns the entry's formatting).
+     *                          'file' => the target file — honored in either slot when
+     *                          no explicit $file param is given.
      * @return string
      */
-    public static function msg($msg, $label = '', $file = '') {
+    public static function msg($msg, $label = '', $file = '', $extra_opts = []) {
         if (empty(self::$logging_enabled)) {
             return '';
         }
 
-        $msg = Dj_App_Log::removeNotEssentialStuff($msg);
-        $label = Dj_App_Log::removeNotEssentialStuff($label);
+        // Smart 3rd slot: an array there is the options.
+        if (is_array($file)) {
+            $extra_opts = $file;
+            $file = '';
+        }
 
-        // Decoupled: ask for a request id through a filter — the logger doesn't know who supplies
-        // it. Dj_App_Request registers as the default supplier; a plugin can override.
-        $req_id = Dj_App_Hooks::applyFilter('app.core.log.req_id', '');
+        // The options can carry the target file, too — works for both slots.
+        // An explicit $file param wins over the options key.
+        if (empty($file) && !empty($extra_opts['file'])) {
+            $file = $extra_opts['file'];
+        }
 
-        if (!empty($req_id) && (strpos($label, $req_id) === false)) {
-            $label = empty($label) ? "req:$req_id" : "$label req:$req_id";
+        $raw = !empty($extra_opts['raw']);
+
+        if ($raw) {
+            $line = $msg;
+            $line_nl = $line;
+        } else {
+            $msg = Dj_App_Log::removeNotEssentialStuff($msg);
+            $label = Dj_App_Log::removeNotEssentialStuff($label);
+
+            // Decoupled: ask for a request id through a filter — the logger doesn't know who supplies
+            // it. Dj_App_Request registers as the default supplier; a plugin can override.
+            $req_id = Dj_App_Hooks::applyFilter('app.core.log.req_id', '');
+
+            if (!empty($req_id) && (strpos($label, $req_id) === false)) {
+                $label = empty($label) ? "req:$req_id" : "$label req:$req_id";
+            }
+
+            $timestamp = date('r');
+            $label_prefix = empty($label) ? '' : "[$label] ";
+            $line = "[$timestamp] " . $label_prefix . $msg;
+            $line_nl = $line . "\n";
         }
 
         $file = empty($file) ? Dj_App_Log::file() : $file;
@@ -157,11 +190,6 @@ class Dj_App_Log {
                 mkdir($parent_dir, 0770, true);
             }
         }
-
-        $timestamp = date('r');
-        $label_prefix = empty($label) ? '' : "[$label] ";
-        $line = "[$timestamp] " . $label_prefix . $msg;
-        $line_nl = $line . "\n";
 
         $log_ok = false;
 
@@ -175,6 +203,16 @@ class Dj_App_Log {
             if ($attempt < self::$retry_attempts) {
                 usleep(self::$retry_delay_ms * 1000);
             }
+        }
+
+        // The entry must never be lost: when the FILE write kept failing, fall back
+        // to PHP's default error log. Last resort — nowhere further to report.
+        if (empty($log_ok)) {
+            if (!empty($file)) {
+                error_log($line_nl);
+            }
+
+            return '';
         }
 
         return $line;
@@ -220,6 +258,78 @@ class Dj_App_Log {
         $msg = '[ERROR] ' . $msg;
 
         return Dj_App_Log::msg($msg, $label, $file);
+    }
+
+    /**
+     * Appends one entry to the dated APP ERROR log (.ht_app_<date>.log under
+     * getCurrentLogDir()), honoring app.error_logging and the app.error_log_file
+     * override. Smart input — the caller passes what it HAS and this method owns
+     * the formatting: a Throwable (bare, under an 'exception' array key, or
+     * carried by a result obj), an error_get_last() style array, or an already
+     * formatted string (written as-is). The error log keeps full file paths —
+     * that is what a stack trace is for — so entries skip the redaction pipeline
+     * (raw). The bootstrap's exception + fatal handlers both write through here,
+     * so every failure kind lands in the SAME log.
+     * Dj_App_Log::logAppError($exception);
+     * @param Throwable|array|object|string $data
+     * @return bool true when the entry was logged (the app error log, or PHP's
+     *              default error log when the configured file is blank)
+     */
+    public static function logAppError($data) {
+        $log_errors = Dj_App_Config::cfg('app.error_logging', true);
+
+        // Critical facility: stays ON unless REALLY disabled (0/false/off/no) —
+        // a blank or garbage value must not silently kill error logging.
+        if (Dj_App_Util::isDisabled($log_errors)) {
+            return false;
+        }
+
+        // A Throwable can arrive bare, under an 'exception' key, or in a result obj.
+        $exception = null;
+
+        if ($data instanceof Throwable) {
+            $exception = $data;
+        } elseif (is_array($data) && !empty($data['exception'])) {
+            $exception = $data['exception'];
+        } elseif (is_object($data) && !empty($data->exception)) {
+            $exception = $data->exception;
+        }
+
+        $entry_body = '';
+
+        if (!empty($exception)) {
+            $entry_body = 'Exception: ' . $exception->getMessage() .
+                ' in ' . $exception->getFile() . ' on line ' . $exception->getLine() .
+                "\nStack trace:\n" . $exception->getTraceAsString();
+        } elseif (is_array($data)) { // error_get_last() shape
+            $entry_body = 'Fatal Error: ' . $data['message'] .
+                ' in ' . $data['file'] . ' on line ' . $data['line'];
+        }
+
+        if (empty($entry_body)) {
+            $log_entry = $data; // already a formatted entry
+        } else {
+            $timestamp = date('Y-m-d H:i:s');
+            $log_entry = "[$timestamp] $entry_body\n" . str_repeat('-', 80) . "\n";
+        }
+
+        $log_dir = Dj_App_Log::getCurrentLogDir();
+        $date_suff = date('Y-m-d');
+        $log_file = $log_dir . "/.ht_app_{$date_suff}.log";
+        $error_log_file = Dj_App_Config::cfg('app.error_log_file', $log_file);
+
+        // A blanked app.error_log_file still logs — naked error_log() goes to
+        // PHP's default log, so enabled logging never silently drops an entry.
+        if (empty($error_log_file)) {
+            $log_res = error_log($log_entry);
+
+            return $log_res;
+        }
+
+        $written_line = Dj_App_Log::msg($log_entry, '', $error_log_file, [ 'raw' => 1, ]);
+        $log_ok = !empty($written_line);
+
+        return $log_ok;
     }
 
     /**

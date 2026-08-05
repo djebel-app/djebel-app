@@ -19,11 +19,12 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('hello world', $line);
         $this->assertFileExists($file);
 
-        $contents = file_get_contents($file);
+        $read_res = Dj_App_File_Util::read($file);
+        $contents = $read_res->output;
         $this->assertStringContainsString('hello world', $contents);
         $this->assertStringContainsString('MYLABEL', $contents);
 
-        @unlink($file);
+        unlink($file);
     }
 
     public function testLevelsPrefixTheMessage()
@@ -34,12 +35,13 @@ class Dj_App_Log_Test extends TestCase {
         Dj_App_Log::info('note', '', $file);
         Dj_App_Log::warn('careful', '', $file);
 
-        $contents = file_get_contents($file);
+        $read_res = Dj_App_File_Util::read($file);
+        $contents = $read_res->output;
         $this->assertStringContainsString('[ERROR] boom', $contents);
         $this->assertStringContainsString('[INFO] note', $contents);
         $this->assertStringContainsString('[WARN] careful', $contents);
 
-        @unlink($file);
+        unlink($file);
     }
 
     public function testDisabledLoggingWritesNothing()
@@ -73,7 +75,7 @@ class Dj_App_Log_Test extends TestCase {
 
         $this->assertStringContainsString('req-abc', $line);
 
-        @unlink($file);
+        unlink($file);
     }
 
     public function testFileHonorsExplicitFile()
@@ -101,5 +103,325 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('false', $cleaned);
         $this->assertStringNotContainsString('int(', $cleaned);
         $this->assertStringNotContainsString('bool(', $cleaned);
+    }
+
+    public function testMsgRawWritesVerbatimEntry()
+    {
+        $file = $this->tmpFile();
+
+        $entry = "[2026-08-05 00:00:00] Fatal Error: boom in /x.php on line 1\n" . str_repeat('-', 80) . "\n";
+
+        $line = Dj_App_Log::msg($entry, '', $file, [ 'raw' => 1, ]);
+
+        $this->assertEquals($entry, $line, 'raw mode returns the entry untouched');
+
+        $read_res = Dj_App_File_Util::read($file);
+        $this->assertEquals($entry, $read_res->output, 'raw mode writes VERBATIM — no prefix, no extra newline');
+
+        unlink($file);
+    }
+
+    public function testMsgRawKeepsMultibyteEntryIntact()
+    {
+        $file = $this->tmpFile();
+
+        $entry = "[2026-08-05 00:00:00] Exception: Разбрах — тест\n";
+
+        Dj_App_Log::msg($entry, '', $file, [ 'raw' => 1, ]);
+
+        $read_res = Dj_App_File_Util::read($file);
+        $contents = $read_res->output;
+        $this->assertEquals($entry, $contents, 'the multibyte entry survives byte-for-byte');
+        $this->assertNotFalse(mb_check_encoding($contents, 'UTF-8'), 'still valid UTF-8');
+
+        unlink($file);
+    }
+
+    public function testMsgFallsBackAndReturnsEmptyWhenFileWriteFails()
+    {
+        // An existing DIRECTORY as the target "file" — the write must fail.
+        $bad_target_dir = sys_get_temp_dir() . '/dj_log_bad_' . getmypid() . '_' . uniqid();
+        $fallback_file = $this->tmpFile();
+
+        $mkdir_res = Dj_App_File_Util::mkdir($bad_target_dir);
+        $this->assertFalse($mkdir_res->isError(), 'Failed to create the directory fixture');
+
+        try {
+            $prior_error_log = ini_get('error_log');
+            $prior_error_reporting = error_reporting();
+
+            // Capture PHP's default error log (the fallback destination) and
+            // silence the expected warnings from the failing file attempts.
+            ini_set('error_log', $fallback_file);
+            error_reporting(0);
+
+            $line = Dj_App_Log::msg('lost? never', '', $bad_target_dir);
+        } finally {
+            error_reporting($prior_error_reporting);
+            ini_set('error_log', $prior_error_log);
+        }
+
+        $this->assertEmpty($line, 'a failed file write returns an empty line');
+        $this->assertFileExists($fallback_file, 'the entry fell back to the default error log');
+
+        $read_res = Dj_App_File_Util::read($fallback_file);
+        $this->assertStringContainsString('lost? never', $read_res->output, 'the entry is never lost');
+
+        unlink($fallback_file);
+        Dj_App_File_Util::rmdir($bad_target_dir);
+    }
+
+    public function testLogAppErrorWritesVerbatimToConfiguredFile()
+    {
+        $file = $this->tmpFile();
+
+        $entry = "[2026-08-05 00:00:00] Exception: boom in /x.php on line 1\n";
+
+        try {
+            // cfg() checks the RAW key first AND memoizes resolved values under it —
+            // drive the raw key directly and restore whatever was there (a cached
+            // value from an earlier cfg() call in this process is possible).
+            $prior_raw_file = getenv('app.error_log_file');
+
+            putenv('app.error_log_file=' . $file);
+
+            $log_ok = Dj_App_Log::logAppError($entry);
+        } finally {
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertTrue($log_ok, 'the entry landed in the app error log');
+
+        $read_res = Dj_App_File_Util::read($file);
+        $this->assertEquals($entry, $read_res->output, 'the entry is written verbatim — full paths intact');
+
+        unlink($file);
+    }
+
+    public function testMsgSmartThirdArgTakesOptionsArray()
+    {
+        $file = $this->tmpFile();
+
+        // Pin the default log file, then pass the OPTIONS as the 3rd arg — the
+        // smart slot means no '' file placeholder is needed.
+        Dj_App_Log::file($file);
+
+        $entry = "verbatim via smart arg\n";
+
+        $line = Dj_App_Log::msg($entry, '', [ 'raw' => 1, ]);
+
+        $this->assertEquals($entry, $line, 'the options array is recognized in the 3rd slot');
+
+        $read_res = Dj_App_File_Util::read($file);
+        $this->assertEquals($entry, $read_res->output, 'the entry went to the default log file, raw');
+
+        unlink($file);
+    }
+
+    public function testMsgOptionsCarryTheTargetFile()
+    {
+        $file = $this->tmpFile();
+
+        $entry = "verbatim via options file\n";
+
+        Dj_App_Log::msg($entry, '', [ 'raw' => 1, 'file' => $file, ]);
+
+        $read_res = Dj_App_File_Util::read($file);
+        $this->assertEquals($entry, $read_res->output, "the 'file' options key targets the file — no pin, no placeholder");
+
+        unlink($file);
+    }
+
+    public function testLogAppErrorBlankFileFallsBackToDefaultErrorLog()
+    {
+        $fallback_file = $this->tmpFile();
+
+        $entry = "[2026-08-05 00:00:00] Exception: still logged\n";
+
+        try {
+            $prior_raw_file = getenv('app.error_log_file');
+            $prior_error_log = ini_get('error_log');
+
+            // A BLANKED app.error_log_file must not drop the entry — it degrades
+            // to PHP's default error log (captured here in a scratch file).
+            putenv('app.error_log_file=');
+            ini_set('error_log', $fallback_file);
+
+            $log_ok = Dj_App_Log::logAppError($entry);
+        } finally {
+            ini_set('error_log', $prior_error_log);
+
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertTrue($log_ok, 'the entry was still logged');
+        $this->assertFileExists($fallback_file, 'the entry landed in the default error log');
+
+        $read_res = Dj_App_File_Util::read($fallback_file);
+        $this->assertStringContainsString('still logged', $read_res->output, 'the entry is never lost');
+
+        unlink($fallback_file);
+    }
+
+    public function testLogAppErrorFormatsAThrowable()
+    {
+        $file = $this->tmpFile();
+
+        try {
+            $prior_raw_file = getenv('app.error_log_file');
+
+            putenv('app.error_log_file=' . $file);
+
+            $log_ok = Dj_App_Log::logAppError(new Exception('boom'));
+        } finally {
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertTrue($log_ok, 'the exception was logged');
+
+        $read_res = Dj_App_File_Util::read($file);
+        $contents = $read_res->output;
+        $this->assertStringContainsString('Exception: boom', $contents, 'the logger built the entry from the Throwable');
+        $this->assertStringContainsString(' on line ', $contents, 'file + line came from the Throwable');
+        $this->assertStringContainsString('Stack trace:', $contents, 'the trace is part of the entry');
+        $this->assertStringContainsString(str_repeat('-', 80), $contents, 'entries stay separator-delimited');
+
+        unlink($file);
+    }
+
+    public function testLogAppErrorFormatsAFatalErrorArray()
+    {
+        $file = $this->tmpFile();
+
+        $error = [ 'type' => E_ERROR, 'message' => 'oom', 'file' => '/x.php', 'line' => 7, ];
+
+        try {
+            $prior_raw_file = getenv('app.error_log_file');
+
+            putenv('app.error_log_file=' . $file);
+
+            $log_ok = Dj_App_Log::logAppError($error);
+        } finally {
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertTrue($log_ok, 'the fatal was logged');
+
+        $read_res = Dj_App_File_Util::read($file);
+        $this->assertStringContainsString('Fatal Error: oom in /x.php on line 7', $read_res->output, 'the logger built the entry from the error_get_last() array');
+
+        unlink($file);
+    }
+
+    public function testLogAppErrorExtractsACarriedException()
+    {
+        $file = $this->tmpFile();
+
+        $res_obj = new Dj_App_Result();
+        $res_obj->exception = new Exception('carried by result');
+
+        try {
+            $prior_raw_file = getenv('app.error_log_file');
+
+            putenv('app.error_log_file=' . $file);
+
+            Dj_App_Log::logAppError([ 'exception' => new Exception('carried by array'), ]);
+            Dj_App_Log::logAppError($res_obj);
+        } finally {
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $read_res = Dj_App_File_Util::read($file);
+        $contents = $read_res->output;
+        $this->assertStringContainsString('Exception: carried by array', $contents, "the 'exception' array key is unwrapped");
+        $this->assertStringContainsString('Exception: carried by result', $contents, 'a result obj carrying the exception is unwrapped');
+
+        unlink($file);
+    }
+
+    public function testLogAppErrorHonorsErrorLoggingDisabled()
+    {
+        $file = $this->tmpFile();
+
+        try {
+            // Raw key, same reason as above — cfg() memoized 'app.error_logging=1'
+            // the first time the gate resolved to its default in this process.
+            $prior_raw_logging = getenv('app.error_logging');
+            $prior_raw_file = getenv('app.error_log_file');
+
+            putenv('app.error_logging=0');
+            putenv('app.error_log_file=' . $file);
+
+            $log_ok = Dj_App_Log::logAppError("nope\n");
+        } finally {
+            if ($prior_raw_logging === false) {
+                putenv('app.error_logging');
+            } else {
+                putenv('app.error_logging=' . $prior_raw_logging);
+            }
+
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertFalse($log_ok, 'disabled error logging refuses the write');
+        $this->assertFileDoesNotExist($file, 'nothing is written when disabled');
+    }
+
+    public function testLogAppErrorBlankGateValueStillLogs()
+    {
+        $file = $this->tmpFile();
+
+        try {
+            $prior_raw_logging = getenv('app.error_logging');
+            $prior_raw_file = getenv('app.error_log_file');
+
+            // A BLANK gate value is not an explicit disable — the critical
+            // facility stays ON; only 0/false/off/no really turn it off.
+            putenv('app.error_logging=');
+            putenv('app.error_log_file=' . $file);
+
+            $log_ok = Dj_App_Log::logAppError("still on\n");
+        } finally {
+            if ($prior_raw_logging === false) {
+                putenv('app.error_logging');
+            } else {
+                putenv('app.error_logging=' . $prior_raw_logging);
+            }
+
+            if ($prior_raw_file === false) {
+                putenv('app.error_log_file');
+            } else {
+                putenv('app.error_log_file=' . $prior_raw_file);
+            }
+        }
+
+        $this->assertTrue($log_ok, 'a blank gate value does not kill error logging');
+        $this->assertFileExists($file, 'the entry was written');
+
+        unlink($file);
     }
 }
