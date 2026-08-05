@@ -447,50 +447,38 @@ class Dj_App_Bootstrap {
         if (!$exception instanceof Throwable) {
             return;
         }
-        
+
         $is_dev = Dj_App_Config::cfg('app.debug', false);
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
 
-        $date_suff = date('Y-m-d');
-        $date_rel_dir = date('Y/m/d');
-        $log_dir = Dj_App_Util::getCorePrivateDataDir() . "/logs/$date_rel_dir";
-        $log_file = $log_dir . "/.ht_app_{$date_suff}.log";
-        $error_log_file = Dj_App_Config::cfg('app.error_log_file', $log_file);
+        // Log the exception — the logger owns the entry format.
+        $log_res = Dj_App_Log::logAppError($exception);
 
-        if (!is_dir($log_dir)) {
-            $mk_dir_res = mkdir($log_dir, 0755, true);
-        }
-
-        // Log the exception
-        if ($log_errors && !empty($error_log_file)) {
-            $timestamp = date('Y-m-d H:i:s');
-            $log_entry = "[$timestamp] Exception: " . $exception->getMessage() . 
-                        " in " . $exception->getFile() . " on line " . $exception->getLine() . 
-                        "\nStack trace:\n" . $exception->getTraceAsString() . 
-                        "\n" . str_repeat('-', 80) . "\n";
-            $log_res = error_log($log_entry, 3, $error_log_file);
-        }
-        
         // Discard any partially rendered output so the error page renders alone.
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
 
-        $content = '<h1 class="djebel-app-error-title">Uncaught Exception</h1>';
-        $content .= '<div class="djebel-app-error-message">' . htmlspecialchars($exception->getMessage()) . '</div>';
+        // The raw message can leak internals (SQL, dirs) — the public page shows a
+        // generic line; the real message is in the log and on the dev page.
+        $display_msg = empty($is_dev) ? 'Something went wrong.' : $exception->getMessage();
+        $display_msg_esc = dj_esc_html($display_msg);
 
-        if ($log_errors && empty($log_res)) {
+        $content = '<h1 class="djebel-app-error-title">Uncaught Exception</h1>';
+        $content .= sprintf('<div class="djebel-app-error-message">%s</div>', $display_msg_esc);
+
+        if (!Dj_App_Util::isDisabled($log_errors) && empty($log_res)) {
             $content .= "\n<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
         }
 
         if ($is_dev) {
             $content .= '<div class="djebel-app-error-details">';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Exception:</div><div class="djebel-app-detail-value">' . htmlspecialchars(get_class($exception)) . '</div></div>';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . htmlspecialchars($exception->getFile()) . '</div></div>';
+            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Exception:</div><div class="djebel-app-detail-value">' . dj_esc_html(get_class($exception)) . '</div></div>';
+            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . dj_esc_html($exception->getFile()) . '</div></div>';
             $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Line:</div><div class="djebel-app-detail-value">' . $exception->getLine() . '</div></div>';
             $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Code:</div><div class="djebel-app-detail-value">' . $exception->getCode() . '</div></div>';
             $content .= '</div>';
-            $content .= '<div class="djebel-app-trace">' . htmlspecialchars($exception->getTraceAsString()) . '</div>';
+            $content .= '<div class="djebel-app-trace">' . dj_esc_html($exception->getTraceAsString()) . '</div>';
         }
         
         $content .= '<div class="djebel-app-back-link"><a href="javascript:history.back()">← Go Back</a></div>';
@@ -503,9 +491,7 @@ class Dj_App_Bootstrap {
         try {
             Dj_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
         } catch (Throwable $render_exception) {
-            $msg = $exception->getMessage();
-            $msg_esc = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
-            echo 'Djebel Error: ' . $msg_esc;
+            echo 'Djebel Error: ' . $display_msg_esc;
         }
     }
 
@@ -522,18 +508,32 @@ class Dj_App_Bootstrap {
         
         if (in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
             $is_dev = Dj_App_Config::cfg('app.debug', false);
+            $log_errors = Dj_App_Config::cfg('app.error_logging', true);
+
+            // Log the fatal — same log the exception handler writes, so both
+            // failure kinds leave a trace. The logger owns the entry format.
+            $log_res = Dj_App_Log::logAppError($error);
 
             // Discard any partially rendered output so the error page renders alone.
             while (ob_get_level() > 0) {
                 ob_end_clean();
             }
 
+            // The raw message can leak internals (SQL, dirs) — the public page shows a
+            // generic line; the real message is in the log and on the dev page.
+            $display_msg = empty($is_dev) ? 'Something went wrong.' : $error['message'];
+            $display_msg_esc = dj_esc_html($display_msg);
+
             $content = '<h1 class="djebel-app-error-title">Fatal Error</h1>';
-            $content .= '<div class="djebel-app-error-message">' . htmlspecialchars($error['message']) . '</div>';
-            
+            $content .= sprintf('<div class="djebel-app-error-message">%s</div>', $display_msg_esc);
+
+            if (!Dj_App_Util::isDisabled($log_errors) && empty($log_res)) {
+                $content .= "\n<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
+            }
+
             if ($is_dev) {
                 $content .= '<div class="djebel-app-error-details">';
-                $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . htmlspecialchars($error['file']) . '</div></div>';
+                $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . dj_esc_html($error['file']) . '</div></div>';
                 $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Line:</div><div class="djebel-app-detail-value">' . $error['line'] . '</div></div>';
                 $content .= '</div>';
             }
@@ -548,9 +548,7 @@ class Dj_App_Bootstrap {
             try {
                 Dj_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
             } catch (Throwable $render_exception) {
-                $msg = $error['message'];
-                $msg_esc = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
-                echo 'Djebel Fatal Error: ' . $msg_esc;
+                echo 'Djebel Fatal Error: ' . $display_msg_esc;
             }
         }
     }
