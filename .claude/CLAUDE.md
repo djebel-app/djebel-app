@@ -35,6 +35,18 @@ fixture writes, restored globals, and multi-byte cases.
 
 How to RUN the suites — every flag and invocation form — is in `tests/readme_tests.md`.
 
+**Driving `cfg()` values in a test — the framework way, never raw dotted putenv:**
+- Set values through the CONVENTIONAL uppercase env keys via `Dj_App_Env::set()` —
+  `Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);` (it takes a key => val array too).
+- `cfg()` memoizes each resolved value under the RAW dotted key (`putenv('app.x=...')`),
+  and the raw key is checked FIRST — so a memoized value beats your `DJEBEL_APP_X` var.
+  Clear it with the built-in override attrib: `Dj_App_Config::cfg('app.x', '', [ 'override' => 1, ]);`
+  (empty value + override REMOVES the raw env key; a non-empty value + override FORCES it).
+- Do the `Dj_App_Env` backup/restore in `setUp()`/`tearDown()` (see `Env_Test.php` for the
+  canonical shape) — never a per-test try/finally getenv/putenv dance.
+- ❌ WRONG: `putenv('app.error_log_file=' . $file)` — drives the internal memoization key
+  directly; it fights the config system instead of using its documented channels.
+
 Quick reference:
 - Framework suite the plain way: `cd tests && ./vendor/bin/phpunit`
 - Anything, framework or addon: `php tools/testing/run.php [addon-dir]`
