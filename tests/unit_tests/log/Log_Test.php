@@ -4,6 +4,41 @@ use PHPUnit\Framework\TestCase;
 
 class Dj_App_Log_Test extends TestCase {
 
+    private $backup_error_logging = false;
+    private $backup_error_log_file = false;
+
+    protected function setUp(): void
+    {
+        $this->backup_error_logging = getenv('DJEBEL_APP_ERROR_LOGGING');
+        $this->backup_error_log_file = getenv('DJEBEL_APP_ERROR_LOG_FILE');
+
+        putenv('DJEBEL_APP_ERROR_LOGGING');
+        putenv('DJEBEL_APP_ERROR_LOG_FILE');
+
+        // cfg() memoizes resolved values under the RAW dotted key — drop those
+        // so each test resolves fresh through the conventional env keys above.
+        Dj_App_Config::cfg('app.error_logging', '', [ 'override' => 1, ]);
+        Dj_App_Config::cfg('app.error_log_file', '', [ 'override' => 1, ]);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->backup_error_logging === false) {
+            putenv('DJEBEL_APP_ERROR_LOGGING');
+        } else {
+            putenv('DJEBEL_APP_ERROR_LOGGING=' . $this->backup_error_logging);
+        }
+
+        if ($this->backup_error_log_file === false) {
+            putenv('DJEBEL_APP_ERROR_LOG_FILE');
+        } else {
+            putenv('DJEBEL_APP_ERROR_LOG_FILE=' . $this->backup_error_log_file);
+        }
+
+        Dj_App_Config::cfg('app.error_logging', '', [ 'override' => 1, ]);
+        Dj_App_Config::cfg('app.error_log_file', '', [ 'override' => 1, ]);
+    }
+
     private function tmpFile()
     {
         return sys_get_temp_dir() . '/dj_log_test_' . getmypid() . '_' . uniqid() . '.log';
@@ -177,22 +212,9 @@ class Dj_App_Log_Test extends TestCase {
 
         $entry = "[2026-08-05 00:00:00] Exception: boom in /x.php on line 1\n";
 
-        try {
-            // cfg() checks the RAW key first AND memoizes resolved values under it —
-            // drive the raw key directly and restore whatever was there (a cached
-            // value from an earlier cfg() call in this process is possible).
-            $prior_raw_file = getenv('app.error_log_file');
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-            putenv('app.error_log_file=' . $file);
-
-            $log_ok = Dj_App_Log::logAppError($entry);
-        } finally {
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        $log_ok = Dj_App_Log::logAppError($entry);
 
         $this->assertTrue($log_ok, 'the entry landed in the app error log');
 
@@ -242,25 +264,16 @@ class Dj_App_Log_Test extends TestCase {
 
         $entry = "[2026-08-05 00:00:00] Exception: still logged\n";
 
-        try {
-            $prior_raw_file = getenv('app.error_log_file');
-            $prior_error_log = ini_get('error_log');
+        // A BLANKED app.error_log_file must not drop the entry — it degrades
+        // to PHP's default error log (captured here in a scratch file).
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', '');
 
-            // A BLANKED app.error_log_file must not drop the entry — it degrades
-            // to PHP's default error log (captured here in a scratch file).
-            putenv('app.error_log_file=');
-            ini_set('error_log', $fallback_file);
+        $prior_error_log = ini_get('error_log');
+        ini_set('error_log', $fallback_file);
 
-            $log_ok = Dj_App_Log::logAppError($entry);
-        } finally {
-            ini_set('error_log', $prior_error_log);
+        $log_ok = Dj_App_Log::logAppError($entry);
 
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        ini_set('error_log', $prior_error_log);
 
         $this->assertTrue($log_ok, 'the entry was still logged');
         $this->assertFileExists($fallback_file, 'the entry landed in the default error log');
@@ -275,19 +288,9 @@ class Dj_App_Log_Test extends TestCase {
     {
         $file = $this->tmpFile();
 
-        try {
-            $prior_raw_file = getenv('app.error_log_file');
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-            putenv('app.error_log_file=' . $file);
-
-            $log_ok = Dj_App_Log::logAppError(new Exception('boom'));
-        } finally {
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        $log_ok = Dj_App_Log::logAppError(new Exception('boom'));
 
         $this->assertTrue($log_ok, 'the exception was logged');
 
@@ -307,19 +310,9 @@ class Dj_App_Log_Test extends TestCase {
 
         $error = [ 'type' => E_ERROR, 'message' => 'oom', 'file' => '/x.php', 'line' => 7, ];
 
-        try {
-            $prior_raw_file = getenv('app.error_log_file');
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-            putenv('app.error_log_file=' . $file);
-
-            $log_ok = Dj_App_Log::logAppError($error);
-        } finally {
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        $log_ok = Dj_App_Log::logAppError($error);
 
         $this->assertTrue($log_ok, 'the fatal was logged');
 
@@ -336,20 +329,10 @@ class Dj_App_Log_Test extends TestCase {
         $res_obj = new Dj_App_Result();
         $res_obj->exception = new Exception('carried by result');
 
-        try {
-            $prior_raw_file = getenv('app.error_log_file');
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-            putenv('app.error_log_file=' . $file);
-
-            Dj_App_Log::logAppError([ 'exception' => new Exception('carried by array'), ]);
-            Dj_App_Log::logAppError($res_obj);
-        } finally {
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        Dj_App_Log::logAppError([ 'exception' => new Exception('carried by array'), ]);
+        Dj_App_Log::logAppError($res_obj);
 
         $read_res = Dj_App_File_Util::read($file);
         $contents = $read_res->output;
@@ -363,29 +346,12 @@ class Dj_App_Log_Test extends TestCase {
     {
         $file = $this->tmpFile();
 
-        try {
-            // Raw key, same reason as above — cfg() memoized 'app.error_logging=1'
-            // the first time the gate resolved to its default in this process.
-            $prior_raw_logging = getenv('app.error_logging');
-            $prior_raw_file = getenv('app.error_log_file');
+        Dj_App_Env::set([
+            'DJEBEL_APP_ERROR_LOGGING' => '0',
+            'DJEBEL_APP_ERROR_LOG_FILE' => $file,
+        ]);
 
-            putenv('app.error_logging=0');
-            putenv('app.error_log_file=' . $file);
-
-            $log_ok = Dj_App_Log::logAppError("nope\n");
-        } finally {
-            if ($prior_raw_logging === false) {
-                putenv('app.error_logging');
-            } else {
-                putenv('app.error_logging=' . $prior_raw_logging);
-            }
-
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        $log_ok = Dj_App_Log::logAppError("nope\n");
 
         $this->assertFalse($log_ok, 'disabled error logging refuses the write');
         $this->assertFileDoesNotExist($file, 'nothing is written when disabled');
@@ -395,29 +361,14 @@ class Dj_App_Log_Test extends TestCase {
     {
         $file = $this->tmpFile();
 
-        try {
-            $prior_raw_logging = getenv('app.error_logging');
-            $prior_raw_file = getenv('app.error_log_file');
+        // A BLANK gate value is not an explicit disable — the critical
+        // facility stays ON; only 0/false/off/no really turn it off.
+        Dj_App_Env::set([
+            'DJEBEL_APP_ERROR_LOGGING' => '',
+            'DJEBEL_APP_ERROR_LOG_FILE' => $file,
+        ]);
 
-            // A BLANK gate value is not an explicit disable — the critical
-            // facility stays ON; only 0/false/off/no really turn it off.
-            putenv('app.error_logging=');
-            putenv('app.error_log_file=' . $file);
-
-            $log_ok = Dj_App_Log::logAppError("still on\n");
-        } finally {
-            if ($prior_raw_logging === false) {
-                putenv('app.error_logging');
-            } else {
-                putenv('app.error_logging=' . $prior_raw_logging);
-            }
-
-            if ($prior_raw_file === false) {
-                putenv('app.error_log_file');
-            } else {
-                putenv('app.error_log_file=' . $prior_raw_file);
-            }
-        }
+        $log_ok = Dj_App_Log::logAppError("still on\n");
 
         $this->assertTrue($log_ok, 'a blank gate value does not kill error logging');
         $this->assertFileExists($file, 'the entry was written');
