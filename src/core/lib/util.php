@@ -1409,27 +1409,45 @@ MSG_EOF;
                 ]);
             }
 
-            // Resolve from the direct key, then the nested 'data' array.
-            if (isset($params[$one_option]) && $params[$one_option] !== '') {
-                $field_val = $params[$one_option];
-            } elseif (isset($params['data'][$one_option]) && $params['data'][$one_option] !== '') {
-                $field_val = $params['data'][$one_option];
-            } else {
-                continue;
+            // The spelling variants, probed in PRIORITY order: the exact form, then
+            // the fully dashed / fully underscored forms, then the COLLAPSED form —
+            // so when a params bag carries several spellings, the one closest to
+            // what the caller asked for wins deterministically.
+            $option_variants = [ $one_option, ];
+            $has_separator = strpbrk($one_option, '-_') !== false;
+
+            if ($has_separator) {
+                $strip_separator_chars = [ '-', '_', ];
+
+                $option_variants[] = str_replace('_', '-', $one_option);
+                $option_variants[] = str_replace('-', '_', $one_option);
+                $option_variants[] = str_replace($strip_separator_chars, '', $one_option);
+                $option_variants = array_unique($option_variants);
             }
 
-            // Cast to match the default's type (int / array), or the explicit flags.
-            if ($cast_to_array) {
-                $field_val = (array) $field_val;
-            } elseif ($cast_to_int) {
-                $field_val = (int) $field_val;
-
-                if ($cast_abs) {
-                    $field_val = abs($field_val);
+            foreach ($option_variants as $option_variant) {
+                // Resolve from the direct key, then the nested 'data' array.
+                if (isset($params[$option_variant]) && $params[$option_variant] !== '') {
+                    $field_val = $params[$option_variant];
+                } elseif (isset($params['data'][$option_variant]) && $params['data'][$option_variant] !== '') {
+                    $field_val = $params['data'][$option_variant];
+                } else {
+                    continue;
                 }
-            }
 
-            return $field_val;
+                // Cast to match the default's type (int / array), or the explicit flags.
+                if ($cast_to_array) {
+                    $field_val = (array) $field_val;
+                } elseif ($cast_to_int) {
+                    $field_val = (int) $field_val;
+
+                    if ($cast_abs) {
+                        $field_val = abs($field_val);
+                    }
+                }
+
+                return $field_val;
+            }
         }
 
         // Try fuzzy matching if no exact match found. Build the candidate key
@@ -1468,8 +1486,9 @@ MSG_EOF;
         $field_esc = preg_quote($field, '#');
         $field_esc = str_replace('__PIPE__', '|', $field_esc);
 
-        // Expand each underscore to a [-_]+ class so the key matches either form.
-        $field_esc = str_replace('_', '[\-\_]+', $field_esc);
+        // Expand each underscore to a [-_]* class so the key matches either form —
+        // or the COLLAPSED form with no separator at all ('new_line' finds 'newline').
+        $field_esc = str_replace('_', '[\-\_]*', $field_esc);
 
         $multi_field_search_prefix = ($flags & self::PARTIAL_MATCH) ? '' : '^';
         $search_pattern = '#' . $multi_field_search_prefix . '[\-\_]*(' . $field_esc . ')$#si';

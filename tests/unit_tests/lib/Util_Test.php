@@ -1769,9 +1769,12 @@ META;
     {
         $underscored_params = [ 'verify_email' => 'yes', ];
         $dashed_params = [ 'verify-email' => 'yes', ];
+        $collapsed_params = [ 'newline' => 'yes', ];
 
         $this->assertEquals('yes', Dj_App_Util::getField('verify-email', $underscored_params));
         $this->assertEquals('yes', Dj_App_Util::getField('verify_email', $dashed_params));
+        $this->assertEquals('yes', Dj_App_Util::getField('new_line', $collapsed_params));
+        $this->assertEquals('yes', Dj_App_Util::getField('new-line', $collapsed_params));
     }
 
     public function testGetFieldNestedData()
@@ -1803,6 +1806,58 @@ META;
         $this->expectException(Dj_App_Exception::class);
 
         Dj_App_Util::getField('bad key|other', [ 'other' => 'x', ]);
+    }
+
+    public function testGetFieldRequestedSpellingWinsOverVariants()
+    {
+        $params = [ 'newline' => 1, 'new-line' => 0, ];
+
+        $this->assertSame(0, Dj_App_Util::getField('new-line', $params, 0));
+        $this->assertSame(1, Dj_App_Util::getField('newline', $params, 0));
+
+        // Neither spelling is exact: the dashed form outranks the collapsed one.
+        $this->assertSame(0, Dj_App_Util::getField('new_line', $params, 0));
+    }
+
+    public function testGetFieldFalsyValuesSurvive()
+    {
+        $params = [ 'flag' => false, 'count' => 0, 'label' => '0', ];
+
+        $this->assertFalse(Dj_App_Util::getField('flag', $params));
+        $this->assertSame(0, Dj_App_Util::getField('count', $params));
+        $this->assertSame('0', Dj_App_Util::getField('label', $params));
+    }
+
+    public function testGetFieldFirstPresentAliasWins()
+    {
+        $params = [ 'out' => '/tmp/out', 'file' => '/tmp/file', ];
+
+        $this->assertEquals('/tmp/file', Dj_App_Util::getField('file|out', $params));
+        $this->assertEquals('/tmp/out', Dj_App_Util::getField('out|file', $params));
+    }
+
+    public function testGetFieldTopLevelBeatsNestedData()
+    {
+        $params = [ 'city' => 'Varna', 'data' => [ 'city' => 'Sofia', ], ];
+
+        $this->assertEquals('Varna', Dj_App_Util::getField('city', $params));
+    }
+
+    public function testGetFieldPartialMatchFlag()
+    {
+        $params = [ 'user_email' => 'a@b.com', ];
+
+        $this->assertEquals('a@b.com', Dj_App_Util::getField('email', $params, '', Dj_App_Util::PARTIAL_MATCH));
+        $this->assertEquals('', Dj_App_Util::getField('email', $params));
+    }
+
+    public function testGetFieldBadFieldTypeThrows()
+    {
+        $this->expectException(Dj_App_Exception::class);
+
+        $field_obj = new stdClass();
+
+        Dj_App_Util::getField($field_obj, [ 'x' => 1, ]);
     }
 
 }
