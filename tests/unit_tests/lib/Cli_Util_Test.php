@@ -282,4 +282,13 @@ class Dj_App_Cli_Util_Test extends TestCase {
         $result = Dj_App_Cli_Util::parseArgs([], ['--help']);
         $this->assertArrayNotHasKey('help', $result);
     }
+
+    public function testStderrAliasParamsAndEarnedReturn()
+    {
+        // An empty message with no newline writes ZERO bytes — a legitimate write,
+        // so the earned return is still true; each call exercises one param alias.
+        $this->assertTrue(Dj_App_Cli_Util::stderr('', [ 'newline' => false, ]));
+        $this->assertTrue(Dj_App_Cli_Util::stderr('', [ 'new_line' => false, ]));
+        $this->assertTrue(Dj_App_Cli_Util::stderr('', [ 'nl' => false, ]));
+    }
 }
