@@ -179,11 +179,22 @@ class Dj_App_Cli_Util {
     /**
      * Write message to STDERR
      *
+     * [newline] rides as a param rather than a second method: a streamed chunk of
+     * a child process's output already carries its own line breaks.
+     *
      * @param string $msg Message to write (optional, defaults to empty for newline)
+     * @param array $params newline|new_line|nl (default true)
      * @return bool Always returns true
      */
-    static function stderr($msg = '') {
-        fputs(STDERR, $msg . "\n");
+    static function stderr($msg = '', $params = []) {
+        $with_newline = Dj_App_Util::getField('newline|new_line|nl', $params, true);
+
+        if (!empty($with_newline)) {
+            $msg .= "\n";
+        }
+
+        fputs(STDERR, $msg);
+
         return true;
     }
 
