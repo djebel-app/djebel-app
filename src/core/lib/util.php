@@ -1317,6 +1317,196 @@ MSG_EOF;
         return $val;
     }
 
+    const CAST_INT = 2;
+    const CAST_ABS_INT = 4;
+    const PARTIAL_MATCH = 32;
+
+    /**
+     * Gets field from the params. The key can partially match internal vars —
+     * the dash and underscore forms of a key are interchangeable in BOTH
+     * directions, and casting follows the default's TYPE (int / array) or the
+     * explicit flags (CAST_INT, CAST_ABS_INT, PARTIAL_MATCH).
+     * Dj_App_Util::getField();
+     * @param string|array $field Field name(s) to search for (can be comma/pipe separated)
+     * @param array $params Array to search in
+     * @param mixed $default_val Default value if field not found
+     * @param int $flags Optional flags (CAST_INT, CAST_ABS_INT, PARTIAL_MATCH)
+     * @return string|array|object
+     */
+    public static function getField($field, $params = [], $default_val = '', $flags = 0) {
+        if (empty($field)) {
+            return $default_val;
+        }
+
+        if (empty($params)) {
+            return $default_val;
+        }
+
+        $params = (array) $params;
+
+        // Cast intent — from the default's TYPE (int / array) and the explicit
+        // $flags. Computed once; reused by every cast site below.
+        $cast_to_int = is_int($default_val) || ($flags & self::CAST_INT) || ($flags & self::CAST_ABS_INT);
+        $cast_to_array = is_array($default_val);
+        $cast_abs = $flags & self::CAST_ABS_INT;
+
+        // Fast path: a plain single-token field that's a direct key hit — the
+        // overwhelmingly common call. Skips the split/clean pipeline (~80% of the
+        // cost) and the fuzzy machinery. strpbrk guards it — a field carrying a
+        // separator/whitespace (which the full path would split or trim) or a
+        // non-direct hit (nested-only / fuzzy) falls through to the full path.
+        if (is_string($field)
+            && isset($params[$field])
+            && (strpbrk($field, "|,; \t\n\r\0\x0B") === false)
+            && $params[$field] !== '') {
+
+            $field_val = $params[$field];
+
+            if ($cast_to_array) {
+                $field_val = (array) $field_val;
+            } elseif ($cast_to_int) {
+                $field_val = (int) $field_val;
+
+                if ($cast_abs) {
+                    $field_val = abs($field_val);
+                }
+            }
+
+            return $field_val;
+        }
+
+        $multiple_fields = [];
+
+        if (is_array($field)) {
+            $multiple_fields = $field;
+        } elseif (is_scalar($field)) {
+            $alias_separator_chars = [ '|', ';', ];
+            $field = str_replace($alias_separator_chars, ',', $field);
+            $multiple_fields = explode(',', $field);
+        } else {
+            $field_type = is_object($field) ? get_class($field) : gettype($field);
+
+            throw new Dj_App_Exception('Bad variable type for field', [
+                'code' => 'app.core.lib.util.get_field.bad_field_type',
+                'field_type' => $field_type,
+            ]);
+        }
+
+        // Skip non-scalar keys and trim
+        $multiple_fields = array_filter($multiple_fields, 'is_scalar');
+        $multiple_fields = Dj_App_String_Util::trim($multiple_fields);
+        $multiple_fields = array_unique($multiple_fields);
+        $multiple_fields = array_filter($multiple_fields);
+
+        // Try each field option
+        foreach ($multiple_fields as $one_option) {
+            // A key name never contains whitespace (surrounding spaces were trimmed above); a token
+            // that STILL has whitespace is a caller bug. strpbrk (not preg) — C byte scan, no regex.
+            if (strpbrk($one_option, " \t\n\r\0\x0B") !== false) {
+                throw new Dj_App_Exception('Field name contains whitespace', [
+                    'code' => 'app.core.lib.util.get_field.field_has_whitespace',
+                    'field' => $one_option,
+                ]);
+            }
+
+            // Resolve from the direct key, then the nested 'data' array.
+            if (isset($params[$one_option]) && $params[$one_option] !== '') {
+                $field_val = $params[$one_option];
+            } elseif (isset($params['data'][$one_option]) && $params['data'][$one_option] !== '') {
+                $field_val = $params['data'][$one_option];
+            } else {
+                continue;
+            }
+
+            // Cast to match the default's type (int / array), or the explicit flags.
+            if ($cast_to_array) {
+                $field_val = (array) $field_val;
+            } elseif ($cast_to_int) {
+                $field_val = (int) $field_val;
+
+                if ($cast_abs) {
+                    $field_val = abs($field_val);
+                }
+            }
+
+            return $field_val;
+        }
+
+        // Try fuzzy matching if no exact match found. Build the candidate key
+        // list keeping every PRESENT value — drop only '' / null, NOT via
+        // array_filter() which would also discard a legitimate '0' value and
+        // make a 0-valued dash/underscore key invisible to the match below.
+        $params_filtered = [];
+
+        foreach ($params as $param_key => $param_val) {
+            if ($param_val === '' || is_null($param_val)) {
+                continue;
+            }
+
+            $params_filtered[$param_key] = $param_val;
+        }
+
+        $keys = array_keys($params_filtered);
+        rsort($keys);
+
+        $field = implode('__PIPE__', $multiple_fields);
+
+        // Bound the lookup key length — field names are short; this caps the
+        // regex built below so a pathological input can't blow it up.
+        $field = substr($field, 0, 100);
+
+        // Fold the lookup key's dashes to underscores up front so the dash and
+        // underscore forms are interchangeable in BOTH directions ('verify-email'
+        // lookup matches a 'verify_email' key, not just the reverse). Folded
+        // FIRST on purpose: the leading-strip below would otherwise drop a
+        // leading '-' (a word-char '_' survives it), and preg_quote escapes '-'
+        // to '\-' which the [-_] expansion further down would corrupt.
+        $field = str_replace('-', '_', $field);
+
+        $field = preg_replace('#^[^\w]+#si', '', $field);
+
+        $field_esc = preg_quote($field, '#');
+        $field_esc = str_replace('__PIPE__', '|', $field_esc);
+
+        // Expand each underscore to a [-_]+ class so the key matches either form.
+        $field_esc = str_replace('_', '[\-\_]+', $field_esc);
+
+        $multi_field_search_prefix = ($flags & self::PARTIAL_MATCH) ? '' : '^';
+        $search_pattern = '#' . $multi_field_search_prefix . '[\-\_]*(' . $field_esc . ')$#si';
+        $actual_field_name_arr = preg_grep($search_pattern, $keys);
+
+        $actual_field_name = $field;
+
+        if (!empty($actual_field_name_arr)) {
+            $actual_field_name = array_shift($actual_field_name_arr);
+        }
+
+        // Resolve from nested 'data', then top-level, else the default. Tested
+        // with isset + !== '' (NOT empty()) so a present '0' resolved via the
+        // fuzzy match is returned, and a caller's non-empty default survives a
+        // '' value instead of collapsing to 0.
+        if (isset($params['data'][$actual_field_name]) && $params['data'][$actual_field_name] !== '') {
+            $result = $params['data'][$actual_field_name];
+        } elseif (isset($params[$actual_field_name]) && $params[$actual_field_name] !== '') {
+            $result = $params[$actual_field_name];
+        } else {
+            $result = $default_val;
+        }
+
+        // Cast to match the default's type (int / array), or the explicit flags.
+        if ($cast_to_array) {
+            $result = (array) $result;
+        } elseif ($cast_to_int) {
+            $result = (int) $result;
+
+            if ($cast_abs) {
+                $result = abs($result);
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * Checks if a value represents an enabled state.
      * 

@@ -1746,4 +1746,63 @@ META;
         $this->assertStringContainsString('</html>', $buff);
     }
 
+    public function testGetFieldExactHitAndDefault()
+    {
+        $params = [ 'name' => 'oterm', 'count' => '3', ];
+
+        $this->assertEquals('oterm', Dj_App_Util::getField('name', $params));
+        $this->assertEquals('missing', Dj_App_Util::getField('nope', $params, 'missing'));
+        $this->assertEquals('', Dj_App_Util::getField('', $params));
+        $this->assertEquals('', Dj_App_Util::getField('name', []));
+    }
+
+    public function testGetFieldAliases()
+    {
+        $params = [ 'out' => '/tmp/x', ];
+
+        $this->assertEquals('/tmp/x', Dj_App_Util::getField('file|out', $params));
+        $this->assertEquals('/tmp/x', Dj_App_Util::getField('file,out', $params));
+        $this->assertEquals('/tmp/x', Dj_App_Util::getField([ 'file', 'out', ], $params));
+    }
+
+    public function testGetFieldDashUnderscoreBothDirections()
+    {
+        $underscored_params = [ 'verify_email' => 'yes', ];
+        $dashed_params = [ 'verify-email' => 'yes', ];
+
+        $this->assertEquals('yes', Dj_App_Util::getField('verify-email', $underscored_params));
+        $this->assertEquals('yes', Dj_App_Util::getField('verify_email', $dashed_params));
+    }
+
+    public function testGetFieldNestedData()
+    {
+        $params = [ 'data' => [ 'city' => 'Sofia', ], ];
+
+        $this->assertEquals('Sofia', Dj_App_Util::getField('city', $params));
+    }
+
+    public function testGetFieldCasting()
+    {
+        $params = [ 'age' => '42', 'tags' => 'one', 'neg' => '-7', ];
+
+        $this->assertSame(42, Dj_App_Util::getField('age', $params, 0));
+        $this->assertSame([ 'one', ], Dj_App_Util::getField('tags', $params, []));
+        $this->assertSame(-7, Dj_App_Util::getField('neg', $params, '', Dj_App_Util::CAST_INT));
+        $this->assertSame(7, Dj_App_Util::getField('neg', $params, '', Dj_App_Util::CAST_ABS_INT));
+    }
+
+    public function testGetFieldZeroValueSurvives()
+    {
+        $params = [ 'month' => '0', ];
+
+        $this->assertEquals('0', Dj_App_Util::getField('month', $params));
+    }
+
+    public function testGetFieldWhitespaceFieldThrows()
+    {
+        $this->expectException(Dj_App_Exception::class);
+
+        Dj_App_Util::getField('bad key|other', [ 'other' => 'x', ]);
+    }
+
 }
