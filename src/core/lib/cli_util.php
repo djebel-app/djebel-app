@@ -179,12 +179,26 @@ class Dj_App_Cli_Util {
     /**
      * Write message to STDERR
      *
+     * [newline] rides as a param rather than a second method: a streamed chunk of
+     * a child process's output already carries its own line breaks.
+     *
      * @param string $msg Message to write (optional, defaults to empty for newline)
-     * @return bool Always returns true
+     * @param array $params newline|new_line|nl (default true)
+     * @return bool whether the write landed
      */
-    static function stderr($msg = '') {
-        fputs(STDERR, $msg . "\n");
-        return true;
+    static function stderr($msg = '', $params = []) {
+        $with_newline = Dj_App_Util::getField('newline|new_line|nl', $params, true);
+
+        if (!empty($with_newline)) {
+            $msg .= "\n";
+        }
+
+        // fputs reports bytes written or FALSE — 0 is a legitimate write of an
+        // empty chunk, so only FALSE means the write did not land.
+        $write_result = fputs(STDERR, $msg);
+        $is_written = $write_result !== false;
+
+        return $is_written;
     }
 
     /**
