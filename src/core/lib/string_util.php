@@ -192,14 +192,37 @@ class Dj_App_String_Util
     /**
      * Splits a buffer on the common list separators — comma, pipe, semicolon and
      * whitespace — into a trimmed, de-duplicated array; empty entries are dropped.
+     * Polymorphic like [trim]: an ARRAY splits each element and merges the results,
+     * so mixed specs (['a,b', 'c']) need no pre-splitting by the caller.
      * Dj_App_String_Util::splitOnSeparators();
-     * @param string $buff
+     * @param string|array $buff
      * @return array
+     * @throws Dj_App_Validation_Exception when $buff is neither scalar nor array
      */
     public static function splitOnSeparators($buff)
     {
-        if (empty($buff) || !is_scalar($buff)) {
+        if (empty($buff)) {
             return [];
+        }
+
+        if (is_array($buff)) {
+            $items = [];
+
+            foreach ($buff as $one_buff) {
+                $one_items = Dj_App_String_Util::splitOnSeparators($one_buff);
+                $items = array_merge($items, $one_items);
+            }
+
+            $items = array_unique($items);
+            $items = array_values($items);
+
+            return $items;
+        }
+
+        if (!is_scalar($buff)) {
+            $buff_type = is_object($buff) ? get_class($buff) : gettype($buff);
+
+            throw new Dj_App_Validation_Exception('splitOnSeparators buffer must be scalar or array', ['type' => $buff_type]);
         }
 
         $separator_chars = [ "\t", "\n", "\r", ' ', '|', ';', ];

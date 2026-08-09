@@ -373,18 +373,18 @@ class Dj_App_File_Util {
 
         $recursive = empty($filters['recursive']) ? 0 : 1;
 
+        // CSV or array, dotted or not, any case — the SPEC arrives however reads
+        // best at the call site and lands here as one clean lookup list.
         $allowed_extensions = [];
 
         if (!empty($filters['ext'])) {
-            $allowed_extensions = (array) $filters['ext'];
-            $allowed_extensions = array_map('strtolower', $allowed_extensions);
+            $allowed_extensions = Dj_App_File_Util::normalizeExtList($filters['ext']);
         }
 
         $skipped_extensions = [];
 
         if (!empty($filters['exclude_ext'])) {
-            $skipped_extensions = (array) $filters['exclude_ext'];
-            $skipped_extensions = array_map('strtolower', $skipped_extensions);
+            $skipped_extensions = Dj_App_File_Util::normalizeExtList($filters['exclude_ext']);
         }
 
         // SPL, not glob(): glob('*') silently omits dot entries, so honouring
@@ -684,6 +684,49 @@ class Dj_App_File_Util {
         }
 
         return $ext;
+    }
+
+    /** Spellings of the SAME format — a spec naming one matches files with either. */
+    const EXT_ALIASES = [
+        'jpg' => 'jpeg',
+        'jpeg' => 'jpg',
+    ];
+
+    /**
+     * An extension SPEC — CSV or array, dotted, any case — as one clean lowercase
+     * lookup list. Known alias spellings EXPAND: a 'jpeg' spec matches .jpg files
+     * too — the sibling is ADDED, nothing the caller asked for is rewritten.
+     * Dj_App_File_Util::normalizeExtList();
+     * @param string|array $input
+     * @return array
+     */
+    public static function normalizeExtList($input)
+    {
+        if (empty($input)) {
+            return [];
+        }
+
+        // The splitter takes both shapes and hands back trimmed strings, so the
+        // loop below only strips dots and folds case.
+        $items = Dj_App_String_Util::splitOnSeparators($input);
+        $extensions = [];
+
+        foreach ($items as $item) {
+            $item = ltrim($item, '.');
+            $item = strtolower($item);
+
+            if (!strlen($item)) {
+                continue;
+            }
+
+            $extensions[] = $item;
+
+            if (isset(Dj_App_File_Util::EXT_ALIASES[$item])) {
+                $extensions[] = Dj_App_File_Util::EXT_ALIASES[$item];
+            }
+        }
+
+        return $extensions;
     }
 
     /**
