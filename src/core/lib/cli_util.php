@@ -184,7 +184,7 @@ class Dj_App_Cli_Util {
      *
      * @param string $msg Message to write (optional, defaults to empty for newline)
      * @param array $params newline|new_line|nl (default true)
-     * @return bool Always returns true
+     * @return bool whether the write landed
      */
     static function stderr($msg = '', $params = []) {
         $with_newline = Dj_App_Util::getField('newline|new_line|nl', $params, true);
@@ -193,9 +193,12 @@ class Dj_App_Cli_Util {
             $msg .= "\n";
         }
 
-        fputs(STDERR, $msg);
+        // fputs reports bytes written or FALSE — 0 is a legitimate write of an
+        // empty chunk, so only FALSE means the write did not land.
+        $write_result = fputs(STDERR, $msg);
+        $is_written = $write_result !== false;
 
-        return true;
+        return $is_written;
     }
 
     /**
