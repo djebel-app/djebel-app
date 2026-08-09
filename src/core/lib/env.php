@@ -159,38 +159,55 @@ class Dj_App_Env {
     }
 
     /**
-     * Gets the value of an environment variable.
+     * Gets the value of an environment variable. Accepts ALTERNATIVE names too —
+     * an array or a CSV list ('DJEBEL_APP_ENV,APP_ENV') — the first SET value wins.
      * Dj_App_Env::getEnv();
-     * @param string $key
+     * @param string|array $key
      * @return string
      */
     public static function getEnv($key)
     {
-        $key_fmt = strtoupper($key);
-        $val = getenv($key_fmt);
-
-        // false = not set. A real '0' value must survive — empty() would eat it.
-        $val = $val === false ? '' : $val;
-
-        if (!strlen($val) && isset($_SERVER[$key_fmt]) && is_scalar($_SERVER[$key_fmt])) {
-            $val = (string) $_SERVER[$key_fmt];
+        if (empty($key)) {
+            return '';
         }
 
-        // clear spaces & some optional quotes that may have been inserted.
-        $val = trim($val, " \t\n\r\0\x0B\'\"");
+        // One or many: the splitter hands back one element for a plain name,
+        // several for an array or CSV of alternatives — the first SET value wins.
+        $keys = Dj_App_String_Util::splitOnSeparators($key);
+        $val = '';
+
+        foreach ($keys as $one_key) {
+            $key_fmt = strtoupper($one_key);
+            $env_value = getenv($key_fmt);
+
+            // false = not set. A real '0' value must survive — empty() would eat it.
+            $val = $env_value === false ? '' : $env_value;
+
+            if (!strlen($val) && isset($_SERVER[$key_fmt]) && is_scalar($_SERVER[$key_fmt])) {
+                $val = (string) $_SERVER[$key_fmt];
+            }
+
+            // clear spaces & some optional quotes that may have been inserted.
+            $val = trim($val, " \t\n\r\0\x0B\'\"");
+
+            if (strlen($val)) {
+                break;
+            }
+        }
 
         return $val;
     }
 
     /**
      * Sets one or multiple env vars. First arg can be an array of key => value pairs.
-     * Keys are uppercased to match getEnv() lookups.
+     * Keys are uppercased to match getEnv() lookups. Omitting the value (or passing
+     * null) REMOVES the variable.
      * Dj_App_Env::set();
      * @param string|array $key
-     * @param string $val
+     * @param string|null $val
      * @return bool
      */
-    public static function set($key, $val = '')
+    public static function set($key, $val = null)
     {
         if (empty($key)) {
             return false;
@@ -203,6 +220,13 @@ class Dj_App_Env {
         $env_vars = array_change_key_case($key, CASE_UPPER);
 
         foreach ($env_vars as $env_key => $env_val) {
+            // null = REMOVE the variable (putenv without '='); '' still sets an
+            // empty value. Same convention as the dot-env setter.
+            if (is_null($env_val)) {
+                putenv($env_key);
+                continue;
+            }
+
             putenv($env_key . '=' . $env_val);
         }
 
