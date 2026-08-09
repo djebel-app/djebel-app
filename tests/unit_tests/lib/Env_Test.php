@@ -34,6 +34,35 @@ class Dj_App_Env_Test extends TestCase
         }
     }
 
+    public function testGetEnvAlternatives()
+    {
+        try {
+            Dj_App_Env::set('DJ_TEST_ENV_ALT_SECOND', 'second_val');
+
+            // Array of alternatives — the first SET name wins, misses are skipped.
+            $alt_names = [ 'DJ_TEST_ENV_ALT_MISSING', 'DJ_TEST_ENV_ALT_SECOND', ];
+            $this->assertEquals('second_val', Dj_App_Env::getEnv($alt_names));
+
+            // CSV spelling of the same alternatives.
+            $this->assertEquals('second_val', Dj_App_Env::getEnv('DJ_TEST_ENV_ALT_MISSING,DJ_TEST_ENV_ALT_SECOND'));
+
+            // ORDER: an earlier set name beats a later one.
+            Dj_App_Env::set('DJ_TEST_ENV_ALT_FIRST', 'first_val');
+            $ordered_names = [ 'DJ_TEST_ENV_ALT_FIRST', 'DJ_TEST_ENV_ALT_SECOND', ];
+            $this->assertEquals('first_val', Dj_App_Env::getEnv($ordered_names));
+
+            // set() with no value REMOVES — the variable is gone, not set to empty.
+            Dj_App_Env::set('DJ_TEST_ENV_ALT_FIRST');
+            $this->assertFalse(getenv('DJ_TEST_ENV_ALT_FIRST'));
+
+            // All misses come back empty.
+            $this->assertEmpty(Dj_App_Env::getEnv([ 'DJ_TEST_ENV_ALT_MISSING', ]));
+        } finally {
+            Dj_App_Env::set('DJ_TEST_ENV_ALT_FIRST');
+            Dj_App_Env::set('DJ_TEST_ENV_ALT_SECOND');
+        }
+    }
+
     public function testGetEnvConstSingleKey()
     {
         putenv('APP_ENV=abc');

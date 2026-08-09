@@ -225,7 +225,19 @@ class Dj_App_String_Util
             throw new Dj_App_Validation_Exception('splitOnSeparators buffer must be scalar or array', ['type' => $buff_type]);
         }
 
-        $separator_chars = [ "\t", "\n", "\r", ' ', '|', ';', ];
+        // FAST PATH: strpbrk scans once — no separator anywhere means the answer
+        // is the single trimmed item, skipping the replace/explode machinery.
+        if (strpbrk($buff, Dj_App_String_Util::SPLIT_SEPARATOR_CHARS) === false) {
+            $item = Dj_App_String_Util::trim($buff);
+
+            if (!strlen($item)) {
+                return [];
+            }
+
+            return [ $item, ];
+        }
+
+        $separator_chars = str_split(Dj_App_String_Util::SPLIT_SEPARATOR_CHARS);
         $buff = str_replace($separator_chars, ',', $buff);
 
         $items = explode(',', $buff);
@@ -422,6 +434,9 @@ class Dj_App_String_Util
 
         return $str;
     }
+
+    // Every character splitOnSeparators treats as a list separator.
+    const SPLIT_SEPARATOR_CHARS = "\t\n\r |;,";
 
     const ALLOW_DOT = 2;
     const KEEP_CASE = 2**2;
