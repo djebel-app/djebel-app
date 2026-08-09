@@ -737,7 +737,39 @@ class Dj_App_File_Util_Test extends TestCase {
         $txt_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'ext' => 'txt', ]);
 
         $this->assertArrayHasKey('b.TXT', $txt_res_obj->files);
+
+        // A CSV spec with dots and mixed case lands as the same clean filter.
+        $csv_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'ext' => 'zip, .XZ', ]);
+
+        $this->assertArrayHasKey('a.zip', $csv_res_obj->files);
+        $this->assertArrayHasKey('c.tar.xz', $csv_res_obj->files);
+        $this->assertArrayNotHasKey('b.TXT', $csv_res_obj->files);
+
+        $dotted_exclude_res_obj = Dj_App_File_Util::listFiles($this->test_dir, [ 'exclude_ext' => '.ZIP', ]);
+
+        $this->assertArrayNotHasKey('a.zip', $dotted_exclude_res_obj->files);
+        $this->assertArrayHasKey('b.TXT', $dotted_exclude_res_obj->files);
     }
+
+    /**
+     * The extension SPEC arrives as CSV, arrays, dotted and mixed-case — one list.
+     */
+    public function testNormalizeExtList() {
+        $this->assertEquals([ 'sha256', ], Dj_App_File_Util::normalizeExtList('sha256'));
+        $this->assertEquals([ 'zip', ], Dj_App_File_Util::normalizeExtList('.ZIP'));
+        $this->assertEquals([ 'deb', 'zip', 'tar', ], Dj_App_File_Util::normalizeExtList('deb, .zip , TAR '));
+        $this->assertEquals([ 'zip', 'deb', ], Dj_App_File_Util::normalizeExtList([ '.Zip', 'DEB', ]));
+        $this->assertEquals([ 'tar.xz', ], Dj_App_File_Util::normalizeExtList('.tar.xz'));
+        $this->assertEquals([ 'zip', 'xz', 'deb', ], Dj_App_File_Util::normalizeExtList('zip|.XZ;deb'));
+        $this->assertEquals([], Dj_App_File_Util::normalizeExtList(''));
+        $this->assertEquals([], Dj_App_File_Util::normalizeExtList([]));
+
+        // Alias spellings EXPAND — either one makes BOTH available.
+        $this->assertEquals([ 'jpeg', 'jpg', ], Dj_App_File_Util::normalizeExtList('jpeg'));
+        $this->assertEquals([ 'jpg', 'jpeg', ], Dj_App_File_Util::normalizeExtList('.JPG'));
+        $this->assertEquals([ 'png', ], Dj_App_File_Util::normalizeExtList('png'));
+    }
+
 
     /**
      * The deny counterpart of ext. Both together is the real case: "artifacts, but not
