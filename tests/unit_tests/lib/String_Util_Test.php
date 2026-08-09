@@ -1923,4 +1923,26 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertArrayHasKey('my_key', $result);
         $this->assertArrayNotHasKey('og.image', $result);
     }
+
+    public function testSplitOnSeparatorsArrayInput()
+    {
+        // Each element splits, results merge, duplicates collapse across elements.
+        $mixed_specs = [ 'a,b', 'c', 'b', ];
+
+        $this->assertEquals([ 'a', 'b', 'c', ], Dj_App_String_Util::splitOnSeparators($mixed_specs));
+
+        // Nested arrays ride the same recursion.
+        $nested_specs = [ 'a|b', [ 'c;d', ], ];
+
+        $this->assertEquals([ 'a', 'b', 'c', 'd', ], Dj_App_String_Util::splitOnSeparators($nested_specs));
+    }
+
+    public function testSplitOnSeparatorsNonScalarThrows()
+    {
+        $this->expectException(Dj_App_Validation_Exception::class);
+
+        $buff_obj = new stdClass();
+
+        Dj_App_String_Util::splitOnSeparators($buff_obj);
+    }
 }
