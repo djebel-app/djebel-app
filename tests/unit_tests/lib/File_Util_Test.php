@@ -954,4 +954,123 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertArrayHasKey('nested/keep.zip', $res_obj->files);
         $this->assertArrayNotHasKey('nested/drop.txt', $res_obj->files);
     }
+
+    public function testDeleteFile() {
+        $test_file = $this->test_dir . '/doomed.txt';
+        file_put_contents($test_file, 'x');
+
+        $res_obj = Dj_App_File_Util::delete($test_file);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertTrue($res_obj->deleted);
+        $this->assertFileDoesNotExist($test_file);
+    }
+
+    /**
+     * Already gone is success — the point is that the name is free.
+     */
+    public function testDeleteMissingTargetIsSuccess() {
+        $test_file = $this->test_dir . '/never_existed.txt';
+
+        $res_obj = Dj_App_File_Util::delete($test_file);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertFalse($res_obj->deleted);
+    }
+
+    /**
+     * Deleting a symlink removes the LINK — what it points at stays untouched.
+     */
+    public function testDeleteSymlinkRemovesLinkNotTarget() {
+        $target_file = $this->test_dir . '/link_target.txt';
+        file_put_contents($target_file, 'precious');
+
+        $link_file = $this->test_dir . '/the_link';
+        symlink($target_file, $link_file);
+
+        $res_obj = Dj_App_File_Util::delete($link_file);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertFalse(is_link($link_file));
+        $this->assertFileExists($target_file);
+    }
+
+    public function testDeleteDirectory() {
+        $doomed_dir = $this->test_dir . '/doomed_dir';
+        mkdir($doomed_dir . '/nested', 0755, true);
+        file_put_contents($doomed_dir . '/nested/entry.txt', 'x');
+
+        $res_obj = Dj_App_File_Util::delete($doomed_dir);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryDoesNotExist($doomed_dir);
+    }
+
+    /**
+     * A symlink INSIDE the deleted tree is unlinked, never followed — content
+     * it points at outside the tree survives.
+     */
+    public function testDeleteDirUnlinksInnerSymlinkWithoutFollowing() {
+        $outside_file = $this->test_dir . '/outside.txt';
+        file_put_contents($outside_file, 'must survive');
+
+        $doomed_dir = $this->test_dir . '/doomed_with_link';
+        mkdir($doomed_dir);
+        symlink($outside_file, $doomed_dir . '/escape_link');
+
+        $res_obj = Dj_App_File_Util::delete($doomed_dir);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryDoesNotExist($doomed_dir);
+        $this->assertFileExists($outside_file);
+    }
+
+    public function testDeleteDirWithinAllowedRoot() {
+        $doomed_dir = $this->test_dir . '/inside';
+        mkdir($doomed_dir);
+
+        $extra_opts = [
+            'within_dir' => $this->test_dir,
+        ];
+
+        $res_obj = Dj_App_File_Util::delete($doomed_dir, $extra_opts);
+
+        $this->assertTrue($res_obj->status);
+        $this->assertDirectoryDoesNotExist($doomed_dir);
+    }
+
+    public function testDeleteDirOutsideAllowedRootRefused() {
+        $allowed_dir = $this->test_dir . '/allowed';
+        mkdir($allowed_dir);
+
+        $victim_dir = $this->test_dir . '/victim';
+        mkdir($victim_dir);
+
+        $extra_opts = [
+            'within_dir' => $allowed_dir,
+        ];
+
+        $res_obj = Dj_App_File_Util::delete($victim_dir, $extra_opts);
+
+        $this->assertTrue($res_obj->isError());
+        $this->assertDirectoryExists($victim_dir);
+    }
+
+    /**
+     * An allowed root that does not resolve refuses the removal — never falls
+     * through to an unconfined delete.
+     */
+    public function testDeleteDirBadWithinRootRefused() {
+        $victim_dir = $this->test_dir . '/victim_bad_root';
+        mkdir($victim_dir);
+
+        $extra_opts = [
+            'within_dir' => $this->test_dir . '/no_such_root',
+        ];
+
+        $res_obj = Dj_App_File_Util::delete($victim_dir, $extra_opts);
+
+        $this->assertTrue($res_obj->isError());
+        $this->assertDirectoryExists($victim_dir);
+    }
 }
