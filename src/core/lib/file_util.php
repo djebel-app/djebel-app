@@ -494,7 +494,16 @@ class Dj_App_File_Util {
         return $res_obj;
     }
 
-    public static function rmdir($dir) {
+    /**
+     * Dj_App_File_Util::rmdir();
+     * Recursively removes [dir]. Already gone is success. Symlinks inside are
+     * unlinked, never followed; a filesystem root is refused outright.
+     * @param string $dir
+     * @param array $extra_opts within_dir — when passed, refuses to remove a
+     *                          dir that does not RESOLVE to somewhere inside it
+     * @return Dj_App_Result data {deleted}
+     */
+    public static function rmdir($dir, $extra_opts = []) {
         $res_obj = new Dj_App_Result();
         $res_obj->deleted = false;
 
@@ -522,6 +531,25 @@ class Dj_App_File_Util {
 
             if (!is_dir($real_dir)) {
                 throw new Dj_App_File_Util_Exception("Not a dir", [ 'dir' => $real_dir ]);
+            }
+
+            $within_dir = empty($extra_opts['within_dir']) ? '' : $extra_opts['within_dir'];
+
+            if (!empty($within_dir)) {
+                // Resolved, so a link is judged by where it actually leads.
+                $real_within_dir = realpath($within_dir);
+
+                if (empty($real_within_dir)) {
+                    throw new Dj_App_File_Util_Exception("Allowed dir does not resolve", [ 'within_dir' => $within_dir ]);
+                }
+
+                // Trailing separator on the haystack so '/x/dist-other' cannot
+                // pass a prefix test against '/x/dist'.
+                $allowed_prefix = $real_within_dir . '/';
+
+                if (strpos($real_dir, $allowed_prefix) !== 0) {
+                    throw new Dj_App_File_Util_Exception("Refusing to remove outside the allowed dir", [ 'dir' => $real_dir, 'within_dir' => $within_dir ]);
+                }
             }
 
             $dir_it_obj = new RecursiveDirectoryIterator($real_dir, FilesystemIterator::SKIP_DOTS);
@@ -560,6 +588,58 @@ class Dj_App_File_Util {
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
         }
+
+        return $res_obj;
+    }
+
+    /**
+     * Dj_App_File_Util::delete();
+     * Removes [target] if it is there, so the next step writes a FRESH one.
+     * Takes a file, a symlink or a DIRECTORY and does the right removal for
+     * each — the caller says WHAT to remove, not how. ALREADY GONE is success:
+     * the point is that the name is free, not that this call did the freeing.
+     * It REPORTS a failed removal rather than throwing — cleanup callers run
+     * in finally blocks where a throw would REPLACE the real failure; a caller
+     * that cannot continue with a leftover checks the Result and stops.
+     * @param string $target file, symlink or dir
+     * @param array $extra_opts within_dir — when passed, confines a DIRECTORY
+     *                          removal to that root
+     * @return Dj_App_Result data {target, deleted} — deleted says whether one was there
+     */
+    public static function delete($target, $extra_opts = [])
+    {
+        $res_obj = new Dj_App_Result();
+        $res_obj->target = $target;
+        $res_obj->deleted = false;
+
+        // is_link FIRST, and the ordering is load-bearing: is_dir() FOLLOWS a
+        // symlink, so a link pointing at a directory would otherwise take the
+        // directory branch and delete what it POINTS AT rather than the link.
+        if (is_link($target) || is_file($target)) {
+            $is_deleted = unlink($target);
+
+            // Still there after unlink means the removal genuinely failed, and
+            // the next step would otherwise UPDATE that stale file.
+            if (empty($is_deleted) || is_file($target)) {
+                $res_obj->msg = 'Cannot remove: ' . $target;
+
+                return $res_obj;
+            }
+
+            $res_obj->status = true;
+            $res_obj->deleted = true;
+
+            return $res_obj;
+        }
+
+        if (is_dir($target)) {
+            $rmdir_res_obj = Dj_App_File_Util::rmdir($target, $extra_opts);
+
+            return $rmdir_res_obj;
+        }
+
+        // Nothing there — the name is free, which is what the caller wanted.
+        $res_obj->status = true;
 
         return $res_obj;
     }
