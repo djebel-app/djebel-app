@@ -326,6 +326,125 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertEquals('C:/path/to/file.txt', $result);
     }
 
+    /**
+     * DEFECT — the backslash rewrite is unconditional, but a backslash is a LEGAL
+     * character in a POSIX filename. On Linux/macOS a dir literally named `a\b` is
+     * rewritten to `a/b`, so the caller gets back a different path that does not
+     * exist. The rewrite is correct on Windows and wrong everywhere else.
+     * @return void
+     */
+    public function testNormalizePathKeepsBackslashInPosixFilename()
+    {
+        if (DIRECTORY_SEPARATOR == '\\') {
+            $this->markTestSkipped('A backslash is a separator on Windows, not a filename character.');
+        }
+
+        $path = '/tmp/dir/a\\b';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/tmp/dir/a\\b', $result);
+    }
+
+    /**
+     * The same defect proven against the FILESYSTEM rather than a literal: the dir is
+     * created, so a normalizer that changes the name is demonstrably wrong.
+     * @return void
+     */
+    public function testNormalizePathBackslashDirStillResolves()
+    {
+        if (DIRECTORY_SEPARATOR == '\\') {
+            $this->markTestSkipped('Cannot create a backslash-named dir on Windows.');
+        }
+
+        $backslash_dir = $this->test_dir . '/a\\b';
+        $made = mkdir($backslash_dir);
+        $this->assertTrue($made, 'A backslash dir name is legal on POSIX');
+
+        $result = Dj_App_File_Util::normalizePath($backslash_dir);
+        $this->assertDirectoryExists($result, 'normalizePath must not rename an existing dir');
+    }
+
+    /**
+     * The Windows behavior must SURVIVE the fix — a drive path is still canonicalized.
+     * @return void
+     */
+    public function testNormalizePathWindowsDrivePathAlwaysConverts()
+    {
+        $path = 'C:\\Users\\test';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('C:/Users/test', $result);
+    }
+
+    public function testNormalizePathLeadingWhitespace()
+    {
+        $path = "   /path/to/file.txt";
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/file.txt', $result);
+    }
+
+    public function testNormalizePathTabsAndNewlines()
+    {
+        $path = "\t/path/to/file.txt\n";
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/file.txt', $result);
+    }
+
+    public function testNormalizePathWhitespaceOnly()
+    {
+        $path = '   ';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEmpty($result);
+    }
+
+    public function testNormalizePathManyConsecutiveSlashes()
+    {
+        $path = '/a/////b//////c';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/a/b/c', $result);
+    }
+
+    public function testNormalizePathMultipleTrailingSlashes()
+    {
+        $path = '/path/to/dir///';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/path/to/dir', $result);
+    }
+
+    public function testNormalizePathRelativePath()
+    {
+        $path = 'relative/dir/';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('relative/dir', $result);
+    }
+
+    public function testNormalizePathSingleCharDirIsNotStripped()
+    {
+        $path = '0';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('0', $result, "a dir literally named '0' must survive");
+    }
+
+    public function testNormalizePathUnicodeName()
+    {
+        $path = '/tmp/папка/файл.txt';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/tmp/папка/файл.txt', $result);
+    }
+
+    public function testNormalizePathSpacesInsideNameSurvive()
+    {
+        $path = '/tmp/my dir/my file.txt';
+        $result = Dj_App_File_Util::normalizePath($path);
+        $this->assertEquals('/tmp/my dir/my file.txt', $result);
+    }
+
+    public function testNormalizePathIsIdempotent()
+    {
+        $path = '  /a//b/c/  ';
+        $once = Dj_App_File_Util::normalizePath($path);
+        $twice = Dj_App_File_Util::normalizePath($once);
+        $this->assertEquals($once, $twice);
+    }
+
     public function testRemoveExtSimpleFilename()
     {
         $path = 'file.md';
