@@ -647,7 +647,7 @@ class Dj_App_File_Util {
     /**
      * Dj_App_File_Util::normalizePath();
      * Normalize a filesystem/web path:
-     *  - convert "\" to "/"
+     *  - convert "\" to "/" on Windows and in drive-letter paths only
      *  - collapse multiple "/" to single "/"
      *  - trim spaces
      *  - optionally run removeSlash() if available in this class
@@ -659,15 +659,35 @@ class Dj_App_File_Util {
      */
     public static function normalizePath($path)
     {
-        if (empty($path)) {
+        // empty() would swallow a dir literally named '0', which is a legal name.
+        if (!is_scalar($path)) {
             return '';
         }
 
         $path = (string) $path;
         $path = Dj_App_String_Util::trim($path);
+        $path_len = strlen($path);
 
-        // convert backslashes first
-        $path = str_replace('\\', '/', $path);
+        if ($path_len == 0) {
+            return '';
+        }
+
+        // A backslash is a legal filename character on POSIX, so it's a separator only
+        // on Windows or in a drive-letter path such as C:\Users\test. A 1-char path has
+        // no second char to read, so it can never be a drive path.
+        if (DIRECTORY_SEPARATOR == '\\') {
+            $convert_backslashes = true;
+        } elseif ($path_len == 1) {
+            $convert_backslashes = false;
+        } else {
+            $first_char = $path[0];
+            $second_char = $path[1];
+            $convert_backslashes = $second_char == ':' && ctype_alpha($first_char);
+        }
+
+        if ($convert_backslashes) {
+            $path = str_replace('\\', '/', $path);
+        }
 
         // Collapse duplicate slashes
         $path = Dj_App_String_Util::singlefy($path, '/');
