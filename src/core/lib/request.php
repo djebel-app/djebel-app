@@ -1949,6 +1949,31 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Total bytes pending across EVERY output buffer level.
+     *
+     * ob_get_length() reports only the TOPMOST buffer while finishRequest() flushes them
+     * all, so on a nested buffer it under-reports the body and whatever consumes the
+     * Content-Length truncates the response mid-byte.
+     *
+     * @return int Byte count; 0 when nothing is buffered.
+     */
+    public function getBufferedContentLength() {
+        $buffer_statuses = ob_get_status(true);
+
+        if (empty($buffer_statuses)) {
+            return 0;
+        }
+
+        $content_length = 0;
+
+        foreach ($buffer_statuses as $buffer_status) {
+            $content_length += $buffer_status['buffer_used'];
+        }
+
+        return $content_length;
+    }
+
+    /**
      * Flush the HTTP response to the client and continue PHP execution in the background.
      * Useful for deferring slow tasks (e.g., push notifications, email) after the response.
      *
@@ -1989,9 +2014,13 @@ CLEAR_AND_REDIRECT_HTML;
             // the client would either hang waiting for more bytes or truncate early.
             header('Content-Encoding: none', true);
 
-            $content_length = ob_get_length();
+            // A zero total means nothing is pending to frame — either the body already
+            // left the buffers or there is none. Emitting Content-Length: 0 there tells
+            // the client (or the proxy in front) the body ended before it began, so it
+            // truncates whatever actually follows.
+            $content_length = $this->getBufferedContentLength();
 
-            if ($content_length !== false) {
+            if (!empty($content_length)) {
                 header('Content-Length: ' . $content_length, true);
             }
         }

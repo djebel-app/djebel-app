@@ -878,4 +878,97 @@ class Dj_App_Request_Test extends TestCase
 
         $this->assertFalse($is_https, 'X-Forwarded-Proto=http should be plain HTTP');
     }
+
+    /**
+     * Every buffer level counts, not just the topmost one. ob_get_length() reports only
+     * the top buffer, so a nested buffer under-reported the body and the response was
+     * truncated mid-byte by whatever consumed the Content-Length.
+     *
+     * The runner may hold a buffer of its own, so each case asserts on the DELTA it adds.
+     * Assertions run AFTER the buffers are closed — inside them a failure message would
+     * be swallowed by the very buffer under test.
+     */
+    public function testGetBufferedContentLengthSumsEveryLevel()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $baseline = $req_obj->getBufferedContentLength();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            echo str_repeat('a', 10);
+
+            ob_start();
+            echo str_repeat('b', 3);
+
+            $nested_total = $req_obj->getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $nested_bytes = $nested_total - $baseline;
+
+        $this->assertSame(13, $nested_bytes, 'both levels counted (10 + 3), not just the topmost 3');
+    }
+
+    /**
+     * An open but EMPTY buffer contributes nothing, so finishRequest() skips the header.
+     * Emitting Content-Length: 0 there tells the client the body ended before it began.
+     */
+    public function testGetBufferedContentLengthIgnoresAnEmptyBuffer()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $baseline = $req_obj->getBufferedContentLength();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+
+            $empty_total = $req_obj->getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $empty_bytes = $empty_total - $baseline;
+
+        $this->assertEmpty($empty_bytes, 'an open but empty buffer adds no bytes');
+    }
+
+    /**
+     * The wire needs BYTES. Cyrillic is 2 bytes per character in UTF-8, so a character
+     * count would under-report and cut the body mid-character — invalid UTF-8 the browser
+     * renders as U+FFFD.
+     */
+    public function testGetBufferedContentLengthCountsBytesNotCharacters()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $baseline = $req_obj->getBufferedContentLength();
+        $cyrillic_body = 'Използвания';
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            echo $cyrillic_body;
+
+            $cyrillic_total = $req_obj->getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $cyrillic_bytes = $cyrillic_total - $baseline;
+        $expected_bytes = strlen($cyrillic_body);
+        $character_count = mb_strlen($cyrillic_body, 'UTF-8');
+
+        $this->assertGreaterThan($character_count, $expected_bytes, 'the fixture is genuinely multibyte');
+        $this->assertSame($expected_bytes, $cyrillic_bytes, 'byte count, never the character count');
+    }
 }

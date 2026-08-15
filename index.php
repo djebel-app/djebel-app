@@ -197,11 +197,19 @@ if (!empty($plugin_dirs)) {
     Dj_App_Hooks::doAction( 'app.core.plugins.loaded', $ctx );
 }
 
-Dj_App_Hooks::doAction( 'app.core.init' );
-
-$req_obj = Dj_App_Request::getInstance();
-
 try {
+    Dj_App_Hooks::doAction( 'app.core.init' );
+
+    $req_obj = Dj_App_Request::getInstance();
+
+    // Hold the WHOLE response in ONE unlimited buffer — no chunk size, so PHP never
+    // auto-flushes it — and leave it open for finishRequest() to measure and flush at
+    // shutdown. php.ini's output_buffering is size-limited: a page bigger than the chunk
+    // flushes itself on the way out and leaves nothing to count, so the body length read
+    // 0 and the response went out unframed. Buffering every path (theme, content, a
+    // plugin echoing directly) is what makes that count the real body size.
+    ob_start();
+
     $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
     $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;
 
