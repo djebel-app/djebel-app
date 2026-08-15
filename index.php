@@ -208,7 +208,17 @@ try {
     // flushes itself on the way out and leaves nothing to count, so the body length read
     // 0 and the response went out unframed. Buffering every path (theme, content, a
     // plugin echoing directly) is what makes that count the real body size.
-    ob_start();
+    //
+    // A plugin that STREAMS (a downloader) turns this off so its output goes straight to
+    // the client instead of being held whole in memory. With no buffer there is nothing
+    // to measure, so finishRequest() emits no Content-Length — correct for a stream.
+    $buffer_output_env = Dj_App_Config::cfg('app.core.buffer_output', true);
+    $buffer_output = Dj_App_Util::isDisabled($buffer_output_env) ? false : true;
+    $buffer_output = Dj_App_Hooks::applyFilter('app.core.buffer_output', $buffer_output);
+
+    if ($buffer_output) {
+        ob_start();
+    }
 
     $load_theme_env = Dj_App_Config::cfg('app.core.theme.load_theme', true);
     $load_theme = Dj_App_Util::isDisabled($load_theme_env) ? false : true;

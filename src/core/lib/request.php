@@ -1991,28 +1991,21 @@ CLEAR_AND_REDIRECT_HTML;
             session_write_close();
         }
 
-        // Disable output compression — prevents gzip from breaking Content-Length.
+        // PHP itself must never compress — that burns a request worker on work the web
+        // server does in C and can cache. Compression at the SERVER layers (mod_deflate,
+        // nginx gzip/brotli/zstd) is left alone: each strips or replaces the length below
+        // when it re-encodes, so an accurate Content-Length costs them nothing.
         // zlib.output_compression is INI_ALL but PHP locks it once headers go out;
         // calling ini_set() after that raises a warning that lands in error_log even
         // with the @ operator. Guard with !headers_sent() to be silent in production.
         if (!headers_sent()) {
             ini_set('zlib.output_compression', 'Off');
 
-            if (function_exists('apache_setenv')) {
-                apache_setenv('no-gzip', 1);
-            }
-
             // Tell the client to close the TCP connection after this response so the
             // browser stops waiting and disconnects. Combined with an explicit
             // Content-Length below, this lets PHP keep running in the background
             // (e.g. for deferred actions / cleanup) without holding the user's request open.
             header('Connection: close', true);
-
-            // Disable any content encoding (gzip etc.) on this response. The
-            // Content-Length header below counts the RAW body bytes; if a downstream
-            // gzip handler re-encoded the body, the byte count would be wrong and
-            // the client would either hang waiting for more bytes or truncate early.
-            header('Content-Encoding: none', true);
 
             // A zero total means nothing is pending to frame — either the body already
             // left the buffers or there is none. Emitting Content-Length: 0 there tells
