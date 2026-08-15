@@ -12,6 +12,24 @@ class Dj_App_Log {
     private static $retry_attempts = 3;
     private static $retry_delay_ms = 250;
 
+    // errno => label for the app error log. error_get_last() and the error handler both
+    // hand over the raw errno under 'type', so fatals and warnings share ONE entry format.
+    // An errno that is not listed falls back to the fatal label.
+    const ERROR_TYPE_LABELS = [
+        E_ERROR => 'Fatal Error',
+        E_WARNING => 'Warning',
+        E_PARSE => 'Parse Error',
+        E_NOTICE => 'Notice',
+        E_CORE_ERROR => 'Core Error',
+        E_COMPILE_ERROR => 'Compile Error',
+        E_USER_ERROR => 'User Error',
+        E_USER_WARNING => 'User Warning',
+        E_USER_NOTICE => 'User Notice',
+        E_RECOVERABLE_ERROR => 'Recoverable Error',
+        E_DEPRECATED => 'Deprecated',
+        E_USER_DEPRECATED => 'User Deprecated',
+    ];
+
     /**
      * The current log dir, date-nested: getCorePrivateDataDir()/logs/Y/m/d. Filterable.
      * Dj_App_Log::getCurrentLogDir();
@@ -301,8 +319,11 @@ class Dj_App_Log {
             $entry_body = 'Exception: ' . $exception->getMessage() .
                 ' in ' . $exception->getFile() . ' on line ' . $exception->getLine() .
                 "\nStack trace:\n" . $exception->getTraceAsString();
-        } elseif (is_array($data)) { // error_get_last() shape
-            $entry_body = 'Fatal Error: ' . $data['message'] .
+        } elseif (is_array($data)) { // error_get_last() / error-handler shape
+            $error_type = empty($data['type']) ? 0 : $data['type'];
+            $error_label = empty(self::ERROR_TYPE_LABELS[$error_type]) ? 'Fatal Error' : self::ERROR_TYPE_LABELS[$error_type];
+
+            $entry_body = $error_label . ': ' . $data['message'] .
                 ' in ' . $data['file'] . ' on line ' . $data['line'];
         }
 

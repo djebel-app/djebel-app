@@ -47,19 +47,24 @@ if (!empty($app_env)) {
 $env_cfg_data = Dj_App_Config::loadIniFile($config_env_file);
 Dj_App_Env::set($env_cfg_data);
 
-// Initialize global error handlers
-set_exception_handler(['Dj_App_Bootstrap', 'handleException']);
+// Initialize global error handlers. All three registrations land on ONE sink — PHP just
+// hands the error over differently in each (Throwable / errno+message / error_get_last).
+// Warnings, notices and deprecations reach the app log ONLY through the error handler;
+// it is registered here so it covers the whole request, including plugin loading.
+set_exception_handler(['Dj_App_Bootstrap', 'handleError']);
+set_error_handler(['Dj_App_Bootstrap', 'handleError'], Dj_App_Bootstrap::ERROR_HANDLER_FLAGS);
 
-// Register the shutdown phase FIRST so it runs before handleFatalError. This
-// matters because handleFatalError can call Dj_App::exit() while rendering an
-// error page, and PHP stops the shutdown chain when exit() fires from inside a
-// shutdown function. Running runShutdownHooks first ensures deferred work (logging,
-// notifications) gets a chance even on fatal errors.
+// Register the shutdown phase FIRST so it runs before the error sink. This matters
+// because rendering the fatal-error page can call Dj_App::exit(), and PHP stops the
+// shutdown chain when exit() fires from inside a shutdown function. Running
+// runShutdownHooks first ensures deferred work (logging, notifications) gets a chance
+// even on fatal errors.
 register_shutdown_function(['Dj_App_Hooks', 'runShutdownHooks']);
 
-// Fatal-error renderer runs AFTER runShutdownHooks. Idempotent: if no fatal error
-// is in error_get_last(), this is a no-op.
-register_shutdown_function(['Dj_App_Bootstrap', 'handleFatalError']);
+// Fatal-error renderer runs AFTER runShutdownHooks. Called with no args, so the sink
+// reads error_get_last(); idempotent — with no FATAL recorded there this is a no-op, and
+// a warning already logged by the error handler is skipped rather than logged twice.
+register_shutdown_function(['Dj_App_Bootstrap', 'handleError']);
 
 Dj_App_Util::microtime( 'dj_app_timer' );
 
@@ -458,48 +463,175 @@ class Dj_App_Bootstrap {
         return $instance;
     }
 
+    // Diagnostics the error handler collects. E_ERROR / E_PARSE / E_CORE_ERROR /
+    // E_COMPILE_ERROR are absent ON PURPOSE — PHP never hands a fatal to a userland
+    // handler, so listing them would be dead flags; those arrive on the shutdown call.
+    const ERROR_HANDLER_FLAGS = E_WARNING | E_NOTICE | E_USER_ERROR | E_USER_WARNING
+        | E_USER_NOTICE | E_RECOVERABLE_ERROR | E_DEPRECATED | E_USER_DEPRECATED;
+
+    // The types that END the request, so they get the error page as well as a log line.
+    const FATAL_ERROR_TYPES = [ E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, ];
+
     /**
-     * Handle uncaught exceptions
+     * Logs any PHP diagnostic, and renders the 500 page for the ones that end the request.
+     *
+     * A warning, notice or deprecation is logged and the request carries on. An uncaught
+     * exception or a FATAL is logged AND gets the error page.
+     *
+     * Takes the error in whichever form the caller holds it: a Throwable, or a PHP errno
+     * followed by the message / file / line. With NO arguments it reads error_get_last()
+     * and acts only on a FATAL there — anything else has already been logged on its way
+     * through, so it is skipped rather than recorded twice.
+     * Dj_App_Bootstrap::handleError($error, $err_str, $err_file, $err_line);
+     * @param Throwable|int $error Throwable, or a PHP errno (0 reads error_get_last())
+     * @param string $err_str
+     * @param string $err_file
+     * @param int $err_line
+     * @return bool false, so PHP's normal handling still runs and whatever logs today
+     *              keeps logging.
      */
-    public static function handleException($exception) {
-        if (!$exception instanceof Throwable) {
-            return;
+    public static function handleError($error = 0, $err_str = '', $err_file = '', $err_line = 0) {
+        $exception = $error instanceof Throwable ? $error : null;
+        $err_no = empty($exception) ? $error : 0;
+
+        // Shutdown call: no args, so take whatever PHP recorded last. Only a FATAL is new
+        // here — a warning already arrived through the error-handler registration and was
+        // logged there, so re-reading it would log every notice twice.
+        if (empty($exception) && empty($err_no)) {
+            $last_error = error_get_last();
+
+            if (empty($last_error['type']) || !in_array($last_error['type'], self::FATAL_ERROR_TYPES)) {
+                return false;
+            }
+
+            $err_no = $last_error['type'];
+            $err_str = $last_error['message'];
+            $err_file = $last_error['file'];
+            $err_line = $last_error['line'];
         }
 
+        $is_fatal = !empty($err_no) && in_array($err_no, self::FATAL_ERROR_TYPES);
+        $ends_request = !empty($exception) || $is_fatal;
+
+        // Honor the active error_reporting level for the recoverable diagnostics — one the
+        // site chose not to report must not reach the log either. Anything that ends the
+        // request is always worth recording.
+        if (!$ends_request) {
+            $reporting_level = error_reporting();
+
+            if (empty($reporting_level) || !($reporting_level & $err_no)) {
+                return false;
+            }
+        }
+
+        // The logger owns the entry format; it labels an array from the errno under 'type'.
+        $log_payload = $exception;
+
+        if (empty($exception)) {
+            $log_payload = [
+                'type' => $err_no,
+                'message' => $err_str,
+                'file' => $err_file,
+                'line' => $err_line,
+            ];
+        }
+
+        $log_res = Dj_App_Log::logAppError($log_payload);
+
+        // A warning / notice is logged and the request carries on.
+        if (!$ends_request) {
+            return false;
+        }
+
+        $render_params = [
+            'exception' => $exception,
+            'message' => empty($exception) ? $err_str : $exception->getMessage(),
+            'file' => empty($exception) ? $err_file : $exception->getFile(),
+            'line' => empty($exception) ? $err_line : $exception->getLine(),
+            'log_ok' => $log_res,
+        ];
+
+        Dj_App_Bootstrap::renderErrorPage($render_params);
+
+        return false;
+    }
+
+    /**
+     * The 500 page shared by every request-ending failure. Drains partial output first so
+     * the page renders alone, and never lets its own rendering fail silently.
+     * Dj_App_Bootstrap::renderErrorPage($params);
+     * @param array $params exception (Throwable|null), message, file, line, log_ok
+     * @return bool
+     */
+    public static function renderErrorPage($params = []) {
+        $exception = empty($params['exception']) ? null : $params['exception'];
         $is_dev = Dj_App_Config::cfg('app.debug', false);
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
-
-        // Log the exception — the logger owns the entry format.
-        $log_res = Dj_App_Log::logAppError($exception);
 
         // Discard any partially rendered output so the error page renders alone.
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
 
+        $title = empty($exception) ? 'Fatal Error' : 'Uncaught Exception';
+
         // The raw message can leak internals (SQL, dirs) — the public page shows a
         // generic line; the real message is in the log and on the dev page.
-        $display_msg = empty($is_dev) ? 'Something went wrong.' : $exception->getMessage();
+        $display_msg = empty($is_dev) ? 'Something went wrong.' : $params['message'];
         $display_msg_esc = dj_esc_html($display_msg);
+        $title_esc = dj_esc_html($title);
 
-        $content = '<h1 class="djebel-app-error-title">Uncaught Exception</h1>';
-        $content .= sprintf('<div class="djebel-app-error-message">%s</div>', $display_msg_esc);
+        $content = sprintf("<h1 class='djebel-app-error-title'>%s</h1>\n", $title_esc);
+        $content .= sprintf("<div class='djebel-app-error-message'>%s</div>\n", $display_msg_esc);
 
-        if (!Dj_App_Util::isDisabled($log_errors) && empty($log_res)) {
-            $content .= "\n<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
+        if (!Dj_App_Util::isDisabled($log_errors) && empty($params['log_ok'])) {
+            $content .= "<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
         }
 
         if ($is_dev) {
-            $content .= '<div class="djebel-app-error-details">';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Exception:</div><div class="djebel-app-detail-value">' . dj_esc_html(get_class($exception)) . '</div></div>';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . dj_esc_html($exception->getFile()) . '</div></div>';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Line:</div><div class="djebel-app-detail-value">' . $exception->getLine() . '</div></div>';
-            $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Code:</div><div class="djebel-app-detail-value">' . $exception->getCode() . '</div></div>';
-            $content .= '</div>';
-            $content .= '<div class="djebel-app-trace">' . dj_esc_html($exception->getTraceAsString()) . '</div>';
+            // label => value; every row renders through the ONE format below. A fatal
+            // carries no class or code, so those rows only exist for an exception.
+            $detail_rows = [];
+
+            if (!empty($exception)) {
+                $detail_rows['Exception'] = get_class($exception);
+            }
+
+            $detail_rows['File'] = $params['file'];
+            $detail_rows['Line'] = $params['line'];
+
+            // getCode() is mixed — a custom exception can return a string, so it is
+            // escaped like every other value here.
+            if (!empty($exception)) {
+                $detail_rows['Code'] = $exception->getCode();
+            }
+
+            $content .= "<div class='djebel-app-error-details'>\n";
+
+            foreach ($detail_rows as $detail_label => $detail_value) {
+                $detail_label_esc = dj_esc_html($detail_label);
+                $detail_value_esc = dj_esc_html($detail_value);
+
+                $content .= sprintf(
+                    "<div class='djebel-app-detail-item'><div class='djebel-app-detail-label'>%s:</div><div class='djebel-app-detail-value'>%s</div></div>\n",
+                    $detail_label_esc,
+                    $detail_value_esc
+                );
+            }
+
+            $content .= "</div>\n";
+
+            if (!empty($exception)) {
+                $trace_esc = dj_esc_html($exception->getTraceAsString());
+
+                $content .= sprintf("<div class='djebel-app-trace'>%s</div>\n", $trace_esc);
+            }
         }
-        
-        $content .= '<div class="djebel-app-back-link"><a href="javascript:history.back()">← Go Back</a></div>';
+
+        $content .= "<div class='djebel-app-back-link'><a href='javascript:history.back()'>← Go Back</a></div>\n";
+
+        $page_title = empty($exception) ? 'Fatal Error - ' . Dj_App::NAME : 'Error - DjebelApp';
+        $echo_prefix = empty($exception) ? 'Djebel Fatal Error: ' : 'Djebel Error: ';
 
         $options = [
             'status_code' => 500,
@@ -507,68 +639,12 @@ class Dj_App_Bootstrap {
 
         // Last resort: the error page itself must never fail silently.
         try {
-            Dj_App_HTML::renderPage($content, 'Error - DjebelApp', $options);
+            Dj_App_HTML::renderPage($content, $page_title, $options);
         } catch (Throwable $render_exception) {
-            echo 'Djebel Error: ' . $display_msg_esc;
+            echo $echo_prefix . $display_msg_esc;
         }
-    }
 
-    /**
-     * Handle fatal errors
-     */
-    public static function handleFatalError() {
-        $error = error_get_last();
-
-        // empty() safely covers null (no error occurred) and any shape without a type.
-        if (empty($error['type'])) {
-            return;
-        }
-        
-        if (in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-            $is_dev = Dj_App_Config::cfg('app.debug', false);
-            $log_errors = Dj_App_Config::cfg('app.error_logging', true);
-
-            // Log the fatal — same log the exception handler writes, so both
-            // failure kinds leave a trace. The logger owns the entry format.
-            $log_res = Dj_App_Log::logAppError($error);
-
-            // Discard any partially rendered output so the error page renders alone.
-            while (ob_get_level() > 0) {
-                ob_end_clean();
-            }
-
-            // The raw message can leak internals (SQL, dirs) — the public page shows a
-            // generic line; the real message is in the log and on the dev page.
-            $display_msg = empty($is_dev) ? 'Something went wrong.' : $error['message'];
-            $display_msg_esc = dj_esc_html($display_msg);
-
-            $content = '<h1 class="djebel-app-error-title">Fatal Error</h1>';
-            $content .= sprintf('<div class="djebel-app-error-message">%s</div>', $display_msg_esc);
-
-            if (!Dj_App_Util::isDisabled($log_errors) && empty($log_res)) {
-                $content .= "\n<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
-            }
-
-            if ($is_dev) {
-                $content .= '<div class="djebel-app-error-details">';
-                $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">File:</div><div class="djebel-app-detail-value">' . dj_esc_html($error['file']) . '</div></div>';
-                $content .= '<div class="djebel-app-detail-item"><div class="djebel-app-detail-label">Line:</div><div class="djebel-app-detail-value">' . $error['line'] . '</div></div>';
-                $content .= '</div>';
-            }
-            
-            $content .= '<div class="djebel-app-back-link"><a href="javascript:history.back()">← Go Back</a></div>';
-            
-            $options = [
-                'status_code' => 500,
-            ];
-
-            // Last resort: the error page itself must never fail silently.
-            try {
-                Dj_App_HTML::renderPage($content, 'Fatal Error - ' . Dj_App::NAME, $options);
-            } catch (Throwable $render_exception) {
-                echo 'Djebel Fatal Error: ' . $display_msg_esc;
-            }
-        }
+        return true;
     }
 
     public function installHooks()

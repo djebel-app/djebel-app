@@ -224,6 +224,104 @@ class Dj_App_Log_Test extends TestCase {
         unlink($file);
     }
 
+    /**
+     * An errno under 'type' labels the entry, so a warning is not filed as a fatal.
+     */
+    public function testLogAppErrorLabelsEntryByErrorType()
+    {
+        $file = $this->tmpFile();
+
+        $error_data = [
+            'type' => E_WARNING,
+            'message' => 'something odd',
+            'file' => '/x.php',
+            'line' => 12,
+        ];
+
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
+
+        $log_ok = Dj_App_Log::logAppError($error_data);
+
+        $this->assertTrue($log_ok, 'the warning landed in the app error log');
+
+        $read_res = Dj_App_File_Util::read($file);
+
+        $this->assertStringContainsString('Warning: something odd', $read_res->output, 'labelled by errno, not as a fatal');
+        $this->assertStringContainsString('/x.php on line 12', $read_res->output, 'file and line are kept');
+
+        unlink($file);
+    }
+
+    /**
+     * A typeless array is the pre-existing error_get_last() shape — it keeps the fatal label.
+     */
+    public function testLogAppErrorFallsBackToFatalLabelWithoutType()
+    {
+        $file = $this->tmpFile();
+
+        $error_data = [
+            'message' => 'legacy shape',
+            'file' => '/y.php',
+            'line' => 3,
+        ];
+
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
+
+        $log_ok = Dj_App_Log::logAppError($error_data);
+
+        $this->assertTrue($log_ok, 'the entry still logs without a type');
+
+        $read_res = Dj_App_File_Util::read($file);
+
+        $this->assertStringContainsString('Fatal Error: legacy shape', $read_res->output, 'a typeless entry keeps the fatal label');
+
+        unlink($file);
+    }
+
+    /**
+     * The error handler routes a warning into the app log and still defers to PHP, so
+     * whatever logs today keeps logging.
+     */
+    public function testHandleErrorLogsWarningAndDefersToPhp()
+    {
+        $file = $this->tmpFile();
+
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
+
+        $handled = Dj_App_Bootstrap::handleError(E_USER_WARNING, 'handler routed', '/z.php', 7);
+
+        $this->assertFalse($handled, 'returns false so PHP still runs its own handling');
+
+        $read_res = Dj_App_File_Util::read($file);
+
+        $this->assertStringContainsString('User Warning: handler routed', $read_res->output, 'the warning reached the app log');
+
+        unlink($file);
+    }
+
+    /**
+     * A diagnostic the site chose not to report must not reach the log either.
+     */
+    public function testHandleErrorRespectsErrorReporting()
+    {
+        $file = $this->tmpFile();
+
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
+
+        try {
+            $reporting_level = error_reporting();
+
+            error_reporting(E_ALL & ~E_USER_NOTICE);
+
+            $handled = Dj_App_Bootstrap::handleError(E_USER_NOTICE, 'muted', '/z.php', 9);
+        } finally {
+            error_reporting($reporting_level);
+        }
+
+        $this->assertFalse($handled, 'still defers to PHP');
+        $this->assertFileDoesNotExist($file, 'a muted diagnostic never reaches the log');
+    }
+
     public function testMsgSmartThirdArgTakesOptionsArray()
     {
         $file = $this->tmpFile();
