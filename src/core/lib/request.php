@@ -1991,15 +1991,23 @@ CLEAR_AND_REDIRECT_HTML;
             session_write_close();
         }
 
-        // PHP itself must never compress — that burns a request worker on work the web
-        // server does in C and can cache. Compression at the SERVER layers (mod_deflate,
-        // nginx gzip/brotli/zstd) is left alone: each strips or replaces the length below
-        // when it re-encodes, so an accurate Content-Length costs them nothing.
+        // PHP must never compress — it burns a request worker on work the web server does
+        // in C and can cache.
         // zlib.output_compression is INI_ALL but PHP locks it once headers go out;
         // calling ini_set() after that raises a warning that lands in error_log even
         // with the @ operator. Guard with !headers_sent() to be silent in production.
         if (!headers_sent()) {
             ini_set('zlib.output_compression', 'Off');
+
+            // NOT "no compression" — this RELOCATES it. Leaving the body uncompressed on
+            // this hop keeps the Content-Length below intact, so a proxy in front can
+            // release the client early and compress there (faster, and it can cache the
+            // compressed copy). Let Apache gzip instead and it strips the length, falls
+            // back to chunked, and the early close is gone. A direct-Apache site with no
+            // proxy therefore gets no compression — that is the tradeoff this line makes.
+            if (function_exists('apache_setenv')) {
+                apache_setenv('no-gzip', 1);
+            }
 
             // Tell the client to close the TCP connection after this response so the
             // browser stops waiting and disconnects. Combined with an explicit
