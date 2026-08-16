@@ -814,10 +814,10 @@ class Dj_App_Util {
     const MSG_NOTICE = 2;
 
     /**
-     * QS_Site_App_Util::msg();
-     * QS_Site_App_Util::msg('', QS_Site_App_Util::MSG_ERROR);
-     * QS_Site_App_Util::msg('', QS_Site_App_Util::MSG_SUCCESS);
-     * QS_Site_App_Util::msg('', QS_Site_App_Util::MSG_NOTICE);
+     * Dj_App_Util::msg();
+     * Dj_App_Util::msg('', Dj_App_Util::MSG_ERROR);
+     * Dj_App_Util::msg('', Dj_App_Util::MSG_SUCCESS);
+     * Dj_App_Util::msg('', Dj_App_Util::MSG_NOTICE);
      * a simple status message, no formatting except color
      */
     public static function msg($msg, $status = self::MSG_ERROR, $use_inline_css = 0) {
@@ -831,12 +831,12 @@ class Dj_App_Util {
             $cls = 'dj-app-info alert alert-info';
         } elseif ( $status === 6 ) { // dismissable notice
             $cls = 'dj-app-info alert alert-danger alert-dismissable';
-            $extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false"><span aria-hidden="true">&times;</span><span class="__sr-only">Close</span></button>';
-            //$extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false">X</button>';
+            $extra = " <button type='button' class='close' data-dismiss='alert' aria-hidden='false'><span aria-hidden='true'>&times;</span><span class='__sr-only'>Close</span></button>";
+            //$extra = " <button type='button' class='close' data-dismiss='alert' aria-hidden='false'>X</button>";
         } elseif ( $status === 4 ) { // dismissable notice
             $cls = 'dj-app-info alert alert-info alert-dismissable';
-            $extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false"><span aria-hidden="true">&times;</span><span class="__sr-only">Close</span></button>';
-            //$extra = ' <button type="button" class="close" data-dismiss="alert" aria-hidden="false">X</button>';
+            $extra = " <button type='button' class='close' data-dismiss='alert' aria-hidden='false'><span aria-hidden='true'>&times;</span><span class='__sr-only'>Close</span></button>";
+            //$extra = " <button type='button' class='close' data-dismiss='alert' aria-hidden='false'>X</button>";
         } elseif ( $status == 0 || $status === false || $status === self::MSG_ERROR ) {
             $cls = 'dj-app-error alert alert-danger';
             $icon = 'remove';
@@ -852,19 +852,38 @@ class Dj_App_Util {
             $inline_css .= 'text-align:center;margin-left: auto; margin-right:auto; padding-bottom:10px;color:white;';
         }
 
-        $msg_icon = "<span class='glyphicon glyphicon-$icon' aria-hidden='true'></span>";
+        $icon_tpl = "<span class='glyphicon glyphicon-{icon}' aria-hidden='true'></span>";
+
+        $icon_map = [
+            'icon' => $icon,
+        ];
+
+        $msg_icon = Dj_App_String_Util::replaceMergeTags($icon_tpl, $icon_map);
         $msg = $msg_icon . ' ' . $msg;
 
-        $str = <<<MSG_EOF
-<div id='$id-notice' class='$cls' style="$inline_css" $extra_attribs>$msg $extra</div>
-MSG_EOF;
+        $msg_tpl = "\n<div id='{id}-notice' class='{cls}' style='{inline_css}' {extra_attribs}>{msg} {extra}</div>\n";
+
+        $replace_map = [
+            'id' => $id,
+            'cls' => $cls,
+            'inline_css' => $inline_css,
+            'extra_attribs' => $extra_attribs,
+            'msg' => $msg,
+            'extra' => $extra,
+        ];
+
+        $str = Dj_App_String_Util::replaceMergeTags($msg_tpl, $replace_map);
+
         return $str;
     }
 
     /**
      * Convert array to HTML5 data attributes
      * Dj_App_Util::convertArrayToDataAttr(['user_id' => '123', 'action' => 'delete'])
-     * Returns: data-user-id="123" data-action="delete"
+     * Returns: data-user-id='123' data-action='delete'
+     *
+     * Values are escaped with ENT_QUOTES, which covers the single quote too, so
+     * a value can never close the attribute it sits in.
      *
      * @param array $data
      * @return string
@@ -880,7 +899,7 @@ MSG_EOF;
             $key = Dj_App_String_Util::formatKey($key);
             $key = str_replace('_', '-', $key);
             $value_esc = dj_esc_attr($value);
-            $attributes[] = "data-{$key}=\"{$value_esc}\"";
+            $attributes[] = "data-{$key}='{$value_esc}'";
         }
 
         $result = implode(' ', $attributes);

@@ -1565,16 +1565,16 @@ META;
         $input = [ 'id' => '123', 'action' => 'delete', ];
         $result = Dj_App_Util::convertArrayToDataAttr($input);
 
-        $this->assertStringContainsString('data-id="123"', $result);
-        $this->assertStringContainsString('data-action="delete"', $result);
+        $this->assertStringContainsString("data-id='123'", $result);
+        $this->assertStringContainsString("data-action='delete'", $result);
     }
 
     public function testConvertArrayToDataAttrWithUnderscores() {
         $input = [ 'user_id' => '456', 'post_type' => 'article', ];
         $result = Dj_App_Util::convertArrayToDataAttr($input);
 
-        $this->assertStringContainsString('data-user-id="456"', $result);
-        $this->assertStringContainsString('data-post-type="article"', $result);
+        $this->assertStringContainsString("data-user-id='456'", $result);
+        $this->assertStringContainsString("data-post-type='article'", $result);
     }
 
     public function testConvertArrayToDataAttrEmpty() {
@@ -1594,6 +1594,20 @@ META;
         $this->assertStringContainsString('&quot;', $result);
     }
 
+    /**
+     * The attribute is wrapped in single quotes, so a single quote in the VALUE
+     * must come back escaped — otherwise it would close the attribute early and
+     * whatever followed would be read as markup.
+     */
+    public function testConvertArrayToDataAttrEscapesSingleQuote() {
+        $input = [ 'title' => "it's onclick='alert(1)'", ];
+        $result = Dj_App_Util::convertArrayToDataAttr($input);
+
+        $this->assertStringContainsString('&#039;', $result);
+        $this->assertStringNotContainsString("it's", $result);
+        $this->assertStringNotContainsString("onclick='alert(1)'", $result);
+    }
+
     public function testConvertArrayToDataAttrMultiple() {
         $input = [
             'id' => '789',
@@ -1602,9 +1616,9 @@ META;
         ];
         $result = Dj_App_Util::convertArrayToDataAttr($input);
 
-        $this->assertStringContainsString('data-id="789"', $result);
-        $this->assertStringContainsString('data-name="test"', $result);
-        $this->assertStringContainsString('data-enabled="1"', $result);
+        $this->assertStringContainsString("data-id='789'", $result);
+        $this->assertStringContainsString("data-name='test'", $result);
+        $this->assertStringContainsString("data-enabled='1'", $result);
     }
 
     public function testConvertArrayToDataAttrNonArray() {
