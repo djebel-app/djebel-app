@@ -858,7 +858,7 @@ class Dj_App_Util {
             'icon' => $icon,
         ];
 
-        $msg_icon = Dj_App_String_Util::replaceMergeTags($icon_tpl, $icon_map);
+        $msg_icon = Dj_App_Util::replaceTags($icon_tpl, $icon_map);
         $msg = $msg_icon . ' ' . $msg;
 
         $msg_tpl = "\n<div id='{id}-notice' class='{cls}' style='{inline_css}' {extra_attribs}>{msg} {extra}</div>\n";
@@ -872,7 +872,7 @@ class Dj_App_Util {
             'extra' => $extra,
         ];
 
-        $str = Dj_App_String_Util::replaceMergeTags($msg_tpl, $replace_map);
+        $str = Dj_App_Util::replaceTags($msg_tpl, $replace_map);
 
         return $str;
     }

@@ -69,20 +69,11 @@ class Dj_App_String_Util
      * Replace merge tags in a string.
      * Dj_App_String_Util::replaceMergeTags();
      *
-     * Keys are passed BARE and matched in both supported forms — 'title' fills
-     * %title% and {title} alike, so the caller never decorates its own data.
+     * Keys arrive ALREADY WRAPPED and are matched exactly, %-form only. For bare
+     * keys, any delimiter form or case-insensitive matching, use
+     * Dj_App_Util::replaceTags() instead.
      *
      * Examples:
-     * $template = '%title% | {site_title}';
-     * $replace_map = [
-     *     'title' => 'Hosting',
-     *     'site_title' => 'djebel.com',
-     * ];
-     *
-     * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
-     *
-     * A key that arrives already wrapped is honored as written, so older
-     * callers keep working:
      * $template = '%title% | %site_title%';
      * $replace_map = [
      *     '%title%' => 'Hosting',
@@ -93,14 +84,14 @@ class Dj_App_String_Util
      *
      * $template = 'Plain title';
      * $replace_map = [
-     *     'title' => 'Ignored',
+     *     '%title%' => 'Ignored',
      * ];
      *
      * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
      *
      * $template = '';
      * $replace_map = [
-     *     'title' => 'Ignored',
+     *     '%title%' => 'Ignored',
      * ];
      *
      * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
@@ -121,48 +112,11 @@ class Dj_App_String_Util
 
         $template = (string) $template;
 
-        $has_brace_tag = strpos($template, '{') !== false;
-        $has_percent_tag = strpos($template, '%') !== false;
-
-        if (empty($has_percent_tag) && empty($has_brace_tag)) {
+        if (strpos($template, '%') === false) {
             return $template;
         }
 
-        // Callers pass their data under BARE keys — 'title', not '%title%' — and the
-        // delimiters are added here. Decorating a key is this function's job, not
-        // the caller's, and a caller that hands over a ready-made tag (the older
-        // style) still has it honored as written.
-        //
-        // Only the delimiter the template ACTUALLY uses gets built: strtr walks the
-        // whole map for every position it examines, so a template written in one
-        // style would otherwise pay for a map twice the size it can ever match.
-        $tag_map = [];
-
-        foreach ($replace_map as $tag => $value) {
-            if (empty($tag)) {
-                continue;
-            }
-
-            $tag_str = (string) $tag;
-            $first_char = $tag_str[0];
-
-            if ($first_char == '%' || $first_char == '{') {
-                $tag_map[$tag_str] = $value;
-                continue;
-            }
-
-            if (!empty($has_percent_tag)) {
-                $percent_tag = '%' . $tag_str . '%';
-                $tag_map[$percent_tag] = $value;
-            }
-
-            if (!empty($has_brace_tag)) {
-                $brace_tag = '{' . $tag_str . '}';
-                $tag_map[$brace_tag] = $value;
-            }
-        }
-
-        $result = strtr($template, $tag_map);
+        $result = strtr($template, $replace_map);
 
         return $result;
     }
