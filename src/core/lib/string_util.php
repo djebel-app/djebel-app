@@ -66,62 +66,6 @@ class Dj_App_String_Util
     }
 
     /**
-     * Replace merge tags in a string.
-     * Dj_App_String_Util::replaceMergeTags();
-     *
-     * Keys arrive ALREADY WRAPPED and are matched exactly, %-form only. For bare
-     * keys, any delimiter form or case-insensitive matching, use
-     * Dj_App_Util::replaceTags() instead.
-     *
-     * Examples:
-     * $template = '%title% | %site_title%';
-     * $replace_map = [
-     *     '%title%' => 'Hosting',
-     *     '%site_title%' => 'djebel.com',
-     * ];
-     *
-     * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
-     *
-     * $template = 'Plain title';
-     * $replace_map = [
-     *     '%title%' => 'Ignored',
-     * ];
-     *
-     * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
-     *
-     * $template = '';
-     * $replace_map = [
-     *     '%title%' => 'Ignored',
-     * ];
-     *
-     * Dj_App_String_Util::replaceMergeTags($template, $replace_map);
-     *
-     * @param string $template
-     * @param array $replace_map
-     * @return string
-     */
-    public static function replaceMergeTags($template, $replace_map = [])
-    {
-        if (empty($template) || !is_scalar($template)) {
-            return $template;
-        }
-
-        if (empty($replace_map) || !is_array($replace_map)) {
-            return $template;
-        }
-
-        $template = (string) $template;
-
-        if (strpos($template, '%') === false) {
-            return $template;
-        }
-
-        $result = strtr($template, $replace_map);
-
-        return $result;
-    }
-
-    /**
      * Format a string to camelCase
      * Dj_App_String_Util::toCamelCase();
      */
