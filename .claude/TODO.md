@@ -285,3 +285,48 @@ lang); core public API still carries it.
 - [ ] Unit tests renamed/extended alongside (`File_Util_Test`, `Request_Test`)
 - [ ] Remove the forwarders once `grep -rn "getWebPath\|getRelWebPath\|normalizePath" app/sites`
       is zero
+
+---
+
+## 4. Move `replaceTags` to `Dj_App_String_Util`
+
+**Status:** [P30] needs the owner — it is a deprecation across repos.
+**Location:** `src/core/lib/util.php` (`Dj_App_Util::replaceTags`).
+**Filed:** 2026-08-16.
+
+`Dj_App_Util::replaceTags` is the framework's tag helper — bare keys,
+`{tag}` + `%tag%` + `%%tag%%`, case-insensitive. The duplicate that used to sit
+beside it in `string_util.php` (`replaceMergeTags`, a strict subset with no
+callers) was deleted on 2026-08-16, so there is now exactly one.
+
+### The move
+
+It is string manipulation, so the string util is its home. It is NOT core-only,
+so this cannot be a plain rename:
+
+- **core** — 4 in `util.php` (the definition + 3 uses in `msg()`), 12 in `Util_Test.php`
+- **sites** — 21 calls across 9 sites (djebel, djebel-live, fsite, influencers,
+  monitor, oterm, slavi, svetlio, wpblogger), from THREE plugins that are each
+  their own git repo: `djebel-seo`, `djebel-contact-log-csv`,
+  `djebel-simple-newsletter`
+
+Renaming in place fatals every site whose core updates before its plugins do.
+The migration shape (same as section 3, worth running together):
+
+- [ ] `Dj_App_String_Util::replaceTags()` gains the implementation
+- [ ] `Dj_App_Util::replaceTags()` becomes a thin forwarder — a deprecation, so
+      it needs the owner's approval first
+- [ ] The 3 plugin repos move to the new name on their own schedule
+- [ ] Forwarder removed once `grep -rn "Dj_App_Util::replaceTags" app/sites` is zero
+- [ ] `Util_Test` cases move to `String_Util_Test` with the method
+
+### Worth knowing
+
+`replaceTags` handles an ordering trap: `%%TAG%%` CONTAINS `%TAG%`, so the
+double form must be queued first or the single form eats its middle and leaves
+stray `%`. Its docblock explains this — preserve it through any move.
+
+### Acceptance
+
+- [ ] One tag helper, in the class its name implies
+- [ ] `grep -rn "Dj_App_Util::replaceTags" app/sites src` is empty
