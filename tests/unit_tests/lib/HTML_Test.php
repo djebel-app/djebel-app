@@ -664,4 +664,93 @@ class Dj_App_HTML_Test extends TestCase {
         // The guard fires before any rendering starts.
         $this->assertEmpty($buff);
     }
+
+    /**
+     * id + title become the option map, led by the empty choice.
+     */
+    public function testPrepareForDropdownBuildsMap()
+    {
+        $records = [
+            [ 'id' => 4, 'title' => 'Ford', ],
+            [ 'id' => 9, 'title' => 'Toyota', ],
+        ];
+
+        $result = Dj_App_HTML::prepareForDropdown($records);
+
+        $this->assertEquals('', $result['']);
+        $this->assertEquals('Ford', $result[4]);
+        $this->assertEquals('Toyota', $result[9]);
+    }
+
+    /**
+     * The id and the label are each read from a list of accepted column names,
+     * so a record shaped by a different table still resolves.
+     */
+    public function testPrepareForDropdownAcceptsAlternateFields()
+    {
+        $records = [
+            [ 'post_id' => 11, 'post_title' => 'From post columns', ],
+            [ 'id' => 12, 'label' => 'From a label column', ],
+        ];
+
+        $result = Dj_App_HTML::prepareForDropdown($records);
+
+        $this->assertEquals('From post columns', $result[11]);
+        $this->assertEquals('From a label column', $result[12]);
+    }
+
+    /**
+     * A record missing either half is skipped — one bad row costs that row, not
+     * the whole dropdown.
+     */
+    public function testPrepareForDropdownSkipsIncompleteRecords()
+    {
+        $records = [
+            [ 'id' => 5, 'title' => 'Kept', ],
+            [ 'id' => 6, ],
+            [ 'title' => 'No id', ],
+        ];
+
+        $result = Dj_App_HTML::prepareForDropdown($records);
+
+        $this->assertEquals('Kept', $result[5]);
+        $this->assertArrayNotHasKey(6, $result);
+        $this->assertCount(2, $result);
+    }
+
+    /**
+     * Labels come back RAW. htmlSelect escapes at the point of output, so
+     * escaping here too would render a literal &amp; to the visitor.
+     */
+    public function testPrepareForDropdownLeavesLabelsUnescaped()
+    {
+        $records = [
+            [ 'id' => 3, 'title' => 'Ford & Co', ],
+        ];
+
+        $result = Dj_App_HTML::prepareForDropdown($records);
+
+        $this->assertEquals('Ford & Co', $result[3]);
+
+        // End to end: the label is escaped exactly once by the time it renders.
+        $html = Dj_App_HTML::htmlSelect('brand', 3, $result);
+
+        $this->assertStringContainsString('Ford &amp; Co', $html);
+        $this->assertStringNotContainsString('&amp;amp;', $html);
+    }
+
+    /**
+     * Nothing usable still answers with a renderable dropdown.
+     */
+    public function testPrepareForDropdownWithNoRecords()
+    {
+        $result = Dj_App_HTML::prepareForDropdown([]);
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('', $result['']);
+
+        $non_array_result = Dj_App_HTML::prepareForDropdown('not an array');
+
+        $this->assertCount(1, $non_array_result);
+    }
 }

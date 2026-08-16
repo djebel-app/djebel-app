@@ -231,9 +231,13 @@ class Dj_App_HTML {
 
     /**
      * Goes through an array of records and picks id and title from the array
+     *
+     * Labels come back RAW. Escaping belongs at the point of output, and
+     * htmlSelect escapes every label it renders — doing it here as well would
+     * show a literal &amp; to the visitor.
+     *
      * @param array $records
      * @return string[]
-     * @throws QS_Site_App_Exception
      */
     public static function prepareForDropdown($records)
     {
@@ -241,16 +245,24 @@ class Dj_App_HTML {
             '' => '',
         ];
 
+        // Nothing usable still answers with the empty choice, so a caller always
+        // has a renderable dropdown. A record MISSING its id or label is skipped
+        // rather than raised: this builds a picker, and one bad row should cost
+        // that row, not the whole screen.
+        if (empty($records) || !is_array($records)) {
+            return $dropdown_arr;
+        }
+
         foreach ($records as $rec) {
             $rec = (array) $rec;
-            $id = QS_Site_App_Util::getField('id|post_id', $rec);
-            $label = QS_Site_App_Util::getField('title|label|post_title', $rec);
+            $id = Dj_App_Util::getField('id|post_id', $rec);
+            $label = Dj_App_Util::getField('title|label|post_title', $rec);
 
             if (empty($id) || empty($label)) {
                 continue;
             }
 
-            $dropdown_arr[$id] = dj_esc_html($label);
+            $dropdown_arr[$id] = $label;
         }
 
         return $dropdown_arr;
