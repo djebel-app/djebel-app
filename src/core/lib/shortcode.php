@@ -28,7 +28,7 @@ class Dj_App_Shortcode {
     }
 
     /**
-     * replaces [djebel_page_nav] shortcode with whatever we have defined in app.ini in the nav
+     * replaces [djebel_page_nav] shortcode with whatever the site config defines for the nav
      * @todo add ids and position?
      * @param array $params
      * @return string
@@ -118,6 +118,52 @@ class Dj_App_Shortcode {
     }
 
     /**
+     * Answers whether the content carries at least one REGISTERED shortcode, in either
+     * separator form — a page may write [my-tag] for a tag registered as my_tag.
+     *
+     * This is the guard that decides whether the buffer gets rewritten at all, so it is
+     * built to cost far less than the rewriting it prevents: a single strpos rejects the
+     * overwhelming majority of pages, and only then is the registry walked.
+     *
+     * @param string $content
+     * @return bool
+     */
+    public function hasShortcode($content)
+    {
+        if (empty($content)) {
+            return false;
+        }
+
+        // No bracket anywhere — the cheapest possible answer, and the common one.
+        if (strpos($content, '[') === false) {
+            return false;
+        }
+
+        $shortcodes = $this->getShortcodes();
+
+        foreach ($shortcodes as $shortcode => $callback) {
+            if (stripos($content, '[' . $shortcode) !== false) {
+                return true;
+            }
+
+            // Names are stored underscored, so the dash spelling a page may use has to be
+            // searched for on its own. A name without underscores yields the same string,
+            // so skip the duplicate scan.
+            $dash_form = str_replace('_', '-', $shortcode);
+
+            if ($dash_form == $shortcode) {
+                continue;
+            }
+
+            if (stripos($content, '[' . $dash_form) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Searches for shortcodes and replaces them with their output.
      * @return string
      */
@@ -138,14 +184,6 @@ class Dj_App_Shortcode {
         // by default we'll only replace shortcodes starting from <body>
         $full_page_replace = Dj_App_Config::cfg('app.core.shortcodes.full_page_replace', false);
 
-        // OFF by default: the same tag with the same params yields the same output, so it is
-        // rendered once and reused for every occurrence — N identical tags cost one call, not
-        // N. Turn it on ([app] shortcodes.process_all) only for a shortcode that must run per
-        // occurrence (a counter, a random pick), and pay N calls for it.
-        $options_obj = Dj_App_Options::getInstance();
-        $process_all_default = Dj_App_Config::cfg('app.core.shortcodes.process_all', false);
-        $process_all = $options_obj->isEnabled('app.shortcodes.process_all', $process_all_default);
-
         if ($full_page_replace) {
             $content = $buff;
         } else {
@@ -161,25 +199,37 @@ class Dj_App_Shortcode {
             }
         }
 
+        // CHEAPEST CHECK FIRST. Both passes below walk the ENTIRE buffer, so a page that
+        // carries no registered shortcode must pay for neither — and, more importantly,
+        // must not have its other bracketed text rewritten underneath it. Page markup
+        // legitimately contains brackets that are not shortcodes (a CSS/JS attribute
+        // selector, an array index), and normalizing those corrupts them.
+        if (!$this->hasShortcode($content)) {
+            return $buff;
+        }
+
         // Escape shortcode brackets inside <pre> and <code> blocks before processing
         $content = $this->escapeShortcodesInCodeBlocks($content);
 
-        // Normalize shortcode dashes to underscores
+        // Normalize the dash form of registered shortcode names to underscores
         $content = $this->prepareShortcodes($content);
 
-        // do we have at least [ ?
+        // Escaping above can consume the first bracket, so the loop's start offset is read
+        // from the REWRITTEN content rather than carried over from before the passes.
         $square_pos = strpos($content, '[');
 
         if ($square_pos === false) {
             return $buff;
         }
 
-        // next char after square is not a letter
-        $next_char = substr($content, $square_pos + 1, 1);
-
-        if (!ctype_alpha($next_char)) {
-            return $buff;
-        }
+        // OFF by default: the same tag with the same params yields the same output, so it is
+        // rendered once and reused for every occurrence — N identical tags cost one call, not
+        // N. Turn it on ([app] shortcodes.process_all) only for a shortcode that must run per
+        // occurrence (a counter, a random pick), and pay N calls for it.
+        // Resolved here, past the guards, so a page that bails above never pays the lookup.
+        $options_obj = Dj_App_Options::getInstance();
+        $process_all_default = Dj_App_Config::cfg('app.core.shortcodes.process_all', false);
+        $process_all = $options_obj->isEnabled('app.shortcodes.process_all', $process_all_default);
 
         foreach ($shortcodes as $shortcode => $callback) {
             if (!is_callable($callback)) {
@@ -406,7 +456,7 @@ class Dj_App_Shortcode {
         }
 
         // Quick check — no code blocks means nothing to do
-        if (stripos($content, '<code') === false && stripos($content, '<pre') === false) {
+        if ((stripos($content, '<code') === false) && (stripos($content, '<pre') === false)) {
             return $content;
         }
 
@@ -487,7 +537,13 @@ class Dj_App_Shortcode {
      * Prepares shortcodes in content by:
      * - normalizing dashes to underscores
      * - converting chars to lowercase
-     * Processes character by character to avoid regex
+     * Processes character by character to avoid regex.
+     *
+     * Only a bracket run whose name is a REGISTERED shortcode is rewritten. Every other
+     * run is copied byte-for-byte: page markup legitimately contains brackets that are
+     * not shortcodes — a CSS/JS attribute selector, an array index — and normalizing
+     * those silently corrupts the page.
+     *
      * @param string $buff
      * @return string
      */
@@ -500,6 +556,13 @@ class Dj_App_Shortcode {
         $square_pos = strpos($buff, '[');
 
         if ($square_pos === false) {
+            return $buff;
+        }
+
+        // With nothing registered there is no name to normalize toward, so no run qualifies.
+        $shortcodes = $this->getShortcodes();
+
+        if (empty($shortcodes)) {
             return $buff;
         }
 
@@ -528,6 +591,27 @@ class Dj_App_Shortcode {
             if ($closing_pos === false) { // No closing bracket, append rest and break
                 $result .= substr($buff, $i);
                 break;
+            }
+
+            $run_len = $closing_pos - $i + 1;
+            $bracket_run = substr($buff, $i, $run_len);
+
+            // The name is everything up to the first whitespace (where params start).
+            $candidate = trim($bracket_run, '[]');
+            $name_len = strcspn($candidate, " \t\r\n");
+            $candidate = substr($candidate, 0, $name_len);
+
+            // Mirror exactly what the char loop below would produce, so the lookup and the
+            // rewrite agree on what the name normalizes to.
+            $candidate = str_replace('-', '_', $candidate);
+            $candidate = strtolower($candidate);
+
+            // Not a registered shortcode — copy the run verbatim and move on.
+            if (empty($shortcodes[$candidate])) {
+                $result .= $bracket_run;
+                $i = $closing_pos + 1;
+
+                continue;
             }
 
             // Process shortcode content

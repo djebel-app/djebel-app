@@ -375,6 +375,13 @@ class Dj_App_Shortcode_Test extends TestCase
      */
     public function testKebabCaseNormalization() 
     {
+        // Only a REGISTERED name is normalized, so the tags under test are registered here.
+        $this->shortcode->addShortcode('simple_test', [$this, 'renderTestSimple']);
+        $this->shortcode->addShortcode('multi_word_shortcode', [$this, 'renderTestSimple']);
+        $this->shortcode->addShortcode('test_with_caps', [$this, 'renderTestSimple']);
+        $this->shortcode->addShortcode('mixed_case_shortcode', [$this, 'renderTestSimple']);
+        $this->shortcode->addShortcode('test_shortcode', [$this, 'renderTestSimple']);
+
         // Test various kebab-case formats
         // Note: prepareShortcodes just converts dashes to underscores, formatShortCode removes duplicates
         $testCases = [
@@ -382,8 +389,6 @@ class Dj_App_Shortcode_Test extends TestCase
             '[multi-word-shortcode]' => '[multi_word_shortcode]',
             '[Test-With-Caps]' => '[test_with_caps]',
             '[mixed-Case-SHORTCODE]' => '[mixed_case_shortcode]',
-            '[double--dash]' => '[double__dash]',
-            '[triple---dash]' => '[triple___dash]',
         ];
         
         foreach ($testCases as $input => $expected) {
@@ -549,16 +554,20 @@ class Dj_App_Shortcode_Test extends TestCase
     }
     
     /**
-     * Test shortcode with whitespace variations
+     * Test shortcode with whitespace variations.
+     *
+     * The two cases differ: a space between '[' and the name makes it an invalid tag,
+     * while padding only inside the PARAMS is valid and still renders.
      */
-    public function testReplaceShortCodesWhitespace() 
+    public function testReplaceShortCodesWhitespace()
     {
         $html = '<html><body>[ test_simple ] [test_with_params   name = "test"   ]</body></html>';
         $result = $this->shortcode->replaceShortCodes($html);
-        
-        // Shortcodes with whitespace should remain unchanged (not valid format)
+
+        // Space after the bracket — not a tag name, left literal.
         $this->assertStringContainsString('[ test_simple ]', $result);
-        $this->assertStringContainsString('[test_with_params   name = "test"   ]', $result);
+        // Name touches the bracket, so it IS a tag; the padded params render normally.
+        $this->assertStringContainsString('PARAMS: name=test', $result);
     }
     
     /**
@@ -829,6 +838,87 @@ class Dj_App_Shortcode_Test extends TestCase
         $result = $this->shortcode->escapeShortcodesInCodeBlocks($content);
 
         $this->assertStringContainsString('&#91;test-with-params', $result);
+    }
+
+    /**
+     * A bracket run that is NOT a registered shortcode survives byte-for-byte.
+     *
+     * Markup is full of brackets that are not shortcodes. The attribute selector is the
+     * case that broke a live screen: rewriting 'form[data-confirm]' to
+     * 'form[data_confirm]' unbinds every handler bound through that selector, silently.
+     */
+    public function testPrepareShortcodesLeavesUnregisteredBracketsIntact()
+    {
+        $inputs = [
+            'form[data-confirm]',
+            'button[data-confirm]',
+            'a[href^="HTTP"]',
+            '$items[myIndex]',
+            'input[type=Text]',
+            // Registered under no name, so these are left alone rather than normalized.
+            '[double--dash]',
+            '[triple---dash]',
+        ];
+
+        foreach ($inputs as $input) {
+            $result = $this->shortcode->prepareShortcodes($input);
+            $this->assertEquals($input, $result, "Rewrote a non-shortcode bracket run: $input");
+        }
+    }
+
+    /**
+     * The same guarantee end to end: an attribute selector comes back untouched even
+     * while a real shortcode on the same page is rendered.
+     */
+    public function testReplaceShortCodesLeavesAttributeSelectorsIntact()
+    {
+        $html = '<html><body><script>$(document).on("submit", "form[data-confirm]", onConfirm);</script>[test_simple]</body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        $this->assertStringContainsString('form[data-confirm]', $result);
+        $this->assertStringNotContainsString('form[data_confirm]', $result);
+        $this->assertStringContainsString('SIMPLE_SHORTCODE_OUTPUT', $result);
+    }
+
+    /**
+     * A page carrying no registered shortcode comes back byte-identical — nothing is
+     * escaped, normalized, or re-assembled on the way through.
+     */
+    public function testReplaceShortCodesLeavesShortcodeFreePageIntact()
+    {
+        $html = '<html><body><p>[not_a_shortcode]</p><pre>[also-not-one]</pre></body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        $this->assertEquals($html, $result);
+    }
+
+    /**
+     * A shortcode is found regardless of what the FIRST bracket on the page happens to
+     * be. The scan used to give up on the entire page when that bracket was not followed
+     * by a letter, so a valid tag further down was silently skipped.
+     */
+    public function testReplaceShortCodesFindsTagAfterNonAlphaBracket()
+    {
+        $html = '<html><body><p>$rows[0]</p>[test_simple]</body></html>';
+        $result = $this->shortcode->replaceShortCodes($html);
+
+        $this->assertStringContainsString('SIMPLE_SHORTCODE_OUTPUT', $result);
+        $this->assertStringContainsString('$rows[0]', $result);
+    }
+
+    /**
+     * The presence guard: true only for a registered name, in either separator form.
+     */
+    public function testHasShortcode()
+    {
+        $this->assertTrue($this->shortcode->hasShortcode('x [test_simple] y'));
+        $this->assertTrue($this->shortcode->hasShortcode('x [test-simple] y'));
+        $this->assertTrue($this->shortcode->hasShortcode('x [TEST_SIMPLE] y'));
+
+        $this->assertFalse($this->shortcode->hasShortcode('form[data-confirm]'));
+        $this->assertFalse($this->shortcode->hasShortcode('[not_registered]'));
+        $this->assertFalse($this->shortcode->hasShortcode('no brackets here'));
+        $this->assertEmpty($this->shortcode->hasShortcode(''));
     }
 
     // =============================================
