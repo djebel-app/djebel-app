@@ -381,14 +381,19 @@ class Dj_App_Shortcode_Test extends TestCase
         $this->shortcode->addShortcode('test_with_caps', [$this, 'renderTestSimple']);
         $this->shortcode->addShortcode('mixed_case_shortcode', [$this, 'renderTestSimple']);
         $this->shortcode->addShortcode('test_shortcode', [$this, 'renderTestSimple']);
+        $this->shortcode->addShortcode('double_dash', [$this, 'renderTestSimple']);
 
-        // Test various kebab-case formats
-        // Note: prepareShortcodes just converts dashes to underscores, formatShortCode removes duplicates
+        // '-' and '_' are aliases, so every spelling below resolves to the registered key.
+        // Repeated separators collapse exactly as they do at registration time.
         $testCases = [
             '[simple-test]' => '[simple_test]',
+            '[simple_test]' => '[simple_test]',
             '[multi-word-shortcode]' => '[multi_word_shortcode]',
             '[Test-With-Caps]' => '[test_with_caps]',
             '[mixed-Case-SHORTCODE]' => '[mixed_case_shortcode]',
+            '[double--dash]' => '[double_dash]',
+            '[double__dash]' => '[double_dash]',
+            '[double---dash]' => '[double_dash]',
         ];
         
         foreach ($testCases as $input => $expected) {

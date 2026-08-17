@@ -534,10 +534,10 @@ class Dj_App_Shortcode {
     }
 
     /**
-     * Prepares shortcodes in content by:
-     * - normalizing dashes to underscores
-     * - converting chars to lowercase
-     * Processes character by character to avoid regex.
+     * Rewrites each written shortcode name to the key it was registered under, so a page
+     * may spell a tag with '-' or '_' interchangeably. Walks bracket to bracket with
+     * strpos rather than scanning the buffer, and normalizes through formatShortCode() —
+     * the same function registration uses, so both sides can never disagree.
      *
      * Only a bracket run whose name is a REGISTERED shortcode is rewritten. Every other
      * run is copied byte-for-byte: page markup legitimately contains brackets that are
@@ -596,46 +596,29 @@ class Dj_App_Shortcode {
             $run_len = $closing_pos - $i + 1;
             $bracket_run = substr($buff, $i, $run_len);
 
-            // The name is everything up to the first whitespace (where params start).
-            $candidate = trim($bracket_run, '[]');
-            $name_len = strcspn($candidate, " \t\r\n");
-            $candidate = substr($candidate, 0, $name_len);
+            // Split the run into its name and whatever params follow the first whitespace.
+            $inner_len = $closing_pos - $i - 1;
+            $inner = substr($buff, $i + 1, $inner_len);
+            $name_len = strcspn($inner, " \t\r\n");
+            $name = substr($inner, 0, $name_len);
+            $params_str = substr($inner, $name_len);
 
-            // Mirror exactly what the char loop below would produce, so the lookup and the
-            // rewrite agree on what the name normalizes to.
-            $candidate = str_replace('-', '_', $candidate);
-            $candidate = strtolower($candidate);
+            // ONE normalizer decides what a written name resolves to, and it is the same
+            // one that maps a name at registration — so '-' and '_' alias each other in
+            // both directions and repeats collapse identically on both sides. Normalizing
+            // here by any other rule is how [double--dash] became a name no registration
+            // could ever produce.
+            $name = $this->formatShortCode($name);
 
             // Not a registered shortcode — copy the run verbatim and move on.
-            if (empty($shortcodes[$candidate])) {
+            if (empty($shortcodes[$name])) {
                 $result .= $bracket_run;
                 $i = $closing_pos + 1;
 
                 continue;
             }
 
-            // Process shortcode content
-            $in_shortcode_name = true;
-
-            for ($j = $i; $j <= $closing_pos; $j++) {
-                $char = $buff[$j];
-
-                // Stop normalizing when we hit any whitespace (params start)
-                if ($in_shortcode_name && ctype_space($char)) {
-                    $in_shortcode_name = false;
-                }
-
-                if ($in_shortcode_name) {
-                    if ($char === '-') {
-                        $result .= '_';
-                    } else {
-                        $result .= strtolower($char);
-                    }
-                } else {
-                    $result .= $char;
-                }
-            }
-
+            $result .= '[' . $name . $params_str . ']';
             $i = $closing_pos + 1;
         }
 
