@@ -23,7 +23,7 @@ class Dj_App_String_Util_Test extends TestCase {
 
     public function testContainsRealWorldPatterns()
     {
-        // HTML attribute checking (like stripos in html.php)
+        // HTML attribute checking
         $attr = "class='btn' id='submit_btn' checked";
         $this->assertTrue(Dj_App_String_Util::contains($attr, 'id='));
         $this->assertTrue(Dj_App_String_Util::contains($attr, 'checked'));
@@ -1907,5 +1907,133 @@ class Dj_App_String_Util_Test extends TestCase {
         $buff_obj = new stdClass();
 
         Dj_App_String_Util::splitOnSeparators($buff_obj);
+    }
+
+    /**
+     * A scalar is the value itself and passes through.
+     */
+    public function testExportLeavesScalarsAlone()
+    {
+        $exported_str = Dj_App_String_Util::export('plain message');
+        $exported_int = Dj_App_String_Util::export(42);
+
+        $this->assertEquals('plain message', $exported_str);
+        $this->assertEquals(42, $exported_int);
+    }
+
+    /**
+     * A flat record renders as ONE compact key=value line, so a caller never builds that
+     * string itself.
+     */
+    public function testExportRendersFlatArrayAsOneLine()
+    {
+        $data = [
+            'endpoint' => '/admin/vehicles/get',
+            'code' => 'admin.vehicles.get.not_found',
+            'msg' => 'Vehicle not found',
+        ];
+
+        $out = Dj_App_String_Util::export($data);
+        $expected = 'endpoint=/admin/vehicles/get code=admin.vehicles.get.not_found msg=Vehicle not found';
+
+        $this->assertEquals($expected, $out);
+        $this->assertStringNotContainsString("\n", $out);
+    }
+
+    /**
+     * NESTED data flattens to a[b]=c rather than being dumped, so a record keeps its one
+     * compact line however deep it goes.
+     */
+    public function testExportFlattensNested()
+    {
+        $out = Dj_App_String_Util::export([ 'a' => [ 'b' => 1, ], ]);
+
+        $this->assertEquals('a[b]=1', $out);
+    }
+
+    /**
+     * Mixing scalars with a nested value stays on ONE line — the scalars render normally
+     * and the nested part carries its own bracketed key.
+     */
+    public function testExportFlattensRecordMixingScalarAndNested()
+    {
+        $data = [
+            'code' => 'x.not_found',
+            'params' => [ 'id' => 5, ],
+        ];
+
+        $out = Dj_App_String_Util::export($data);
+
+        $this->assertEquals('code=x.not_found params[id]=5', $out);
+    }
+
+    /**
+     * Booleans render as 1 / 0, and a null is DROPPED — an absent field says the same as
+     * an empty one, without the noise.
+     */
+    public function testExportRendersBooleansAsDigitsAndDropsNull()
+    {
+        $data = [
+            'code' => null,
+            'cached' => true,
+            'stale' => false,
+        ];
+
+        $out = Dj_App_String_Util::export($data);
+
+        $this->assertEquals('cached=1 stale=0', $out);
+    }
+
+    public function testExportRendersEmptyArrayAsEmptyString()
+    {
+        $out = Dj_App_String_Util::export([]);
+
+        $this->assertEmpty($out);
+    }
+
+    /**
+     * An OBJECT contributes only its PUBLIC properties. That is the whole reason it goes
+     * through the query builder rather than an (array) cast: the cast exports private ones
+     * under NUL-mangled keys, which would put internal state and raw NUL bytes into the
+     * output while looking like clean data.
+     */
+    public function testExportRendersObjectPublicPropertiesOnly()
+    {
+        $res_obj = new Dj_App_Result();
+        $res_obj->code = 'app.access_denied';
+
+        $out = Dj_App_String_Util::export($res_obj);
+
+        $this->assertStringContainsString('code=app.access_denied', $out);
+        $this->assertStringNotContainsString('expected_system_keys_regex', $out);
+        $this->assertStringNotContainsString("\0", $out);
+        $this->assertStringNotContainsString("\n", $out);
+    }
+
+    /**
+     * null and resources are neither array nor object, so the builder would reject them —
+     * they keep the dump instead of throwing.
+     */
+    public function testExportDumpsValueTheBuilderCannotTake()
+    {
+        $out = Dj_App_String_Util::export(null);
+
+        $this->assertNotEmpty($out);
+    }
+
+    /**
+     * Returned READY TO USE: a dump's trailing newline and a padded scalar are both
+     * trimmed here, so no caller has to do it.
+     */
+    public function testExportReturnsTrimmedOutput()
+    {
+        $padded = Dj_App_String_Util::export('  padded  ');
+
+        $this->assertEquals('padded', $padded);
+
+        $dumped = Dj_App_String_Util::export(null);
+        $dumped_rtrimmed = rtrim($dumped);
+
+        $this->assertEquals($dumped_rtrimmed, $dumped);
     }
 }

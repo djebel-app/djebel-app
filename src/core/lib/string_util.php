@@ -630,6 +630,48 @@ class Dj_App_String_Util
     }
 
     /**
+     * Any value as ONE compact line — key=value pairs joined by spaces, with nesting
+     * flattened to a[b]=c. The counterpart of parseQueryString, which reads that shape
+     * back into an array.
+     * Dj_App_String_Util::export();
+     *
+     * An OBJECT contributes only its PUBLIC properties, so unlike an (array) cast — which
+     * exports private ones under NUL-mangled keys — nothing internal can reach the output.
+     * A null value is dropped and a bool renders as 1 / 0, both of which the builder
+     * decides; an absent field says the same as an empty one.
+     *
+     * null and resources are neither array nor object and the builder rejects them, so
+     * they fall back to a dump rather than throwing.
+     *
+     * @param mixed $data
+     * @return string
+     */
+    public static function export($data)
+    {
+        if (is_scalar($data)) {
+            $line = $data;
+        } elseif (is_array($data) || is_object($data)) {
+            // The builder makes the pairs and flattens the nesting; the separator joins
+            // them with spaces instead of &. It escapes for a URL, which plain text does
+            // not want, so decoding restores the original — the round trip is exact,
+            // multibyte and % + & ( ) included.
+            $line = http_build_query($data, '', ' ');
+            $line = urldecode($line);
+        } else {
+            ob_start();
+            var_dump($data);
+            $line = ob_get_clean();
+        }
+
+        // Returned READY TO USE. A dump ends with a newline and a scalar may arrive padded;
+        // either one breaks a one-entry-per-line log, so the trim belongs here rather than
+        // at every caller — where one of them would eventually forget it.
+        $line = Dj_App_String_Util::trim($line);
+
+        return $line;
+    }
+
+    /**
      * This is needed when doing JSON encode as decoding may not work with php 7+
      * Dj_App_String_Util::encodeUTF8();
      * @param mixed $d
@@ -1096,7 +1138,7 @@ if (!function_exists('str_contains')) {
      * @return bool
      */
     function str_contains($haystack, $needle) {
-        $result = $needle === '' || strpos($haystack, $needle) !== false;
+        $result = $needle === '' || (strpos($haystack, $needle) !== false);
 
         return $result;
     }
