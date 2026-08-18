@@ -232,8 +232,10 @@ class Dj_App_HTML {
     /**
      * Generates an HTML textarea wrapped in its label. Dj_App_HTML::textarea()
      *
-     * Content goes through prepareTextareaContent(), so the leading-newline guard is
-     * applied here once and no caller has to remember it.
+     * A leading newline in $value is discarded by the HTML parser — that is specified
+     * behavior and there is no encoding around it, so normalize whitespace where the
+     * value is stored rather than compensating for it here. Spaces and tabs are safe in
+     * every position; only that one newline is special.
      *
      * Pass the element id as $extra['id']. Unlike the older field helpers this one does
      * not regex an id back out of a raw attribute string — that parse is fragile and
@@ -248,7 +250,7 @@ class Dj_App_HTML {
      * @return string
      *
      * @example
-     * echo Dj_App_HTML::textarea('message', $message, [ 'msg' => 'Your *message*', ]);
+     * echo Dj_App_HTML::textarea('message', $message, [ 'msg' => 'Your message', ]);
      */
     public static function textarea($name, $value = '', $extra = []) {
         $id = empty($extra['id']) ? $name : $extra['id'];
@@ -260,10 +262,7 @@ class Dj_App_HTML {
         $msg_esc = dj_esc_html($msg);
         $value_esc = dj_esc_html($value);
 
-        // The newline right after the opening tag is a GUARD, not formatting: an HTML
-        // parser discards exactly one there, so a stored value that itself begins with
-        // a newline survives a form round-trip instead of losing a line per redisplay.
-        $html = "\n<label for='$id_esc'><textarea id='$id_esc' name='$name_esc' $attr>\n$value_esc</textarea> $msg_esc</label>\n";
+        $html = "\n<label for='$id_esc'><textarea id='$id_esc' name='$name_esc' $attr>$value_esc</textarea> $msg_esc</label>\n";
 
         return $html;
     }
@@ -1072,30 +1071,4 @@ class Dj {
         echo $escaped;
     }
 
-    /**
-     * Escape for textarea content and PRINT it. Same contract as e(); `t` = textarea.
-     *
-     * The leading newline is a GUARD: an HTML parser discards exactly one directly after
-     * the opening tag, so a stored value that itself begins with a newline survives a
-     * form round-trip instead of losing a line every time the form redisplays.
-     *
-     * PLACE THE CALL FLUSH AGAINST THE OPENING TAG. A newline of your own between the
-     * two adds a second guard, and that one reaches the reader as a blank first line.
-     * Use textarea() instead when the whole element is being generated — there the
-     * placement cannot be got wrong.
-     *
-     * @param mixed $value
-     * @return void
-     *
-     * @example
-     * <textarea name="notes"><?php Dj::et($notes); ?></textarea>
-     */
-    public static function et($value) {
-        $escaped = Dj_App_HTML::escHtml($value);
-
-        // The "\n" is a GUARD, not formatting: a parser discards one newline directly
-        // after the opening tag, so it eats OURS instead of the value's own leading one.
-        // Comma over concatenation — echo takes operands in sequence, no joined string.
-        echo "\n", $escaped;
-    }
 }

@@ -837,78 +837,43 @@ class Dj_App_HTML_Test extends TestCase {
         $html_res = Dj::e('x');
         $attr_res = Dj::ea('x');
         $url_res = Dj::eu('/x');
-        $textarea_res = Dj::et('x');
         ob_get_clean();
 
         $this->assertNull($html_res);
         $this->assertNull($attr_res);
         $this->assertNull($url_res);
-        $this->assertNull($textarea_res);
     }
 
-    public function testDjEtPrintsLeadingNewlineGuard()
-    {
-        ob_start();
-        Dj::et('hello');
-        $buff = ob_get_clean();
-
-        $this->assertEquals("\nhello", $buff);
-    }
+    // Tests for textarea()
 
     /**
-     * The reason et() exists. An HTML parser eats one newline after the opening tag,
-     * so the guard is what lets a value that itself starts with a newline survive a
-     * form round-trip. Here the parser is simulated: drop the single newline it would
-     * discard, decode, and the original value must come back byte for byte.
+     * The content starts immediately after the opening tag — NO padding newline. An
+     * HTML parser discards one newline there, so emitting a guard would mean markup
+     * whose correctness depends on the consumer implementing that rule. Leading
+     * whitespace is normalized where the value is stored instead.
      */
-    public function testDjEtPreservesLeadingNewlineInValue()
-    {
-        $value = "\nfirst line was deliberately blank";
-
-        ob_start();
-        Dj::et($value);
-        $buff = ob_get_clean();
-
-        $first_char = substr($buff, 0, 1);
-
-        if ($first_char == "\n") {
-            $buff = substr($buff, 1);
-        }
-
-        $decoded = dj_dec_html($buff);
-
-        $this->assertEquals($value, $decoded);
-    }
-
-    public function testDjEtEscapesValue()
-    {
-        ob_start();
-        Dj::et('<script>alert("x")</script>');
-        $buff = ob_get_clean();
-
-        $this->assertStringNotContainsString('<script>', $buff);
-        $this->assertStringContainsString('&lt;script&gt;', $buff);
-    }
-
-    // Tests for textarea() — the leading-newline guard is the reason it exists
-
-    public function testTextareaAddsLeadingNewlineGuard()
+    public function testTextareaEmitsContentWithoutLeadingNewline()
     {
         $html = Dj_App_HTML::textarea('notes', 'hello');
 
-        $this->assertStringContainsString(">\nhello</textarea>", $html);
+        $this->assertStringContainsString('>hello</textarea>', $html);
+
+        // Specifically the first content byte — the trailing newline after </label> is
+        // deliberate formatting the sibling field helpers also emit.
+        $tag_pos = strpos($html, '<textarea');
+        $start_pos = strpos($html, '>', $tag_pos);
+        $first_content_char = substr($html, $start_pos + 1, 1);
+
+        $this->assertNotEquals("\n", $first_content_char);
     }
 
     /**
-     * THE bug this helper exists for. An HTML parser discards one newline directly
-     * after the opening tag, so without the guard a value that itself begins with a
-     * newline loses one on every form round-trip. Here the parser is simulated: take
-     * the element content, drop the single newline it would eat, decode, and the
-     * original value must come back byte for byte.
+     * Spaces and tabs carry no special meaning to the parser in ANY position, so they
+     * must survive verbatim — only a single leading newline is ever discarded.
      */
-    public function testTextareaPreservesLeadingNewlineInValue()
+    public function testTextareaPreservesSpacesAndTabs()
     {
-        $value = "\nfirst line was deliberately blank";
+        $value = "   leading, trailing and\tinner  spaces   ";
         $html = Dj_App_HTML::textarea('notes', $value);
 
         $tag_pos = strpos($html, '<textarea');
@@ -916,12 +881,6 @@ class Dj_App_HTML_Test extends TestCase {
         $end_pos = strpos($html, '</textarea>');
         $content_len = $end_pos - $start_pos - 1;
         $content = substr($html, $start_pos + 1, $content_len);
-        $first_char = substr($content, 0, 1);
-
-        if ($first_char == "\n") {
-            $content = substr($content, 1);
-        }
-
         $decoded = dj_dec_html($content);
 
         $this->assertEquals($value, $decoded);
@@ -959,10 +918,10 @@ class Dj_App_HTML_Test extends TestCase {
         $this->assertStringNotContainsString('<b>', $html);
     }
 
-    public function testTextareaEmptyValueRendersGuardOnly()
+    public function testTextareaEmptyValueRendersEmptyElement()
     {
         $html = Dj_App_HTML::textarea('notes');
 
-        $this->assertStringContainsString(">\n</textarea>", $html);
+        $this->assertStringContainsString('></textarea>', $html);
     }
 }
