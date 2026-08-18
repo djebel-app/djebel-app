@@ -971,4 +971,67 @@ class Dj_App_Request_Test extends TestCase
         $this->assertGreaterThan($character_count, $expected_bytes, 'the fixture is genuinely multibyte');
         $this->assertSame($expected_bytes, $cyrillic_bytes, 'byte count, never the character count');
     }
+
+    /**
+     * getAndCompare() tests the request value against a SEPARATED list of accepted
+     * values, trimming each candidate first — so ' live ' written with padding in the
+     * list still matches a stored 'live'. The method had no coverage at all.
+     */
+    public function testGetAndCompareMatchesSeparatedListIgnoringPadding()
+    {
+        $req_obj = new Dj_App_Request();
+        $req_obj->set('mode', 'live');
+
+        $exact_res = $req_obj->getAndCompare('mode', 'live');
+
+        $this->assertTrue($exact_res);
+
+        $case_res = $req_obj->getAndCompare('mode', 'LIVE');
+
+        $this->assertTrue($case_res);
+
+        // Each entry is padded; without the trim none of them would match.
+        $padded_res = $req_obj->getAndCompare('mode', ' draft , live , archived ');
+
+        $this->assertTrue($padded_res);
+
+        $pipe_res = $req_obj->getAndCompare('mode', 'draft | live | archived');
+
+        $this->assertTrue($pipe_res);
+
+        $absent_res = $req_obj->getAndCompare('mode', 'draft,archived');
+
+        $this->assertFalse($absent_res);
+    }
+
+    /**
+     * The candidates go through the project trim, which also removes INNER null bytes —
+     * the one thing native trim does not do, since its charlist only strips them from
+     * the ends. A value carrying an embedded null cannot slip past the comparison by
+     * looking different from the entry it should have matched.
+     */
+    public function testGetAndCompareStripsInnerNullBytes()
+    {
+        $req_obj = new Dj_App_Request();
+        $req_obj->set('mode', 'live');
+
+        $null_byte_res = $req_obj->getAndCompare('mode', "draft,li\0ve");
+
+        $this->assertTrue($null_byte_res);
+    }
+
+    public function testGetAndCompareEmptyHandling()
+    {
+        $req_obj = new Dj_App_Request();
+
+        // Nothing asked for, nothing stored — treated as a match.
+        $both_empty_res = $req_obj->getAndCompare('missing_key', '');
+
+        $this->assertTrue($both_empty_res);
+
+        // Something expected, nothing stored — not a match.
+        $no_value_res = $req_obj->getAndCompare('missing_key', 'live');
+
+        $this->assertFalse($no_value_res);
+    }
 }

@@ -498,7 +498,7 @@ class Dj_App_Request {
         $sep = $this->getSep($checked_val);
 
         $vals = explode($sep, $checked_val);
-        $vals = array_map('trim', $vals);
+        $vals = Dj_App_String_Util::trim($vals);
         $vals = array_filter($vals);
         $vals = array_unique($vals);
 
@@ -556,7 +556,7 @@ class Dj_App_Request {
             // Replace all separators with comma, then split by comma
             $normalized_key = str_replace($separators, ',', $key);
             $multiple_keys = explode(',', $normalized_key);
-            $multiple_keys = array_map('trim', $multiple_keys);
+            $multiple_keys = Dj_App_String_Util::trim($multiple_keys);
             $multiple_keys = array_unique($multiple_keys);
 
             foreach ($multiple_keys as $loop_key) {
@@ -1601,7 +1601,7 @@ CLEAR_AND_REDIRECT_HTML;
             $server_ports[] = $_SERVER['SERVER_PORT'];
         }
 
-        $server_ports = array_map('trim', $server_ports);
+        $server_ports = Dj_App_String_Util::trim($server_ports);
         $server_ports = array_map('intval', $server_ports);
         $server_ports = array_unique($server_ports);
         $server_ports = array_filter($server_ports); // rm empty
