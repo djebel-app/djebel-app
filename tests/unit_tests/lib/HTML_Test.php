@@ -753,4 +753,94 @@ class Dj_App_HTML_Test extends TestCase {
 
         $this->assertCount(1, $non_array_result);
     }
+
+    // Tests for the Dj brevity facade — the printing twin of the dj_esc_* functions
+
+    public function testDjPrintsEscapedHtml()
+    {
+        $input = '<script>alert("test")</script>';
+        $expected = Dj_App_HTML::escHtml($input);
+
+        ob_start();
+        Dj::e($input);
+        $buff = ob_get_clean();
+
+        $this->assertEquals($expected, $buff);
+    }
+
+    public function testDjPrintsEscapedAttr()
+    {
+        $input = 'test "value"';
+        $expected = Dj_App_HTML::escAttr($input);
+
+        ob_start();
+        Dj::ea($input);
+        $buff = ob_get_clean();
+
+        $this->assertEquals($expected, $buff);
+    }
+
+    public function testDjPrintsEscapedUrl()
+    {
+        $input = 'https://example.com/page?a=1&b=2';
+        $expected = Dj_App_HTML::escUrl($input);
+
+        ob_start();
+        Dj::eu($input);
+        $buff = ob_get_clean();
+
+        $this->assertEquals($expected, $buff);
+    }
+
+    /**
+     * A javascript: payload is rejected by escUrl(), so the facade prints NOTHING
+     * rather than emitting an executable href.
+     */
+    public function testDjPrintsNothingForDangerousUrl()
+    {
+        ob_start();
+        Dj::eu('javascript:alert(1)');
+        $buff = ob_get_clean();
+
+        $this->assertEmpty($buff);
+    }
+
+    public function testDjPrintsNothingForNonScalar()
+    {
+        ob_start();
+        Dj::e(['an', 'array',]);
+        $buff = ob_get_clean();
+
+        $this->assertEmpty($buff);
+    }
+
+    /**
+     * Zero is a REAL value, not emptiness — escHtml() exempts numerics, so the facade
+     * must print '0'. assertSame, because assertEmpty would pass on '0' too.
+     */
+    public function testDjPrintsZero()
+    {
+        ob_start();
+        Dj::e(0);
+        $buff = ob_get_clean();
+
+        $this->assertSame('0', $buff);
+    }
+
+    /**
+     * The facade PRINTS and hands nothing back — pinning the contract so nobody
+     * turns it into `$safe = Dj::e($raw);`, which would print as a side effect.
+     */
+    public function testDjMethodsReturnNothing()
+    {
+        ob_start();
+        $html_res = Dj::e('x');
+        $attr_res = Dj::ea('x');
+        $url_res = Dj::eu('/x');
+        ob_get_clean();
+
+        $this->assertNull($html_res);
+        $this->assertNull($attr_res);
+        $this->assertNull($url_res);
+    }
 }

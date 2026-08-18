@@ -230,6 +230,45 @@ class Dj_App_HTML {
 	}
 
     /**
+     * Generates an HTML textarea wrapped in its label. Dj_App_HTML::textarea()
+     *
+     * Content goes through prepareTextareaContent(), so the leading-newline guard is
+     * applied here once and no caller has to remember it.
+     *
+     * Pass the element id as $extra['id']. Unlike the older field helpers this one does
+     * not regex an id back out of a raw attribute string — that parse is fragile and
+     * silently wrong on any attribute value containing id=.
+     *
+     * $extra['attr'] is emitted RAW, matching the sibling field helpers: it is an
+     * attribute fragment the CALLER composes, never a place to put user input.
+     *
+     * @param string $name
+     * @param mixed $value
+     * @param array $extra - id, msg, attr
+     * @return string
+     *
+     * @example
+     * echo Dj_App_HTML::textarea('message', $message, [ 'msg' => 'Your *message*', ]);
+     */
+    public static function textarea($name, $value = '', $extra = []) {
+        $id = empty($extra['id']) ? $name : $extra['id'];
+        $attr = empty($extra['attr']) ? '' : $extra['attr'];
+        $msg = empty($extra['msg']) ? '' : $extra['msg'];
+
+        $id_esc = dj_esc_attr($id);
+        $name_esc = dj_esc_attr($name);
+        $msg_esc = dj_esc_html($msg);
+        $value_esc = dj_esc_html($value);
+
+        // The newline right after the opening tag is a GUARD, not formatting: an HTML
+        // parser discards exactly one there, so a stored value that itself begins with
+        // a newline survives a form round-trip instead of losing a line per redisplay.
+        $html = "\n<label for='$id_esc'><textarea id='$id_esc' name='$name_esc' $attr>\n$value_esc</textarea> $msg_esc</label>\n";
+
+        return $html;
+    }
+
+    /**
      * Goes through an array of records and picks id and title from the array
      *
      * Labels come back RAW. Escaping belongs at the point of output, and
@@ -957,5 +996,79 @@ if (!function_exists('dj_dec')) {
      */
     function dj_dec($str) {
         return dj_dec_html($str);
+    }
+}
+
+// Brevity facade — the PRINTING twin of the dj_esc_* functions above.
+// Those RETURN an escaped string, so every template writes `echo dj_esc_html($x)`.
+// These print it, which means the escaping cannot be separated from the output.
+// One class claims ONE global symbol instead of a new global function per context —
+// on 1,000,000 sites every global name is a collision surface.
+//
+// SCOPE — READ BEFORE ADDING A METHOD. `Dj` is the PRINTING facade, not a front door
+// to the framework. Only things that PRINT belong here: a future t() that prints a
+// translated string is in scope; cache(), hook(), cfg() are NOT — those get their own
+// class. That boundary is the only reason one-letter names stay readable. The core
+// domains already compete for nearly every letter (Env/Exception want e, Themes wants
+// t, Util wants u, Hooks/HTML want h, Cache/Cli/Config want c), so the moment this
+// class takes on a second concern the letters turn into guesswork — and by then every
+// call site on every site has frozen the meanings already shipped.
+class Dj {
+    /**
+     * Escape for HTML content and PRINT it.
+     *
+     * Terse by design: this class exists to be short AT THE CALL SITE, which is the
+     * whole reason its methods are one and two letters. `e` = echo.
+     *
+     * Prints and returns nothing, deliberately. An echo has no failure to report, and
+     * a return value would invite `$safe = Dj::e($raw);` — which would print as a side
+     * effect. Use dj_esc_html() when you want the escaped string back instead.
+     *
+     * @param mixed $value
+     * @return void
+     *
+     * @example
+     * <h1><?php Dj::e($title); ?></h1>
+     */
+    public static function e($value) {
+        // NOTE: calls the class method, NOT dj_esc_html(). That global sits behind a
+        // function_exists() guard, so on a site that already declares the name it is
+        // someone else's function — our own output always escapes with our escaper.
+        $escaped = Dj_App_HTML::escHtml($value);
+
+        echo $escaped;
+    }
+
+    /**
+     * Escape for an HTML attribute and PRINT it. Same contract as e(); `a` = attribute.
+     *
+     * @param mixed $value
+     * @return void
+     *
+     * @example
+     * <input value="<?php Dj::ea($name); ?>">
+     */
+    public static function ea($value) {
+        $escaped = Dj_App_HTML::escAttr($value);
+
+        echo $escaped;
+    }
+
+    /**
+     * Escape a URL and PRINT it. Same contract as e(); `u` = url.
+     *
+     * Prints nothing when the URL is neither relative nor http(s) — escUrl() rejects
+     * those outright, so a javascript: payload never reaches the page.
+     *
+     * @param string $url
+     * @return void
+     *
+     * @example
+     * <a href="<?php Dj::eu($next); ?>">Next</a>
+     */
+    public static function eu($url) {
+        $escaped = Dj_App_HTML::escUrl($url);
+
+        echo $escaped;
     }
 }
