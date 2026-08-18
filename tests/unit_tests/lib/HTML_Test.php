@@ -843,4 +843,80 @@ class Dj_App_HTML_Test extends TestCase {
         $this->assertNull($attr_res);
         $this->assertNull($url_res);
     }
+
+    // Tests for textarea() — the leading-newline guard is the reason it exists
+
+    public function testTextareaAddsLeadingNewlineGuard()
+    {
+        $html = Dj_App_HTML::textarea('notes', 'hello');
+
+        $this->assertStringContainsString(">\nhello</textarea>", $html);
+    }
+
+    /**
+     * THE bug this helper exists for. An HTML parser discards one newline directly
+     * after the opening tag, so without the guard a value that itself begins with a
+     * newline loses one on every form round-trip. Here the parser is simulated: take
+     * the element content, drop the single newline it would eat, decode, and the
+     * original value must come back byte for byte.
+     */
+    public function testTextareaPreservesLeadingNewlineInValue()
+    {
+        $value = "\nfirst line was deliberately blank";
+        $html = Dj_App_HTML::textarea('notes', $value);
+
+        $tag_pos = strpos($html, '<textarea');
+        $start_pos = strpos($html, '>', $tag_pos);
+        $end_pos = strpos($html, '</textarea>');
+        $content_len = $end_pos - $start_pos - 1;
+        $content = substr($html, $start_pos + 1, $content_len);
+        $first_char = substr($content, 0, 1);
+
+        if ($first_char == "\n") {
+            $content = substr($content, 1);
+        }
+
+        $decoded = dj_dec_html($content);
+
+        $this->assertEquals($value, $decoded);
+    }
+
+    public function testTextareaEscapesValue()
+    {
+        $html = Dj_App_HTML::textarea('notes', '<script>alert("x")</script>');
+
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+    }
+
+    public function testTextareaDefaultsIdToName()
+    {
+        $html = Dj_App_HTML::textarea('message');
+
+        $this->assertStringContainsString("id='message'", $html);
+        $this->assertStringContainsString("for='message'", $html);
+    }
+
+    public function testTextareaUsesExplicitId()
+    {
+        $html = Dj_App_HTML::textarea('message', '', [ 'id' => 'custom_id', ]);
+
+        $this->assertStringContainsString("id='custom_id'", $html);
+        $this->assertStringNotContainsString("id='message'", $html);
+    }
+
+    public function testTextareaEscapesMsg()
+    {
+        $html = Dj_App_HTML::textarea('notes', '', [ 'msg' => 'Say <b>hi</b>', ]);
+
+        $this->assertStringContainsString('&lt;b&gt;', $html);
+        $this->assertStringNotContainsString('<b>', $html);
+    }
+
+    public function testTextareaEmptyValueRendersGuardOnly()
+    {
+        $html = Dj_App_HTML::textarea('notes');
+
+        $this->assertStringContainsString(">\n</textarea>", $html);
+    }
 }
