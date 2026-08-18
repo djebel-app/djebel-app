@@ -84,8 +84,49 @@ class Dj_App_File_Util {
      */
     static public function read($file) {
         $max_bytes = 1 * 1024 * 1024 * 1024; // 1GB
-        $res_obj = self::readPartially($file, $max_bytes);
+        $res_obj = Dj_App_File_Util::readPartially($file, $max_bytes);
+
         return $res_obj;
+    }
+
+    /**
+     * A unique temp NAME. Nothing is created, so the caller writes it when it is ready —
+     * and a caller that wanted a directory passes an empty ext and gets a name it can
+     * mkdir. One generator rather than a hand-rolled uniqid concat at every call site.
+     *
+     * Dj_App_File_Util::generateTempFile();
+     * Dj_App_File_Util::generateTempFile([ 'prefix' => 'dj_log', 'ext' => 'log', ]);
+     * Dj_App_File_Util::generateTempFile([ 'ext' => '', ]);        // a dir-shaped name
+     *
+     * @param array $extra_opts prefix, ext (empty for none), dir
+     * @return string
+     */
+    public static function generateTempFile($extra_opts = [])
+    {
+        $prefix = empty($extra_opts['prefix']) ? 'dj_app' : $extra_opts['prefix'];
+        $dir = empty($extra_opts['dir']) ? sys_get_temp_dir() : $extra_opts['dir'];
+
+        // An empty ext is a REQUEST for no extension, not an absent option, so presence
+        // decides here rather than emptiness.
+        $ext = 'tmp';
+
+        if (array_key_exists('ext', $extra_opts)) {
+            $ext = $extra_opts['ext'];
+        }
+
+        // The pid separates parallel processes; uniqid separates calls inside one of them.
+        // Both are needed — a suite running in parallel collides on either alone.
+        $name = $prefix . '_' . getmypid() . '_' . uniqid();
+
+        if (!empty($ext)) {
+            $ext = ltrim($ext, '.');
+            $name = $name . '.' . $ext;
+        }
+
+        $dir = rtrim($dir, '/');
+        $file = $dir . '/' . $name;
+
+        return $file;
     }
 
     /**
@@ -129,8 +170,8 @@ class Dj_App_File_Util {
                 $microtime_val = (string) microtime(true);
                 $microtime_parts = explode('.', $microtime_val);
                 $microtime_sec = $microtime_parts[0];
-                $microtime_frac_raw = empty($microtime_parts[1]) ? 0 : (int) substr($microtime_parts[1], 0, 4);
-                $microtime_frac = sprintf('%04d', $microtime_frac_raw);
+                $microtime_frac = empty($microtime_parts[1]) ? 0 : (int) substr($microtime_parts[1], 0, 4);
+                $microtime_frac = sprintf('%04d', $microtime_frac);
                 $microtime_fmt = $microtime_sec . '.' . $microtime_frac;
 
                 $tmp_file = $file . '.dj_tmp.' . $microtime_fmt;
@@ -849,7 +890,7 @@ class Dj_App_File_Util {
             return '';
         }
 
-        $path = self::normalizePath($path);
+        $path = Dj_App_File_Util::normalizePath($path);
         $basename = basename($path);
 
         return $basename;

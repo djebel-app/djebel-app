@@ -1192,4 +1192,109 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertTrue($res_obj->isError());
         $this->assertDirectoryExists($victim_dir);
     }
+
+    /**
+     * The name lands in the system temp dir and carries the default extension — the
+     * no-argument call has to be usable, or every caller ends up passing options.
+     */
+    public function testGenerateTempFileDefaults() {
+        $file = Dj_App_File_Util::generateTempFile();
+
+        $this->assertStringStartsWith(sys_get_temp_dir(), $file);
+        $this->assertEquals('tmp', Dj_App_File_Util::getExt($file));
+    }
+
+    /**
+     * Nothing is created — the caller writes it when ready.
+     */
+    public function testGenerateTempFileCreatesNothing() {
+        $file = Dj_App_File_Util::generateTempFile();
+
+        $this->assertFileDoesNotExist($file);
+    }
+
+    /**
+     * Two calls in the same process must not collide, or a second write clobbers the
+     * first — which is exactly what a temp name exists to prevent.
+     */
+    public function testGenerateTempFileIsUniquePerCall() {
+        $first_file = Dj_App_File_Util::generateTempFile();
+        $second_file = Dj_App_File_Util::generateTempFile();
+
+        $this->assertNotEquals($first_file, $second_file);
+    }
+
+    public function testGenerateTempFileHonorsPrefixExtAndDir() {
+        $extra_opts = [
+            'prefix' => 'dj_log',
+            'ext' => 'log',
+            'dir' => $this->test_dir,
+        ];
+
+        $file = Dj_App_File_Util::generateTempFile($extra_opts);
+        $name = Dj_App_File_Util::getBasename($file);
+
+        $this->assertStringStartsWith($this->test_dir . '/', $file);
+        $this->assertStringStartsWith('dj_log_', $name);
+        $this->assertEquals('log', Dj_App_File_Util::getExt($file));
+    }
+
+    /**
+     * A dotted ext is the same request as an undotted one, so the name never grows '..'.
+     */
+    public function testGenerateTempFileAcceptsDottedExt() {
+        $extra_opts = [
+            'ext' => '.log',
+        ];
+
+        $file = Dj_App_File_Util::generateTempFile($extra_opts);
+
+        $this->assertEquals('log', Dj_App_File_Util::getExt($file));
+        $this->assertStringNotContainsString('..', $file);
+    }
+
+    /**
+     * An EMPTY ext is a request for no extension — that is how a caller asks for a
+     * directory-shaped name, so one generator serves files and dirs alike.
+     */
+    public function testGenerateTempFileEmptyExtYieldsDirShapedName() {
+        $extra_opts = [
+            'ext' => '',
+        ];
+
+        $file = Dj_App_File_Util::generateTempFile($extra_opts);
+        $name = Dj_App_File_Util::getBasename($file);
+
+        $this->assertEmpty(Dj_App_File_Util::getExt($file));
+        $this->assertStringNotContainsString('.', $name);
+    }
+
+    /**
+     * A COMPOUND extension survives whole — only a LEADING dot is stripped, so a caller
+     * asking for tar.gz gets tar.gz. Note getExt() reports the last segment only ('gz'),
+     * which is its documented behavior, so the name is what has to be asserted here.
+     */
+    public function testGenerateTempFileKeepsCompoundExt() {
+        $extra_opts = [
+            'ext' => 'tar.gz',
+        ];
+
+        $file = Dj_App_File_Util::generateTempFile($extra_opts);
+
+        $this->assertStringEndsWith('.tar.gz', $file);
+        $this->assertStringNotContainsString('..', $file);
+    }
+
+    /**
+     * A trailing slash on the dir must not double up in the result.
+     */
+    public function testGenerateTempFileNormalizesTrailingSlashOnDir() {
+        $extra_opts = [
+            'dir' => $this->test_dir . '/',
+        ];
+
+        $file = Dj_App_File_Util::generateTempFile($extra_opts);
+
+        $this->assertStringNotContainsString('//', $file);
+    }
 }

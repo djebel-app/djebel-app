@@ -92,7 +92,13 @@ class Dj_App_Log {
     }
 
     /**
-     * Normalizes a message to a string: a non-scalar is var_dump'd.
+     * Normalizes a message to a string so callers never format one themselves.
+     *
+     * A FLAT array of scalars is a log record — it renders as a single compact
+     * "key=value key=value" line, which is the shape a reader greps and keeps the file
+     * small. Anything nested still gets the full var_dump, where the structure IS the
+     * information.
+     *
      * @param string|mixed $msg
      * @return string
      */
@@ -101,6 +107,21 @@ class Dj_App_Log {
             return $msg;
         }
 
+        // Arrays and objects both go through the builder: it makes the pairs, flattens any
+        // nesting to a[b]=c, and the separator joins them with spaces instead of &. An
+        // OBJECT contributes only its PUBLIC properties, so unlike an (array) cast this
+        // cannot put private state or NUL-mangled keys into the log.
+        //
+        // It escapes for a URL, which a log does not want, so decoding restores the
+        // original text — the round trip is exact, multibyte and % + & ( ) included.
+        if (is_array($msg) || is_object($msg)) {
+            $line = http_build_query($msg, '', ' ');
+            $line = urldecode($line);
+
+            return $line;
+        }
+
+        // Whatever is left is neither — null or a resource — and the builder rejects both.
         ob_start();
         var_dump($msg);
         $msg = ob_get_clean();

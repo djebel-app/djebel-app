@@ -39,14 +39,9 @@ class Dj_App_Log_Test extends TestCase {
         Dj_App_Config::cfg('app.error_log_file', '', [ 'override' => 1, ]);
     }
 
-    private function tmpFile()
-    {
-        return sys_get_temp_dir() . '/dj_log_test_' . getmypid() . '_' . uniqid() . '.log';
-    }
-
     public function testMsgWritesTimestampedLabelledLine()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $line = Dj_App_Log::msg('hello world', 'MYLABEL', $file);
 
@@ -64,7 +59,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLevelsPrefixTheMessage()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Log::error('boom', '', $file);
         Dj_App_Log::info('note', '', $file);
@@ -81,7 +76,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testDisabledLoggingWritesNothing()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Log::disableLogging();
         $res = Dj_App_Log::msg('should not write', '', $file);
@@ -91,17 +86,136 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertFileDoesNotExist($file);
     }
 
-    public function testPrepMsgDumpsNonScalar()
+    /**
+     * NESTED data flattens to a[b]=c rather than being dumped, so a record keeps its one
+     * compact line however deep it goes.
+     */
+    public function testPrepMsgFlattensNested()
     {
-        $out = Dj_App_Log::prepMsg([ 'a' => 1, ]);
+        $out = Dj_App_Log::prepMsg([ 'a' => [ 'b' => 1, ], ]);
+
+        $this->assertEquals('a[b]=1', $out);
+        $this->assertStringNotContainsString("\n", $out);
+    }
+
+    /**
+     * A FLAT array is a log record: it renders as ONE compact key=value line, so a caller
+     * never builds that string itself and the file stays greppable.
+     */
+    public function testPrepMsgRendersFlatArrayAsOneLine()
+    {
+        $log_data = [
+            'endpoint' => '/admin/vehicles/get',
+            'code' => 'admin.vehicles.get.not_found',
+            'msg' => 'Vehicle not found',
+        ];
+
+        $out = Dj_App_Log::prepMsg($log_data);
+        $expected = 'endpoint=/admin/vehicles/get code=admin.vehicles.get.not_found msg=Vehicle not found';
+
+        $this->assertEquals($expected, $out);
+        $this->assertStringNotContainsString("\n", $out);
+    }
+
+    /**
+     * A record mixing scalars with a nested value stays on ONE line — the scalars render
+     * normally and the nested part carries its own bracketed key.
+     */
+    public function testPrepMsgFlattensRecordMixingScalarAndNested()
+    {
+        $log_data = [
+            'code' => 'x.not_found',
+            'params' => [ 'id' => 5, ],
+        ];
+
+        $out = Dj_App_Log::prepMsg($log_data);
+
+        $this->assertEquals('code=x.not_found params[id]=5', $out);
+    }
+
+    /**
+     * Booleans render as 1 / 0, which is what the query builder emits.
+     */
+    public function testPrepMsgRendersBooleansAsDigits()
+    {
+        $log_data = [
+            'cached' => true,
+            'stale' => false,
+        ];
+
+        $out = Dj_App_Log::prepMsg($log_data);
+
+        $this->assertEquals('cached=1 stale=0', $out);
+    }
+
+    /**
+     * A null value is DROPPED rather than logged as an empty pair — an absent field says
+     * the same thing as an empty one, without the noise.
+     */
+    public function testPrepMsgDropsNullValue()
+    {
+        $log_data = [
+            'code' => null,
+            'msg' => 'boom',
+        ];
+
+        $out = Dj_App_Log::prepMsg($log_data);
+
+        $this->assertEquals('msg=boom', $out);
+    }
+
+    /**
+     * An empty array has no pairs, so it renders as an empty string.
+     */
+    public function testPrepMsgRendersEmptyArrayAsEmptyString()
+    {
+        $out = Dj_App_Log::prepMsg([]);
+
+        $this->assertEmpty($out);
+    }
+
+    /**
+     * An OBJECT contributes only its PUBLIC properties. That is the whole reason it goes
+     * through the query builder rather than an (array) cast: the cast exports private
+     * properties under NUL-mangled keys, which would put internal state and raw NUL bytes
+     * into the log while looking like clean data.
+     */
+    public function testPrepMsgRendersObjectPublicPropertiesOnly()
+    {
+        $res_obj = new Dj_App_Result();
+        $res_obj->code = 'app.access_denied';
+
+        $out = Dj_App_Log::prepMsg($res_obj);
+
+        $this->assertStringContainsString('code=app.access_denied', $out);
+        $this->assertStringNotContainsString('expected_system_keys_regex', $out);
+        $this->assertStringNotContainsString("\0", $out);
+        $this->assertStringNotContainsString("\n", $out);
+    }
+
+    /**
+     * null and resources are neither array nor object, so the builder would reject them —
+     * they keep the dump instead of throwing.
+     */
+    public function testPrepMsgDumpsValueTheBuilderCannotTake()
+    {
+        $out = Dj_App_Log::prepMsg(null);
 
         $this->assertNotEmpty($out);
-        $this->assertStringContainsString('a', $out);
+    }
+
+    /**
+     * A scalar is the message itself and passes through untouched.
+     */
+    public function testPrepMsgLeavesScalarsAlone()
+    {
+        $this->assertEquals('plain message', Dj_App_Log::prepMsg('plain message'));
+        $this->assertEquals(42, Dj_App_Log::prepMsg(42));
     }
 
     public function testRequestIdTagsTheLine()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $req_obj = Dj_App_Request::getInstance();
         $req_obj->setRequestId('req-abc');
@@ -115,7 +229,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testFileHonorsExplicitFile()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $resolved = Dj_App_Log::file($file);
 
@@ -142,7 +256,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testMsgRawWritesVerbatimEntry()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $entry = "[2026-08-05 00:00:00] Fatal Error: boom in /x.php on line 1\n" . str_repeat('-', 80) . "\n";
 
@@ -158,7 +272,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testMsgRawKeepsMultibyteEntryIntact()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $entry = "[2026-08-05 00:00:00] Exception: Разбрах — тест\n";
 
@@ -175,8 +289,13 @@ class Dj_App_Log_Test extends TestCase {
     public function testMsgFallsBackAndReturnsEmptyWhenFileWriteFails()
     {
         // An existing DIRECTORY as the target "file" — the write must fail.
-        $bad_target_dir = sys_get_temp_dir() . '/dj_log_bad_' . getmypid() . '_' . uniqid();
-        $fallback_file = $this->tmpFile();
+        $bad_target_opts = [
+            'prefix' => 'dj_log_bad',
+            'ext' => '',
+        ];
+
+        $bad_target_dir = Dj_App_File_Util::generateTempFile($bad_target_opts);
+        $fallback_file = Dj_App_File_Util::generateTempFile();
 
         $mkdir_res = Dj_App_File_Util::mkdir($bad_target_dir);
         $this->assertFalse($mkdir_res->isError(), 'Failed to create the directory fixture');
@@ -208,7 +327,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorWritesVerbatimToConfiguredFile()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $entry = "[2026-08-05 00:00:00] Exception: boom in /x.php on line 1\n";
 
@@ -229,7 +348,7 @@ class Dj_App_Log_Test extends TestCase {
      */
     public function testLogAppErrorLabelsEntryByErrorType()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $error_data = [
             'type' => E_WARNING,
@@ -257,7 +376,7 @@ class Dj_App_Log_Test extends TestCase {
      */
     public function testLogAppErrorFallsBackToFatalLabelWithoutType()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $error_data = [
             'message' => 'legacy shape',
@@ -284,7 +403,7 @@ class Dj_App_Log_Test extends TestCase {
      */
     public function testHandleErrorLogsWarningAndDefersToPhp()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
@@ -304,7 +423,7 @@ class Dj_App_Log_Test extends TestCase {
      */
     public function testHandleErrorRespectsErrorReporting()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
@@ -324,7 +443,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testMsgSmartThirdArgTakesOptionsArray()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         // Pin the default log file, then pass the OPTIONS as the 3rd arg — the
         // smart slot means no '' file placeholder is needed.
@@ -344,7 +463,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testMsgOptionsCarryTheTargetFile()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $entry = "verbatim via options file\n";
 
@@ -358,7 +477,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorBlankFileFallsBackToDefaultErrorLog()
     {
-        $fallback_file = $this->tmpFile();
+        $fallback_file = Dj_App_File_Util::generateTempFile();
 
         $entry = "[2026-08-05 00:00:00] Exception: still logged\n";
 
@@ -384,7 +503,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorFormatsAThrowable()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
@@ -404,7 +523,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorFormatsAFatalErrorArray()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $error = [ 'type' => E_ERROR, 'message' => 'oom', 'file' => '/x.php', 'line' => 7, ];
 
@@ -422,7 +541,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorExtractsACarriedException()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         $res_obj = new Dj_App_Result();
         $res_obj->exception = new Exception('carried by result');
@@ -442,7 +561,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorHonorsErrorLoggingDisabled()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         Dj_App_Env::set([
             'DJEBEL_APP_ERROR_LOGGING' => '0',
@@ -457,7 +576,7 @@ class Dj_App_Log_Test extends TestCase {
 
     public function testLogAppErrorBlankGateValueStillLogs()
     {
-        $file = $this->tmpFile();
+        $file = Dj_App_File_Util::generateTempFile();
 
         // A BLANK gate value is not an explicit disable — the critical
         // facility stays ON; only 0/false/off/no really turn it off.
