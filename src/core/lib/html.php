@@ -1071,4 +1071,31 @@ class Dj {
 
         echo $escaped;
     }
+
+    /**
+     * Escape for textarea content and PRINT it. Same contract as e(); `t` = textarea.
+     *
+     * The leading newline is a GUARD: an HTML parser discards exactly one directly after
+     * the opening tag, so a stored value that itself begins with a newline survives a
+     * form round-trip instead of losing a line every time the form redisplays.
+     *
+     * PLACE THE CALL FLUSH AGAINST THE OPENING TAG. A newline of your own between the
+     * two adds a second guard, and that one reaches the reader as a blank first line.
+     * Use textarea() instead when the whole element is being generated — there the
+     * placement cannot be got wrong.
+     *
+     * @param mixed $value
+     * @return void
+     *
+     * @example
+     * <textarea name="notes"><?php Dj::et($notes); ?></textarea>
+     */
+    public static function et($value) {
+        $escaped = Dj_App_HTML::escHtml($value);
+
+        // The "\n" is a GUARD, not formatting: a parser discards one newline directly
+        // after the opening tag, so it eats OURS instead of the value's own leading one.
+        // Comma over concatenation — echo takes operands in sequence, no joined string.
+        echo "\n", $escaped;
+    }
 }

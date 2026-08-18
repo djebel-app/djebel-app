@@ -837,11 +837,57 @@ class Dj_App_HTML_Test extends TestCase {
         $html_res = Dj::e('x');
         $attr_res = Dj::ea('x');
         $url_res = Dj::eu('/x');
+        $textarea_res = Dj::et('x');
         ob_get_clean();
 
         $this->assertNull($html_res);
         $this->assertNull($attr_res);
         $this->assertNull($url_res);
+        $this->assertNull($textarea_res);
+    }
+
+    public function testDjEtPrintsLeadingNewlineGuard()
+    {
+        ob_start();
+        Dj::et('hello');
+        $buff = ob_get_clean();
+
+        $this->assertEquals("\nhello", $buff);
+    }
+
+    /**
+     * The reason et() exists. An HTML parser eats one newline after the opening tag,
+     * so the guard is what lets a value that itself starts with a newline survive a
+     * form round-trip. Here the parser is simulated: drop the single newline it would
+     * discard, decode, and the original value must come back byte for byte.
+     */
+    public function testDjEtPreservesLeadingNewlineInValue()
+    {
+        $value = "\nfirst line was deliberately blank";
+
+        ob_start();
+        Dj::et($value);
+        $buff = ob_get_clean();
+
+        $first_char = substr($buff, 0, 1);
+
+        if ($first_char == "\n") {
+            $buff = substr($buff, 1);
+        }
+
+        $decoded = dj_dec_html($buff);
+
+        $this->assertEquals($value, $decoded);
+    }
+
+    public function testDjEtEscapesValue()
+    {
+        ob_start();
+        Dj::et('<script>alert("x")</script>');
+        $buff = ob_get_clean();
+
+        $this->assertStringNotContainsString('<script>', $buff);
+        $this->assertStringContainsString('&lt;script&gt;', $buff);
     }
 
     // Tests for textarea() — the leading-newline guard is the reason it exists
