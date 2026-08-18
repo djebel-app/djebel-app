@@ -1945,4 +1945,69 @@ META;
         $this->assertFalse($garbage_res);
     }
 
+    /**
+     * date() renders the instant against the configured zone, and — the part that
+     * matters — ROUND-TRIPS with strtotime(). Parsing in the configured zone and then
+     * formatting with PHP's date() in the server zone moves 2026-08-01 back into July,
+     * so the two halves are only ever correct as a pair.
+     *
+     * Separate process for the same reason strtotime()'s test needs one: getTimezone()
+     * memoizes into a static that is already frozen by the time this class runs.
+     */
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    public function testDateUsesConfiguredTimezoneAndRoundTrips()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $saved_data = $options_obj->toArray();
+
+        try {
+            $tz_data = $saved_data;
+            $tz_data['site']['timezone'] = 'Europe/Sofia';
+            $options_obj->setData($tz_data);
+
+            // A fixed instant, derived rather than hardcoded so it cannot drift.
+            $utc_obj = new DateTime('2026-08-01 00:00:00', new DateTimeZone('UTC'));
+            $utc_ts = $utc_obj->getTimestamp();
+
+            // Sofia is UTC+03:00 in August, so the same instant reads as 03:00 there.
+            $formatted = Dj_App_Util::date('Y-m-d H:i', $utc_ts);
+
+            $this->assertEquals('2026-08-01 03:00', $formatted);
+
+            // The pair round-trips: what strtotime() parsed, date() renders back.
+            $parsed_ts = Dj_App_Util::strtotime('2026-08-01');
+            $round_trip = Dj_App_Util::date('Y-m-01', $parsed_ts);
+
+            $this->assertEquals('2026-08-01', $round_trip);
+
+            $month_end = Dj_App_Util::date('Y-m-t', $parsed_ts);
+
+            $this->assertEquals('2026-08-31', $month_end);
+        } finally {
+            $options_obj->setData($saved_data);
+        }
+    }
+
+    /**
+     * With no zone configured the output is PHP's date(), unchanged — that is what
+     * makes adopting it a no-op on sites that never set site.timezone.
+     */
+    public function testDateFallsBackToServerTimezone()
+    {
+        $utc_obj = new DateTime('2026-08-01 00:00:00', new DateTimeZone('UTC'));
+        $utc_ts = $utc_obj->getTimestamp();
+
+        $expected = date('Y-m-d H:i', $utc_ts);
+        $formatted = Dj_App_Util::date('Y-m-d H:i', $utc_ts);
+
+        $this->assertEquals($expected, $formatted);
+    }
+
+    public function testDateRejectsEmptyFormat()
+    {
+        $formatted = Dj_App_Util::date('');
+
+        $this->assertEmpty($formatted);
+    }
+
 }

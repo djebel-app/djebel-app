@@ -249,6 +249,50 @@ class Dj_App_Util {
     }
 
     /**
+     * Timezone-aware date() - formats a timestamp in the configured timezone
+     * Falls back to server timezone if not configured in site.timezone
+     *
+     * This is the OTHER HALF of strtotime(). A timestamp parsed in the configured zone
+     * and then formatted by PHP's date() in the SERVER zone shifts the result — enough
+     * to move '2026-08-01' back into July. Parse and format through the same pair or
+     * through neither; mixing them is the bug.
+     *
+     * Usage:
+     * $today = Dj_App_Util::date('Y-m-d');
+     * $day = Dj_App_Util::date('Y-m-d', $timestamp);
+     *
+     * @param string $format date() format string
+     * @param int|null $timestamp Unix timestamp (default: now)
+     * @return string Formatted date, or '' when no format was given
+     */
+    public static function date($format, $timestamp = null)
+    {
+        if (empty($format)) {
+            return '';
+        }
+
+        if (is_null($timestamp)) {
+            $timestamp = time();
+        }
+
+        $timezone = Dj_App_Util::getTimezone();
+
+        if (empty($timezone)) {
+            $formatted = date($format, $timestamp);
+
+            return $formatted;
+        }
+
+        // '@' builds the instant in UTC; setTimezone moves the WALL CLOCK to the
+        // configured zone without changing the instant it points at.
+        $dt = new DateTime('@' . $timestamp);
+        $dt->setTimezone($timezone);
+        $formatted = $dt->format($format);
+
+        return $formatted;
+    }
+
+    /**
      * Get configured timezone or server default
      * Returns DateTimeZone object or null if using server default
      *
