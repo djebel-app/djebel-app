@@ -204,7 +204,7 @@ class Dj_App_Util {
      * $timestamp = Dj_App_Util::strtotime('+1 day');
      *
      * @param string $datetime Date/time string to parse
-     * @param int|null $base_timestamp Optional base timestamp (default: current time)
+     * @param int|null $base_timestamp Optional anchor for a RELATIVE $datetime (default: now)
      * @return int|false Unix timestamp or false on failure
      */
     public static function strtotime($datetime, $base_timestamp = null)
@@ -218,17 +218,25 @@ class Dj_App_Util {
 
         try {
             if ($timezone) {
-                // Create base DateTime in configured timezone
                 if (is_null($base_timestamp)) {
-                    $dt = new DateTime('now', $timezone);
+                    // The CONSTRUCTOR parses the string in $timezone, which is what makes
+                    // an absolute date land on midnight the way strtotime() does. Building
+                    // 'now' and calling modify() instead is WRONG: modify() sets only the
+                    // fields the string names, so '2026-08-01' would keep the current clock
+                    // time. It parses relative strings ('+1 day') just as well.
+                    $dt = new DateTime($datetime, $timezone);
                 } else {
+                    // A base timestamp exists to anchor a RELATIVE string, and modify()
+                    // applies it inside $timezone so DST shifts are handled. An absolute
+                    // string here keeps the base's time-of-day rather than resetting it.
                     $dt = new DateTime('@' . $base_timestamp);
                     $dt->setTimezone($timezone);
+                    $dt->modify($datetime);
                 }
 
-                // Modify with the datetime string
-                $dt->modify($datetime);
-                return $dt->getTimestamp();
+                $result = $dt->getTimestamp();
+
+                return $result;
             }
 
             // Fallback to PHP's strtotime

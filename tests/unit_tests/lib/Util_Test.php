@@ -1874,4 +1874,75 @@ META;
         Dj_App_Util::getField($field_obj, [ 'x' => 1, ]);
     }
 
+    /**
+     * Timezone-aware strtotime(): an ABSOLUTE date lands on midnight in the configured
+     * zone, exactly as strtotime() does — it must not inherit the current clock time.
+     *
+     * Regression pin. The method used to build a 'now' DateTime and modify() it, and
+     * modify() sets only the fields the string names, so '2026-08-01' came back as
+     * TODAY's time on that date. Every period boundary computed through it was wrong
+     * the moment a site configured a timezone.
+     *
+     * Runs in a SEPARATE PROCESS by necessity, not preference: getTimezone() memoizes
+     * into a function-local static, and Dj_App_Util::time() reaches it from inside
+     * Dj_App_Hooks, so by the time this class runs the zone is already frozen to null.
+     * A fresh process is the only way to observe the configured-zone branch at all.
+     */
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    public function testStrtotimeUsesConfiguredTimezone()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $saved_data = $options_obj->toArray();
+
+        try {
+            $tz_data = $saved_data;
+            $tz_data['site']['timezone'] = 'Europe/Sofia';
+            $options_obj->setData($tz_data);
+
+            $tz_obj = new DateTimeZone('Europe/Sofia');
+
+            // Absolute date, no time part -> midnight, NOT the current clock time.
+            $midnight_ts = Dj_App_Util::strtotime('2026-08-01');
+            $midnight_obj = new DateTime('@' . $midnight_ts);
+            $midnight_obj->setTimezone($tz_obj);
+            $midnight_fmt = $midnight_obj->format('Y-m-d H:i:s');
+
+            $this->assertEquals('2026-08-01 00:00:00', $midnight_fmt);
+
+            // An explicit time is preserved as given.
+            $explicit_ts = Dj_App_Util::strtotime('2026-08-01 14:20:00');
+            $explicit_obj = new DateTime('@' . $explicit_ts);
+            $explicit_obj->setTimezone($tz_obj);
+            $explicit_fmt = $explicit_obj->format('Y-m-d H:i:s');
+
+            $this->assertEquals('2026-08-01 14:20:00', $explicit_fmt);
+
+            // A base timestamp anchors a RELATIVE string.
+            $base_ts = Dj_App_Util::strtotime('2026-03-15 10:30:00');
+            $prev_month_ts = Dj_App_Util::strtotime('-1 month', $base_ts);
+            $prev_month_obj = new DateTime('@' . $prev_month_ts);
+            $prev_month_obj->setTimezone($tz_obj);
+            $prev_month_fmt = $prev_month_obj->format('Y-m-d H:i:s');
+
+            $this->assertEquals('2026-02-15 10:30:00', $prev_month_fmt);
+        } finally {
+            $options_obj->setData($saved_data);
+        }
+    }
+
+    /**
+     * Unparsable input yields false, matching strtotime(). assertFalse and not
+     * assertEmpty: a valid timestamp of 0 is the epoch, not a failure.
+     */
+    public function testStrtotimeRejectsUnparsableInput()
+    {
+        $empty_res = Dj_App_Util::strtotime('');
+
+        $this->assertFalse($empty_res);
+
+        $garbage_res = Dj_App_Util::strtotime('!!not a date!!');
+
+        $this->assertFalse($garbage_res);
+    }
+
 }
