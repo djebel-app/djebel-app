@@ -2010,4 +2010,51 @@ META;
         $this->assertEmpty($formatted);
     }
 
+    /**
+     * Throws put their code in the data bag, so that is where the accessor has to read it —
+     * otherwise it answers '' for an exception that plainly carries one.
+     */
+    public function testExceptionLiftsCodeFromData()
+    {
+        $exc_data = [
+            'code' => 'app.access_denied',
+            'endpoint' => '/stats/daily_users',
+        ];
+
+        $exc_obj = new Dj_App_Exception('Access denied', $exc_data);
+
+        $this->assertEquals('app.access_denied', $exc_obj->getErrorCode());
+    }
+
+    public function testExceptionWithoutCodeHasEmptyErrorCode()
+    {
+        $exc_obj = new Dj_App_Exception('Invalid lib id', [ 'id' => 'bad id', ]);
+
+        $this->assertEmpty($exc_obj->getErrorCode());
+    }
+
+    /**
+     * getMsg() answers the message the exception was built with, so a caller reaching for it
+     * cannot be told there is none.
+     */
+    public function testExceptionKeepsMessage()
+    {
+        $exc_obj = new Dj_App_Exception('Stats API key is not configured');
+
+        $this->assertEquals('Stats API key is not configured', $exc_obj->getMsg());
+    }
+
+    /**
+     * A Result may stand in for the data bag. Indexing one would fatal, so the code is left
+     * empty and the bag is handed back exactly as it arrived.
+     */
+    public function testExceptionWithObjectDataHasNoCode()
+    {
+        $res_obj = new Dj_App_Result();
+        $exc_obj = new Dj_App_Exception('Denied', $res_obj);
+
+        $this->assertEmpty($exc_obj->getErrorCode());
+        $this->assertSame($res_obj, $exc_obj->getData());
+    }
+
 }

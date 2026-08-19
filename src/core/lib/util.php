@@ -2243,9 +2243,24 @@ class Dj_App_Exception extends \Exception
     private $_error_code = '';
     private $_data = [];
 
+    /**
+     * The code rides in the data bag by convention, so it is lifted onto its own property here
+     * and every throw gets a working getErrorCode() without changing a single call site.
+     *
+     * @param string $message
+     * @param array|object|Dj_App_Result $data
+     */
     public function __construct($message, $data = [])
     {
         $this->_data = $data;
+        $this->_msg = $message;
+
+        // Only an array can be indexed — a caller may hand over a Result object instead, and
+        // reading an offset off one would fatal. Such a throw simply carries no code.
+        if (is_array($data) && !empty($data['code'])) {
+            $this->_error_code = $data['code'];
+        }
+
         parent::__construct($message, 0, null);
     }
 
