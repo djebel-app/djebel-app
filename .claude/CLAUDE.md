@@ -772,6 +772,51 @@ $req_obj->json($res_obj);
     - Use generic filters with context (e.g., `$ctx['ext']`). Any plugin can hook in and check context.
     - This allows plugins to work independently - markdown plugin hooks into `app.page.content` and checks `$ctx['ext'] === 'md'`
 
+29a. **Listener signatures are FIXED — an action takes `$ctx = []`, a filter takes
+    `($cur_val, $ctx = [])`, two at most**:
+    - What the dispatcher PASSES is not what you DECLARE. `doAction()` calls
+      `$callback($params, $executed_hook)`, but PHP discards extra args for a user-defined
+      function — so declare only what the body reads and drop an unused param entirely
+      rather than keeping it "for symmetry".
+    - A third parameter (`$event`, `$hook_name`, `$priority`) is noise the caller never
+      needed. It gets copied in from a sibling method; it is never required.
+    - ❌ WRONG: `public function renderAssets($ctx = [], $event = '')`
+    - ✅ CORRECT: `public function renderAssets($ctx = [])`
+    - ✅ CORRECT: `public function filterLogoutLink($cur_val, $ctx = [])`
+    - **Name a listener for what it DOES, not when it fires** — `renderAssets()`, never
+      `onFormAfter()`. The hook name already records the timing; the method name is where a
+      reader learns it writes output. (`on*` is fine when reacting IS the job — recording,
+      invalidating, dispatching — and no better verb exists.)
+
+29b. **One plugin contributes to another's output through a SEAM — never by rendering into
+    it**:
+    - The side that renders FIRES an action at the spot; the contributing side ECHOES from a
+      listener. Fire a `before` AND an `after` seam when the region has an inside/outside —
+      two lines, and the next contribution needs no edit at all.
+    - ❌ WRONG: `$html = $other_obj->renderSomethingHtml();` then `<?php echo $html; ?>` —
+      the host now names what belongs there, so every later addition edits the host.
+    - ✅ CORRECT: `<?php Dj_App_Hooks::doAction('app.core.plugin.login.action.form.after'); ?>`
+    - ✅ EQUALLY CORRECT: `<?php Dj_App_Hooks::doAction('app/core/plugin/login/action/form/after'); ?>`
+    - **Dots and slashes are the SAME hook.** `formatHookName()` normalizes `.`, `:`, spaces,
+      tabs and newlines to `/`, lowercases, collapses repeats and singularizes (`/plugins/` →
+      `/plugin/`) — so `App.Page.Content`, `app.page.content` and `app/page/content` all
+      resolve to one registry key. Slash is the canonical form (it is what everything
+      normalizes TO); pick one spelling per project and stay with it rather than mixing.
+    - **The host fires a plain STRING, not the other class's constant.** A hook name is a
+      string; `Other_Class::ACTION_FORM_AFTER` makes the host hard-depend on a class that may
+      not be loaded at all — deactivate that plugin and the page fatals on a missing class,
+      for a hook nobody was listening to anyway. The CONSTANT is for the owning plugin, which
+      uses it when registering (`addAction(self::ACTION_FORM_AFTER, ...)`) and publishes it as
+      documentation; everyone else fires the string. Same reasoning as 29 — a host must work
+      with the plugin absent.
+    - The listener ECHOES; it does not return. The host is already inside its own
+      `ob_start()`, so the listener writes into that buffer — no `ob_start` /
+      `ob_get_clean` / `return` in the listener, and no variable at the call site.
+    - **The hook-name constants belong to the plugin that owns the contract**, declared beside
+      its other contract constants (field names, option keys). If the HOST names the hook, a
+      generic plugin has to know about that host in order to listen — backwards, and the next
+      app inherits nothing.
+
 30. **Don't modify files without authorization** - ALWAYS ask before touching files outside the current task scope:
     - If asked to add feature X to plugin A, don't touch plugin B
     - Ask: "Should I update plugin B to support this?"
