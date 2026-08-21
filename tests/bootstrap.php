@@ -23,6 +23,13 @@ putenv('DJEBEL_APP_CORE_LOAD_LIBS=1');
 // Committed sample/fixture files used by the unit tests.
 define('DJEBEL_APP_TEST_DATA_DIR', __DIR__ . '/unit_tests/data');
 
+// A site brings its own .ht_djebel; the framework package does not ship one, and no site
+// is loaded here. Left alone the private-dir scan finds nothing and settles beside the
+// phpunit binary, writing into tests/vendor/. Pinning it to a disposable temp dir keeps
+// every suite — the framework's own and every addon's — out of the repo.
+$dj_app_test_private_dir = sys_get_temp_dir() . '/dj_app_tests/.ht_djebel';
+putenv('DJEBEL_APP_PRIVATE_DIR=' . $dj_app_test_private_dir);
+
 $dj_app_dir = dirname(__DIR__);
 require_once $dj_app_dir . '/index.php';
 
