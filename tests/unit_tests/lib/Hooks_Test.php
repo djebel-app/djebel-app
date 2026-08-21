@@ -1763,6 +1763,98 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertEquals($first, $second);
     }
 
+    // ============================================================
+    // Nested-Dispatch Current-Hook Tests
+    // ============================================================
+
+    public static $nested_action_seen = '';
+
+    public static $nested_filter_seen = '';
+
+    public static $nested_action_matched = null;
+
+    public static function fireNestedAction($params = []) {
+        Dj_App_Hooks::doAction('app.core.test.nested.inner_action');
+    }
+
+    public static function recordCurrentAction($params = []) {
+        self::$nested_action_seen = Dj_App_Hooks::currentAction();
+    }
+
+    public static function recordCurrentActionMatch($params = []) {
+        self::$nested_action_matched = Dj_App_Hooks::currentAction('app.core.test.nested.match_outer');
+    }
+
+    public static function fireNestedFilter($value, $params = []) {
+        // The nested dispatch IS the scenario: it must not erase the outer filter name.
+        $inner_val = Dj_App_Hooks::applyFilter('app.core.test.nested.inner_filter', 'inner');
+        $value = $value . $inner_val;
+
+        return $value;
+    }
+
+    public static function recordCurrentFilter($value, $params = []) {
+        self::$nested_filter_seen = Dj_App_Hooks::currentFilter();
+
+        return $value;
+    }
+
+    public function testNestedActionRestoresOuterCurrentAction() {
+        self::$nested_action_seen = '';
+
+        // Priority 10 fires an action of its own; priority 20 then asks which action it
+        // is running under. Blanking instead of restoring left the second one with ''.
+        Dj_App_Hooks::addAction('app.core.test.nested.outer_action', ['Dj_App_Hooks_Test', 'fireNestedAction'], 10);
+        Dj_App_Hooks::addAction('app.core.test.nested.outer_action', ['Dj_App_Hooks_Test', 'recordCurrentAction'], 20);
+
+        Dj_App_Hooks::doAction('app.core.test.nested.outer_action');
+
+        $expected_hook = Dj_App_Hooks::formatHookName('app.core.test.nested.outer_action');
+
+        $this->assertNotEmpty(self::$nested_action_seen, 'A nested doAction erased the outer action');
+        $this->assertEquals($expected_hook, self::$nested_action_seen);
+    }
+
+    public function testNestedFilterRestoresOuterCurrentFilter() {
+        self::$nested_filter_seen = '';
+
+        Dj_App_Hooks::addFilter('app.core.test.nested.outer_filter', ['Dj_App_Hooks_Test', 'fireNestedFilter'], 10);
+        Dj_App_Hooks::addFilter('app.core.test.nested.outer_filter', ['Dj_App_Hooks_Test', 'recordCurrentFilter'], 20);
+
+        $res = Dj_App_Hooks::applyFilter('app.core.test.nested.outer_filter', 'seed');
+
+        $expected_hook = Dj_App_Hooks::formatHookName('app.core.test.nested.outer_filter');
+
+        $this->assertNotEmpty(self::$nested_filter_seen, 'A nested applyFilter erased the outer filter');
+        $this->assertEquals($expected_hook, self::$nested_filter_seen);
+        $this->assertEquals('seedinner', $res);
+    }
+
+    public function testNestedActionKeepsTheBooleanCurrentActionForm() {
+        self::$nested_action_matched = null;
+
+        // The documented boolean form has to survive nesting too, not just the getter.
+        Dj_App_Hooks::addAction('app.core.test.nested.match_outer', ['Dj_App_Hooks_Test', 'fireNestedAction'], 10);
+        Dj_App_Hooks::addAction('app.core.test.nested.match_outer', ['Dj_App_Hooks_Test', 'recordCurrentActionMatch'], 20);
+
+        Dj_App_Hooks::doAction('app.core.test.nested.match_outer');
+
+        $this->assertTrue(self::$nested_action_matched);
+    }
+
+    public function testTopLevelDispatchLeavesNoCurrentHook() {
+        // Restoring must not leak the name outward: once the outermost dispatch returns,
+        // nothing is running, so both readers report empty again.
+        Dj_App_Hooks::doAction('app.core.test.nested.standalone_action');
+
+        $this->assertEmpty(Dj_App_Hooks::currentAction());
+
+        $res = Dj_App_Hooks::applyFilter('app.core.test.nested.standalone_filter', 'v');
+
+        $this->assertEmpty(Dj_App_Hooks::currentFilter());
+        $this->assertEquals('v', $res);
+    }
+
     public function testVariantSpellingsResolveToSameHook() {
         // Register with dotted CamelCase, fire with the canonical slash form —
         // each variant spelling gets its own memo-cache slot but they must all
