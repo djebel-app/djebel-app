@@ -1724,12 +1724,18 @@ The current hook tracking uses try/finally blocks to ensure cleanup even if exce
 ```php
 // Internal implementation (for reference)
 try {
+    $prev_filter = self::$current_filter;
     self::$current_filter = $hook_name;
     // Execute callbacks...
 } finally {
-    self::$current_filter = '';  // ALWAYS runs, even on exceptions
+    self::$current_filter = $prev_filter;  // ALWAYS runs, even on exceptions
 }
 ```
+
+The finally RESTORES the previous name rather than blanking it, because dispatch
+nests: a callback that fires a hook of its own would otherwise return with the outer
+name erased, leaving every later callback on that hook seeing no current hook at all.
+The call stack supplies the stack a single string cannot.
 
 ## Feature Implementation
 
