@@ -842,6 +842,59 @@ BUFF_EOF;
     }
 
     /**
+     * Test getContentUrl method - no context is the content dir itself
+     */
+    public function testGetContentUrl() {
+        $content_url = Dj_App_Util::getContentUrl();
+
+        $this->assertNotEmpty($content_url);
+        $this->assertStringEndsWith('/dj-content', $content_url);
+        $this->assertStringEndsNotWith('/', $content_url);
+    }
+
+    /**
+     * Test getContentUrl method - plugin context
+     */
+    public function testGetContentUrlWithPlugin() {
+        $content_url = Dj_App_Util::getContentUrl([ 'plugin' => 'djebel-login', ]);
+
+        $this->assertStringEndsWith('/dj-content/plugins/djebel-login', $content_url);
+    }
+
+    /**
+     * Test getContentUrl method - theme context
+     */
+    public function testGetContentUrlWithTheme() {
+        $content_url = Dj_App_Util::getContentUrl([ 'theme' => 'djebel-clear', ]);
+
+        $this->assertStringEndsWith('/dj-content/themes/djebel-clear', $content_url);
+    }
+
+    /**
+     * Test getContentUrl method - the slug is sanitized, so a traversal attempt
+     * can never climb out of the plugins/themes dir.
+     */
+    public function testGetContentUrlSanitizesSlug() {
+        $content_url = Dj_App_Util::getContentUrl([ 'plugin' => '../../etc', ]);
+
+        $this->assertStringNotContainsString('..', $content_url);
+        $this->assertStringEndsWith('/dj-content/plugins/etc', $content_url);
+
+        $content_url = Dj_App_Util::getContentUrl([ 'theme' => 'My Theme', ]);
+        $this->assertStringEndsWith('/dj-content/themes/my_theme', $content_url);
+    }
+
+    /**
+     * Test getContentUrl method - getContentDirUrl forwards to it, so the two agree
+     */
+    public function testGetContentDirUrlForwardsToGetContentUrl() {
+        $content_dir_url = Dj_App_Util::getContentDirUrl();
+        $content_url = Dj_App_Util::getContentUrl();
+
+        $this->assertEquals($content_dir_url, $content_url);
+    }
+
+    /**
      * Test formatSlug method - basic functionality
      */
     public function testFormatSlug() {

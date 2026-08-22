@@ -405,6 +405,48 @@ class Dj_App_Util {
     }
 
     /**
+     * The public URL of the content dir, optionally narrowed to one plugin or theme.
+     * The URL half of getContentDataDir(), and it takes the same ['plugin' => …] /
+     * ['theme' => …] shape. Never has a trailing slash.
+     *
+     * Dj_App_Util::getContentUrl();                        // …/dj-content
+     * Dj_App_Util::getContentUrl([ 'plugin' => 'aaa', ]);  // …/dj-content/plugins/aaa
+     * Dj_App_Util::getContentUrl([ 'theme' => 'bbb', ]);   // …/dj-content/themes/bbb
+     *
+     * The slug is formatted, so a caller cannot climb out of plugins/ or themes/ with it.
+     *
+     * @param array $params Optional plugin or theme slug
+     * @return string
+     */
+    public static function getContentUrl($params = [])
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $site_url = $req_obj->getSiteUrl();
+        $site_url = Dj_App_Util::removeSlash($site_url);
+        $content_dir_name = Dj_App_Util::getContentDirName();
+
+        $url_parts = [ $site_url, ];
+        $url_parts[] = $content_dir_name;
+
+        if (!empty($params['plugin'])) {
+            $slug = $params['plugin'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $url_parts[] = 'plugins';
+            $url_parts[] = $slug;
+        } elseif (!empty($params['theme'])) {
+            $slug = $params['theme'];
+            $slug = Dj_App_String_Util::formatStringId($slug);
+            $url_parts[] = 'themes';
+            $url_parts[] = $slug;
+        }
+
+        $content_url = implode('/', $url_parts);
+        $content_url = Dj_App_Hooks::applyFilter('app.config.content_url', $content_url);
+
+        return $content_url;
+    }
+
+    /**
      * Gets the content directory URL (site URL + content dir name)
      * Dj_App_Util::getContentDirUrl();
      *
@@ -416,17 +458,9 @@ class Dj_App_Util {
     {
         static $content_dir_url = null;
 
-        if (!is_null($content_dir_url)) {
-            return $content_dir_url;
+        if (is_null($content_dir_url)) {
+            $content_dir_url = Dj_App_Util::getContentUrl();
         }
-
-        $req_obj = Dj_App_Request::getInstance();
-        $site_url = Dj_App_Util::removeSlash($req_obj->getSiteUrl());
-        $content_dir_name = Dj_App_Util::getContentDirName();
-
-        $url_parts = [$site_url];
-        $url_parts[] = $content_dir_name;
-        $content_dir_url = implode('/', $url_parts);
 
         return $content_dir_url;
     }
