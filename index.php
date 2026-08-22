@@ -123,6 +123,15 @@ if (empty($run_app) || $headless) {
     return;
 }
 
+$app_load_assets = Dj_App_Config::cfg('app.core.assets.load', true);
+
+if ($app_load_assets) {
+    require_once $app_lib_dir . '/assets.php';
+    $assets_obj = Dj_App_Assets::getInstance();
+    $assets_obj->installHooks();
+    Dj_App_Hooks::doAction( 'app.core.assets.loaded' );
+}
+
 $boostrap_obj = Dj_App_Bootstrap::getInstance();
 $boostrap_obj->installHooks();
 
