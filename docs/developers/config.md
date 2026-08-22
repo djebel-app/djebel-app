@@ -115,6 +115,7 @@ Env/constant only unless the *app.ini* column names a key.
 | `app.core.shortcodes.load` | `true` | — | Shortcode system toggle. |
 | `app.core.shortcodes.full_page_replace` | `false` | — | Replace shortcodes in the whole buffer instead of only from `<body>`. |
 | `app.core.shortcodes.process_all` | `false` | `[app] shortcodes.process_all` | Call the callback for EVERY occurrence. See the warning below. |
+| `app.core.assets.load` | `true` | — | Asset queue toggle (`Dj_App_Assets`). Off = plugin `register()` calls have nowhere to go, so no asset tags are emitted. |
 | `app.core.output.render_generator` | `true` | — | Emit the generator meta tag. |
 | `app.core.process_missing_static_files` | `false` | — | Let the app handle requests for missing static files. |
 | `app.core.log.file` | *(unset)* | — | Log file location. |
