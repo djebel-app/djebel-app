@@ -949,6 +949,8 @@ Key configuration points:
 - `app.core.load_libs`: eager-load libs at bootstrap — `1`/`true`/`*` = every lib, or a list of ids/globs like `orbisius*` (`[app] load_libs`)
 - `app.core.theme.load_theme`: Theme system toggle
 - `app.core.theme.load_theme_functions`: overrides the site's `theme_load_functions`
+- `app.core.assets.load`: load the asset queue (`Dj_App_Assets`) so plugins/themes can
+  register CSS/JS in one call (default on)
 - `app.core.shortcodes.full_page_replace`: replace shortcodes in the whole buffer, not
   just from `<body>` (default off)
 - `app.core.shortcodes.process_all`: call the callback for EVERY occurrence instead of
