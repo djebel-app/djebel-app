@@ -32,11 +32,6 @@ class Dj_App_Assets {
     const HOOK_PAGE_BODY_START = 'app.page.html.body.start';
     const HOOK_PAGE_BODY_END = 'app.page.html.body.end';
 
-    // renderPage() is a self-contained terminal renderer and fires none of the seams above,
-    // so error pages reach the queue through these two instead.
-    const HOOK_RENDER_PAGE_HEAD = 'app.page.render.head_content';
-    const HOOK_RENDER_PAGE_FOOTER = 'app.page.render.footer_content';
-
     // Around adding.
     const FILTER_ITEM = 'app.core.assets.filter.item';
     const ACTION_ADDED = 'app.core.assets.action.added';
@@ -88,13 +83,6 @@ class Dj_App_Assets {
         ];
 
         Dj_App_Hooks::addAction($page_hooks, [$this, 'renderAssets']);
-
-        $render_page_hooks = [
-            Dj_App_Assets::HOOK_RENDER_PAGE_HEAD,
-            Dj_App_Assets::HOOK_RENDER_PAGE_FOOTER,
-        ];
-
-        Dj_App_Hooks::addFilter($render_page_hooks, [$this, 'filterRenderPageContent']);
     }
 
     /**
@@ -1113,31 +1101,4 @@ class Dj_App_Assets {
         echo $html;
     }
 
-    /**
-     * Appends the queued markup to renderPage()'s head / footer slots, so an asset reaches an
-     * error page too. CAVEAT worth stating plainly: a broken plugin asset can then also affect
-     * the page that reports the breakage.
-     *
-     * @param string $cur_val The content renderPage() already holds for that slot
-     * @param array $ctx
-     * @return string
-     */
-    public function filterRenderPageContent($cur_val, $ctx = [])
-    {
-        $target = Dj_App_Assets::TARGET_FOOTER;
-
-        if (Dj_App_Hooks::currentFilter(Dj_App_Assets::HOOK_RENDER_PAGE_HEAD)) {
-            $target = Dj_App_Assets::TARGET_HEAD;
-        }
-
-        $html = $this->buildHtml($target);
-
-        if (empty($html)) {
-            return $cur_val;
-        }
-
-        $content = $cur_val . $html;
-
-        return $content;
-    }
 }

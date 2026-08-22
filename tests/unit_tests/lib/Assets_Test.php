@@ -895,26 +895,42 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertStringContainsString('var footer_seam = 1;', $footer_html);
     }
 
-    public function testRenderPageFiltersCarryAssetsToErrorPages()
+    /**
+     * renderPage() is terminal and never reaches app.page.full_content, so it runs the seams
+     * itself through the shared injector. This asserts that path end to end: a queued asset
+     * lands in a page buffer that was never touched by the page pipeline.
+     *
+     * Runs in a SEPARATE PROCESS by necessity, not preference: the injector skips a seam that
+     * hasRun(), and the executed-hook registry is private and process-wide, so an earlier test
+     * firing a seam would otherwise decide this one's result.
+     */
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    public function testTerminalRenderCarriesAssetsThroughTheSeamInjector()
     {
         $this->registerAsset([ 'style' => '.error-page-css {}', ]);
         $this->registerAsset([ 'js' => 'var error_page_js = 1;', ]);
 
-        $head_content = Dj_App_Hooks::applyFilter('app.page.render.head_content', '');
-        $footer_content = Dj_App_Hooks::applyFilter('app.page.render.footer_content', '');
+        $page_buff = '<html><head><title>x</title></head><body><p>boom</p></body></html>';
+        $injected_buff = Dj_App_Util::autoInjectSysHookContent($page_buff);
 
-        $this->assertStringContainsString('.error-page-css {}', $head_content);
-        $this->assertStringContainsString('var error_page_js = 1;', $footer_content);
+        $this->assertStringContainsString('.error-page-css {}', $injected_buff);
+        $this->assertStringContainsString('var error_page_js = 1;', $injected_buff);
     }
 
-    public function testRenderPageFiltersKeepTheIncomingContent()
+    /**
+     * The injector refuses to fire a seam twice, so a page rendered after the theme already
+     * fired them keeps what it had rather than getting a second copy of every asset.
+     */
+    public function testSeamInjectorDoesNotFireASeamTwice()
     {
-        $this->registerAsset([ 'js' => 'var appended = 1;', ]);
+        $this->registerAsset([ 'style' => '.once-only {}', ]);
 
-        $footer_content = Dj_App_Hooks::applyFilter('app.page.render.footer_content', '<!-- caller supplied -->');
+        $page_buff = '<html><head><title>x</title></head><body><p>x</p></body></html>';
 
-        $this->assertStringContainsString('<!-- caller supplied -->', $footer_content);
-        $this->assertStringContainsString('var appended = 1;', $footer_content);
+        $first_buff = Dj_App_Util::autoInjectSysHookContent($page_buff);
+        $second_buff = Dj_App_Util::autoInjectSysHookContent($first_buff);
+
+        $this->assertEquals($first_buff, $second_buff);
     }
 
     // ---------------------------------------------------------------- filter callbacks
