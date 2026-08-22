@@ -8,7 +8,7 @@ Claude in a future session) without re-deriving the design.
 
 ## 1. `Dj_App_Assets` — inline / external asset enqueue system
 
-**Status:** designed, not implemented. **The design lives in
+**Status:** implemented 2026-08-21. **The design lives in
 [`.claude/prd/assets.md`](prd/assets.md)** — read that, not this entry.
 
 Superseded here on 2026-08-21: the design outgrew a TODO entry and the two would
