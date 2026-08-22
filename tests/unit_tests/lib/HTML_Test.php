@@ -407,6 +407,82 @@ class Dj_App_HTML_Test extends TestCase {
         $this->assertStringContainsString('&quot;', $result);
     }
 
+    public function testEscUrlProtocolRelative()
+    {
+        $input = '//cdn.example.com/lib/app.js';
+        $result = Dj_App_HTML::escUrl($input);
+
+        $this->assertEquals('//cdn.example.com/lib/app.js', $result);
+    }
+
+    public function testEscUrlProtocolRelativeWithQueryString()
+    {
+        $input = '//cdn.example.com/lib/app.js?v=1&min=1';
+        $result = Dj_App_HTML::escUrl($input);
+
+        $this->assertEquals('//cdn.example.com/lib/app.js?v=1&amp;min=1', $result);
+    }
+
+    /**
+     * Browsers fold a backslash into a forward slash, so every one of these resolves to
+     * evil.com while reading as a same-site path or a trusted host. The last two matter
+     * most: they sit PAST the scheme, so a check that only looked at the opening
+     * characters would wave them through.
+     */
+    public function testEscUrlRejectsBackslashAnywhere()
+    {
+        $this->assertEmpty(Dj_App_HTML::escUrl('\\\\evil.com/path'));
+        $this->assertEmpty(Dj_App_HTML::escUrl('/\\evil.com/path'));
+        $this->assertEmpty(Dj_App_HTML::escUrl('\\/evil.com/path'));
+        $this->assertEmpty(Dj_App_HTML::escUrl('http:\\\\evil.com'));
+        $this->assertEmpty(Dj_App_HTML::escUrl('http://\\evil.com'));
+        $this->assertEmpty(Dj_App_HTML::escUrl('http://good.com\\@evil.com'));
+    }
+
+    /**
+     * Tab, LF and CR are STRIPPED from a url by the browser before it is parsed, so
+     * http://good.com<TAB>@evil.com resolves with evil.com as the HOST and good.com
+     * demoted to a username. None of the C0 range is legal raw in a url, so the whole
+     * class is refused rather than stripped.
+     */
+    public function testEscUrlRejectsControlCharacters()
+    {
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\t@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\n@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\r@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\x0b@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\x0c@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\x01@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\x7f@evil.com"));
+    }
+
+    /**
+     * A NUL is dropped from ANYWHERE in the string by the shared trimmer, which would
+     * otherwise rebuild a mangled url into a working one pointing at evil.com.
+     */
+    public function testEscUrlRejectsNullByte()
+    {
+        $this->assertEmpty(Dj_App_HTML::escUrl("http://good.com\x00@evil.com"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("\x00javascript:alert(1)"));
+        $this->assertEmpty(Dj_App_HTML::escUrl("https://example.com/x.js\x00"));
+    }
+
+    /**
+     * The refusals above must not cost a conforming url: percent-encoded is the legal way
+     * to carry those bytes, and surrounding whitespace is still just trimmed.
+     */
+    public function testEscUrlKeepsConformingUrls()
+    {
+        $result = Dj_App_HTML::escUrl('https://example.com/a%5Cb.js');
+        $this->assertEquals('https://example.com/a%5Cb.js', $result);
+
+        $result = Dj_App_HTML::escUrl('   https://example.com/x.js   ');
+        $this->assertEquals('https://example.com/x.js', $result);
+
+        $result = Dj_App_HTML::escUrl("\thttps://example.com/x.js");
+        $this->assertEquals('https://example.com/x.js', $result);
+    }
+
     // Tests for encodeEntities() - wrapper for escHtml()
 
     public function testEncodeEntitiesBasic()

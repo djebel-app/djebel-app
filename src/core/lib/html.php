@@ -504,6 +504,11 @@ class Dj_App_HTML {
 		$buff = ob_get_clean();
 		$buff = trim($buff);
 
+        // This renderer is terminal — it never reaches the app.page.full_content filter that
+        // normally drives the injection — so the seams are run here instead. A seam the theme
+        // already fired is skipped, so a page rendered mid-request keeps whatever it had.
+        $buff = Dj_App_Util::autoInjectSysHookContent($buff);
+
 		$req_obj->setContent($buff);
 		$req_obj->outputContent();
 
@@ -850,7 +855,7 @@ class Dj_App_HTML {
      * Dj_App_HTML::escUrl()
      *
      * Validates and sanitizes URLs to prevent XSS attacks.
-     * Only allows http://, https://, and relative URLs.
+     * Allows http://, https://, protocol-relative //host, and root-relative URLs.
      *
      * @param string $url The URL to escape
      * @return string The sanitized URL safe for use in href/src attributes
@@ -872,15 +877,50 @@ class Dj_App_HTML {
             return '';
         }
 
+        // Caught on the RAW value: the trim below drops a NUL from ANYWHERE in the string,
+        // not just its ends, which would quietly rebuild good.com\0@evil.com into a working
+        // url whose host is evil.com. Refusing first is what keeps that from happening.
+        if (strpos($url, "\0") !== false) {
+            return '';
+        }
+
         $url = Dj_App_String_Util::trim($url);
 
         if (empty($url)) {
             return '';
         }
 
+        // Built once per process: the backslash, every C0 control (0x00-0x1F) and DEL.
+        static $unsafe_chars = '';
+
+        if ($unsafe_chars === '') {
+            $unsafe_chars = '\\' . chr(127);
+
+            for ($char_code = 0; $char_code <= 31; $char_code++) {
+                $unsafe_chars .= chr($char_code);
+            }
+        }
+
+        // NONE of these is legal RAW in a url — the conforming form is percent-encoded (%5C,
+        // %09) — and each one makes a browser go somewhere the string does not read like:
+        //   - a backslash is folded to a forward slash, so \\evil.com, /\evil.com,
+        //     http:/\evil.com, http://\evil.com and http://good.com\@evil.com all resolve
+        //     to evil.com while reading as a same-site path or a trusted host
+        //   - tab, LF and CR are STRIPPED before parsing, so http://good.com<TAB>@evil.com
+        //     resolves with evil.com as the HOST and good.com demoted to a username
+        // Scanned across the WHOLE url, not just its opening: the smuggle works just as well
+        // in the authority as at the front. Refused whole rather than stripped, so a mangled
+        // url can never render as a working one.
+        if (strpbrk($url, $unsafe_chars) !== false) {
+            return '';
+        }
+
         $url_lower = strtolower($url);
         $first_char = substr($url, 0, 1);
 
+        // Covers both the root-relative /path form and the protocol-relative //host form —
+        // the latter is a first-class URL a CDN asset legitimately ships as, and it inherits
+        // the page's scheme rather than choosing one.
         if ($first_char == '/') {
             $escaped = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
             return $escaped;
