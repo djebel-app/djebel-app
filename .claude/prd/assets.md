@@ -1,7 +1,7 @@
 # PRD: `Dj_App_Assets` — one-call asset registration
 
-**Status:** designed, not implemented.
-**Location-to-be:** `src/core/lib/assets.php`, registered in `index.php`.
+**Status:** implemented 2026-08-21.
+**Location:** `src/core/lib/assets.php`, registered in `index.php`.
 **Supersedes:** `.claude/TODO.md` entry #1, whose `addFile()` / `addInline()` split is replaced
 by one auto-detecting `add()`. That entry now points here; this file is the only design.
 **Design settled:** 2026-08-21. Exploration facts below were verified the same day — they are
@@ -125,7 +125,7 @@ What it gives us for free:
   written. The alias table in this PRD *is* the argument string.
 - **Cast by the default's TYPE** — an `[]` default returns an array, an int default returns an
   int. `attrs` therefore needs no `is_array()` guard and no cast.
-- **Dash/underscore interchangeable in both directions**, so `add_ctx` and `add-ctx` both
+- **Dash/underscore interchangeable in both directions**, so `add_params` and `add-params` both
   resolve without listing either.
 - **A fast path** for a plain single-token key with no separator, so the common case does not
   pay for the alias machinery.
@@ -244,7 +244,7 @@ editing any plugin. Naming uses the `.filter.` / `.action.` infix already used b
 
 | Hook | Type | Purpose |
 |---|---|---|
-| `app.core.assets.filter.add_ctx` | filter | The `$ctx` **before** normalization — rewrite a URL to a CDN, force a target, bump priority, swap in a minified build. |
+| `app.core.assets.filter.add_params` | filter | The `$params` **before** normalization — rewrite a URL to a CDN, force a target, bump priority, swap in a minified build. |
 | `app.core.assets.filter.item` | filter | The normalized item just before it enters the queue. **Returning empty vetoes it** — the one seam for "this site never loads that asset". |
 | `app.core.assets.action.added` | action | After queueing; `$ctx` carries the item. Logging / auditing, changes nothing. |
 
@@ -424,7 +424,7 @@ for a test-reset seam.
 - **a custom id is still removable by the params that created it**
 - `replace()` preserves position; `removeAll()` empties the queue
 - dedupe by content hash; head vs footer routing
-- each hook fires: `add_ctx` rewrites, `item` returning empty vetoes, `tag_html` stamps an
+- each hook fires: `add_params` rewrites, `item` returning empty vetoes, `tag_html` stamps an
   attribute, `queue` / `html` see the assembled set
 - `getContentUrl()` with no ctx / plugin / theme
 - `escUrl()` accepts `//host` and still rejects `javascript:` / `data:` / `\\host`
