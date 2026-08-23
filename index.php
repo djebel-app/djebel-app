@@ -116,20 +116,26 @@ if ($app_load_shortcodes) {
     Dj_App_Hooks::doAction( 'app.core.shortcodes.loaded' );
 }
 
-// we return after the shortcodes are loaded as there could be plugins that rely on it.
-// In headless mode the shutdown phase is still handled by the shutdown function
-// registered above (Dj_App_Hooks::runShutdownHooks) — no explicit drain needed here.
-if (empty($run_app) || $headless) {
-    return;
-}
-
-$app_load_assets = Dj_App_Config::cfg('app.core.assets.load', true);
+// Assets exist to reach a rendered page, so the default follows whether there will BE one — a
+// consumer that loads the framework as a library never renders and should not pay for a queue
+// nothing reads. A suite runs headless by design and still has to exercise them, so it is the
+// one headless caller that loads them — and that check comes second, so an ordinary request
+// settles on two memory reads and never calls it. Either way `app.core.assets.load` overrides.
+$app_load_assets_default = (!empty($run_app) && empty($headless)) || Dj_App_Env::isInRunningUnitTests();
+$app_load_assets = Dj_App_Config::cfg('app.core.assets.load', $app_load_assets_default);
 
 if ($app_load_assets) {
     require_once $app_lib_dir . '/assets.php';
     $assets_obj = Dj_App_Assets::getInstance();
     $assets_obj->installHooks();
     Dj_App_Hooks::doAction( 'app.core.assets.loaded' );
+}
+
+// we return after the shortcodes are loaded as there could be plugins that rely on it.
+// In headless mode the shutdown phase is still handled by the shutdown function
+// registered above (Dj_App_Hooks::runShutdownHooks) — no explicit drain needed here.
+if (empty($run_app) || $headless) {
+    return;
 }
 
 $boostrap_obj = Dj_App_Bootstrap::getInstance();
