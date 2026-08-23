@@ -59,6 +59,10 @@ class Dj_App_Assets {
     // registered far more often than they are ordered, so the common page pays nothing.
     private $has_priority = false;
 
+    // Same idea for prerequisites: while nothing declares one there is no graph to walk, so
+    // the reordering pass is never entered.
+    private $has_prereq = false;
+
     /**
      * Singleton pattern i.e. we have only one instance of this obj
      * @staticvar static $instance
@@ -131,9 +135,14 @@ class Dj_App_Assets {
      *   - plugin / theme: the slug 'file' is relative to
      *   - kind: 'css' or 'js', overriding what the key implied
      *   - target: TARGET_HEAD / TARGET_BODY_START / TARGET_FOOTER
+     *   - in_head / head / in_footer / footer: shorthand for the two common placements —
+     *     'in_footer' => 1. An explicit 'target' outranks them; asking for both throws.
      *   - priority: lower renders earlier. OMIT IT and the asset renders where it was
      *     registered; pass one only to move against assets you do not control. An asset that
      *     names none is ordered as Dj_App_Hooks::DEFAULT_PRIORITY once anything else does.
+     *   - prereq / prereqs / deps: id(s) this asset must render after — one name or a list,
+     *     as a string or an array. A hard constraint: it moves the asset regardless of what
+     *     priority arranged. A name that was never registered is treated as satisfied.
      *   - v / ver / version: the cache-busting stamp. Given one, the file is never stat'ed
      *     for a filemtime. Applies to 'file' only — an explicit url carries its own query.
      *   - attrs / attribs: extra tag attributes; a true value renders the attribute bare
@@ -183,6 +192,28 @@ class Dj_App_Assets {
         $attrs = Dj_App_Util::getField('attrs|attribs', $params, []);
         $target = Dj_App_Util::getField('target', $params);
 
+        // Shorthand flags for the two placements anyone actually names, so a caller can say
+        // where without reaching for a constant. An explicit 'target' outranks them, and it is
+        // the only way to reach TARGET_BODY_START.
+        if (empty($target)) {
+            $in_head = Dj_App_Util::getField('in_head|head', $params);
+            $in_footer = Dj_App_Util::getField('in_footer|footer', $params);
+
+            // Asking for both is not a preference to resolve, it is a contradiction — and
+            // picking one silently is how a caller ends up debugging the wrong half of a page.
+            if (!empty($in_head) && !empty($in_footer)) {
+                throw new Dj_App_Validation_Exception('An asset goes in one place', [
+                    'code' => 'app.core.assets.conflicting_target',
+                ]);
+            }
+
+            if (!empty($in_head)) {
+                $target = Dj_App_Assets::TARGET_HEAD;
+            } elseif (!empty($in_footer)) {
+                $target = Dj_App_Assets::TARGET_FOOTER;
+            }
+        }
+
         if (empty($target)) {
             $target = Dj_App_Assets::TARGET_FOOTER;
 
@@ -226,6 +257,13 @@ class Dj_App_Assets {
             $this->has_priority = true;
         }
 
+        $prereq_ids = $this->resolvePrereqIds($params);
+
+        if (!empty($prereq_ids)) {
+            $item['prereq'] = $prereq_ids;
+            $this->has_prereq = true;
+        }
+
         $item = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_ITEM, $item, $params);
 
         // An empty return is the veto seam — the one way a site says "never load that".
@@ -253,6 +291,48 @@ class Dj_App_Assets {
         $res_obj->status(true);
 
         return $res_obj;
+    }
+
+    /**
+     * The ids an asset must render after, as a list. One name or many, given as a string or an
+     * array — the caller writes whichever reads better and the splitter takes both.
+     *
+     * Each name goes through the SAME formatter an id does, so a prerequisite written 'jQuery'
+     * finds an asset registered as 'jquery' instead of silently never matching.
+     *
+     * @param array $params See add()
+     * @return array
+     */
+    public function resolvePrereqIds($params = [])
+    {
+        $prereq_ids = [];
+        $inp_prereq = Dj_App_Util::getField('prereq|prereqs|deps', $params);
+
+        if (empty($inp_prereq)) {
+            return $prereq_ids;
+        }
+
+        // Always a list on the way out, whatever went in: the splitter takes a string, a
+        // separated string, an array or a nested one and answers with a flat array every time.
+        $prereq_tokens = Dj_App_String_Util::splitOnSeparators($inp_prereq);
+
+        foreach ($prereq_tokens as $prereq_token) {
+            // A name has to be a name. Anything else cannot match an id and is not worth
+            // failing a page over.
+            if (!is_scalar($prereq_token)) {
+                continue;
+            }
+
+            $prereq_id = Dj_App_String_Util::formatStringId($prereq_token);
+
+            if (empty($prereq_id)) {
+                continue;
+            }
+
+            $prereq_ids[] = $prereq_id;
+        }
+
+        return $prereq_ids;
     }
 
     /**
@@ -341,6 +421,7 @@ class Dj_App_Assets {
     {
         $this->queue = [];
         $this->has_priority = false;
+        $this->has_prereq = false;
 
         $res_obj = new Dj_App_Result();
         $res_obj->status(true);
@@ -987,6 +1068,12 @@ class Dj_App_Assets {
             return $html;
         }
 
+        // Last, and only when something asked: a prerequisite is a hard constraint while a
+        // priority is a preference, so it gets to move what priority already arranged.
+        if (!empty($this->has_prereq)) {
+            $queue_items = $this->sortByPrereq($queue_items);
+        }
+
         $ctx = [ 'target' => $target, ];
         $queue_items = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_QUEUE, $queue_items, $ctx);
 
@@ -1022,6 +1109,99 @@ class Dj_App_Assets {
         $html = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_HTML, $html, $ctx);
 
         return $html;
+    }
+
+    /**
+     * Reorders so an asset follows everything it named as a prerequisite. Priority and
+     * registration order decided the list handed in; this only moves what has to move, so an
+     * asset with no prerequisites keeps the place those rules gave it.
+     *
+     * A prerequisite naming an asset that is not in THIS list — never registered, or sitting in
+     * the head while this renders the footer — is already satisfied: it either loaded earlier in
+     * the document or does not exist to wait for. Blocking on it would drop a working asset over
+     * a name nobody registered.
+     *
+     * @param array $queue_items Items in the order priority left them
+     * @return array
+     */
+    public function sortByPrereq($queue_items = [])
+    {
+        $present_ids = [];
+
+        foreach ($queue_items as $item) {
+            $present_ids[$item['id']] = 1;
+        }
+
+        $ordered_items = [];
+        $emitted_ids = [];
+        $remaining_items = $queue_items;
+
+        // Each pass emits everything whose prerequisites are already out, in the order the list
+        // arrived — so the tiebreak stays priority-then-registration and nothing is reshuffled
+        // beyond what a prerequisite demanded.
+        while (!empty($remaining_items)) {
+            $progressed = false;
+            $deferred_items = [];
+
+            foreach ($remaining_items as $item) {
+                $is_ready = true;
+                $item_prereq_ids = empty($item['prereq']) ? [] : $item['prereq'];
+
+                // add() stores a list, but the item passes through a filter on the way here and
+                // a listener can hand back whatever it likes. Re-normalizing a stray string
+                // beats iterating one character at a time — and it goes through the same
+                // resolver, so 'a, b' arriving that way still means two names and not one.
+                if (!is_array($item_prereq_ids)) {
+                    $item_prereq_ids = $this->resolvePrereqIds($item);
+                }
+
+                foreach ($item_prereq_ids as $prereq_id) {
+                    if (!isset($present_ids[$prereq_id])) {
+                        continue;
+                    }
+
+                    if (isset($emitted_ids[$prereq_id])) {
+                        continue;
+                    }
+
+                    $is_ready = false;
+                    break;
+                }
+
+                if (!$is_ready) {
+                    $deferred_items[] = $item;
+                    continue;
+                }
+
+                $ordered_items[] = $item;
+                $emitted_ids[$item['id']] = 1;
+                $progressed = true;
+            }
+
+            // Nothing moved and something is left, so the rest wait on each other. A cycle is a
+            // registration bug, not a reason to drop assets off the page — they go out in the
+            // order they came, and the log carries the ids so it can be found.
+            if (empty($progressed)) {
+                $cycle_ids = [];
+
+                foreach ($deferred_items as $item) {
+                    $ordered_items[] = $item;
+                    $cycle_ids[] = $item['id'];
+                }
+
+                $log_data = [
+                    'asset_ids' => $cycle_ids,
+                ];
+
+                Dj_App_Log::error($log_data, __METHOD__);
+
+                break;
+            }
+
+            $remaining_items = $deferred_items;
+        }
+
+        return $ordered_items;
     }
 
     /**

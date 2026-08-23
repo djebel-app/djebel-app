@@ -195,6 +195,62 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertEmpty($footer_html);
     }
 
+    public function testInHeadFlagPlacesTheAssetInTheHead()
+    {
+        $this->registerAsset([ 'js' => 'var probe = 1;', 'in_head' => 1, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
+    }
+
+    public function testHeadFlagIsAcceptedAsTheShortSpelling()
+    {
+        $this->registerAsset([ 'js' => 'var probe = 1;', 'head' => 1, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+    }
+
+    public function testInFooterFlagPlacesTheAssetInTheFooter()
+    {
+        $this->registerAsset([ 'style' => '.a { color: red; }', 'in_footer' => 1, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertStringContainsString('.a { color: red; }', $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+    }
+
+    public function testExplicitTargetOutranksTheShorthandFlag()
+    {
+        $this->registerAsset([ 'js' => 'var probe = 1;', 'in_head' => 1, 'target' => Dj_App_Assets::TARGET_FOOTER, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+    }
+
+    /**
+     * Asking for both places is a contradiction, not a preference to resolve — picking one
+     * quietly is how a caller ends up debugging the half of the page the asset is not on.
+     */
+    public function testAskingForHeadAndFooterThrows()
+    {
+        $code = '';
+
+        try {
+            $this->registerAsset([ 'js' => 'var probe = 1;', 'in_head' => 1, 'in_footer' => 1, ]);
+        } catch (Dj_App_Validation_Exception $e) {
+            $code = $e->getErrorCode();
+        }
+
+        $this->assertEquals('app.core.assets.conflicting_target', $code);
+    }
+
     public function testBodyStartTargetAcceptsDashedSpelling()
     {
         $this->registerAsset([ 'js' => 'var underscored = 1;', 'target' => 'body_start', ]);
@@ -748,6 +804,118 @@ class Dj_App_Assets_Test extends TestCase {
         $normal_pos = strpos($footer_html, 'var normal = 1;');
 
         $this->assertLessThan($normal_pos, $first_pos);
+    }
+
+    // ---------------------------------------------------------------- prerequisites
+
+    public function testAssetRendersAfterItsPrereqEvenWhenRegisteredFirst()
+    {
+        $this->registerAsset([ 'js' => 'var app = 1;', 'id' => 'app', 'prereq' => 'jquery', ]);
+        $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $jq_pos = strpos($footer_html, 'var jq = 1;');
+        $app_pos = strpos($footer_html, 'var app = 1;');
+
+        $this->assertLessThan($app_pos, $jq_pos);
+    }
+
+    /**
+     * A prerequisite is a hard constraint and a priority only a preference, so the asset moves
+     * even when the priorities say the opposite.
+     */
+    public function testPrereqBeatsPriority()
+    {
+        $this->registerAsset([ 'js' => 'var app = 1;', 'id' => 'app', 'prereq' => 'jquery', 'priority' => 1, ]);
+        $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', 'priority' => 99, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $jq_pos = strpos($footer_html, 'var jq = 1;');
+        $app_pos = strpos($footer_html, 'var app = 1;');
+
+        $this->assertLessThan($app_pos, $jq_pos);
+    }
+
+    public function testPrereqAcceptsAnArrayOfIds()
+    {
+        $this->registerAsset([ 'js' => 'var c = 1;', 'id' => 'c', 'prereq' => [ 'a', 'b', ], ]);
+        $this->registerAsset([ 'js' => 'var b = 1;', 'id' => 'b', ]);
+        $this->registerAsset([ 'js' => 'var a = 1;', 'id' => 'a', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $c_pos = strpos($footer_html, 'var c = 1;');
+
+        $this->assertLessThan($c_pos, strpos($footer_html, 'var a = 1;'));
+        $this->assertLessThan($c_pos, strpos($footer_html, 'var b = 1;'));
+    }
+
+    public function testPrereqAcceptsASeparatedString()
+    {
+        $this->registerAsset([ 'js' => 'var c = 1;', 'id' => 'c', 'prereq' => 'a, b', ]);
+        $this->registerAsset([ 'js' => 'var b = 1;', 'id' => 'b', ]);
+        $this->registerAsset([ 'js' => 'var a = 1;', 'id' => 'a', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $c_pos = strpos($footer_html, 'var c = 1;');
+
+        $this->assertLessThan($c_pos, strpos($footer_html, 'var a = 1;'));
+        $this->assertLessThan($c_pos, strpos($footer_html, 'var b = 1;'));
+    }
+
+    /**
+     * A prerequisite naming something nobody registered — or something in another target — is
+     * already satisfied. Waiting for it would drop a working asset over a name that will never
+     * arrive.
+     */
+    public function testPrereqThatWasNeverRegisteredDoesNotBlockTheAsset()
+    {
+        $this->registerAsset([ 'js' => 'var solo = 1;', 'id' => 'solo', 'prereq' => 'never-registered', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $this->assertStringContainsString('var solo = 1;', $footer_html);
+    }
+
+    /**
+     * A cycle is a registration bug, not a reason to drop assets off the page or to spin.
+     */
+    public function testPrereqCycleStillRendersEveryAsset()
+    {
+        $this->registerAsset([ 'js' => 'var x = 1;', 'id' => 'x', 'prereq' => 'y', ]);
+        $this->registerAsset([ 'js' => 'var y = 1;', 'id' => 'y', 'prereq' => 'x', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $this->assertStringContainsString('var x = 1;', $footer_html);
+        $this->assertStringContainsString('var y = 1;', $footer_html);
+    }
+
+    /**
+     * Prerequisite names run through the same formatter ids do, so a plugin asking for 'jQuery'
+     * finds the asset registered as 'jquery' instead of silently waiting forever.
+     */
+    public function testPrereqNameIsFormattedLikeAnId()
+    {
+        $this->registerAsset([ 'js' => 'var app = 1;', 'id' => 'app', 'prereq' => 'jQuery', ]);
+        $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $jq_pos = strpos($footer_html, 'var jq = 1;');
+        $app_pos = strpos($footer_html, 'var app = 1;');
+
+        $this->assertLessThan($app_pos, $jq_pos);
     }
 
     // ---------------------------------------------------------------- duplicates
