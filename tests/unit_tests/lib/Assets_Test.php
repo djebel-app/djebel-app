@@ -255,6 +255,42 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertStringContainsString('v=' . $version, $footer_html);
     }
 
+    /**
+     * A caller that already knows the version — a build id, a release tag — supplies it and
+     * the file is never stat'ed for a filemtime.
+     */
+    public function testSuppliedVersionReplacesTheFilemtime()
+    {
+        $this->registerAsset([
+            'plugin' => 'djebel-test-plugin',
+            'file' => '/assets/main.js',
+            'version' => '1.2.3',
+        ]);
+
+        $asset_file = $this->content_dir . '/plugins/djebel-test-plugin/assets/main.js';
+        $mtime = filemtime($asset_file);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $this->assertStringContainsString('v=1.2.3', $footer_html);
+        $this->assertStringNotContainsString('v=' . $mtime, $footer_html);
+    }
+
+    public function testSuppliedVersionAcceptsTheShortSpellings()
+    {
+        $this->registerAsset([
+            'plugin' => 'djebel-test-plugin',
+            'file' => '/assets/main.js',
+            'ver' => 'abc123',
+        ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $this->assertStringContainsString('v=abc123', $footer_html);
+    }
+
     public function testVersionParamAbsentForExplicitUrl()
     {
         $this->registerAsset([ 'url' => 'https://cdn.example.com/x.js', ]);
@@ -366,6 +402,32 @@ class Dj_App_Assets_Test extends TestCase {
         $assets_obj = Dj_App_Assets::getInstance();
         $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
         $this->assertStringContainsString('var owns_its_tag = 1;', $footer_html);
+    }
+
+    /**
+     * The wrapped check reads the FIRST byte before anything else, so a tag that arrives behind
+     * the newline a template or heredoc opens with must still be recognized. Reading byte zero
+     * alone would call this bare content and wrap it a second time.
+     */
+    public function testPreWrappedContentIsRecognizedBehindLeadingWhitespace()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertTrue($assets_obj->isWrappedContent("\n    <style>.a{color:red}</style>"));
+        $this->assertTrue($assets_obj->isWrappedContent("\t<script defer>var x = 1;</script>"));
+    }
+
+    /**
+     * Only script and style wrap an asset. Any other tag is content, and content gets wrapped —
+     * so the cheap first-byte test must not answer "wrapped" for every string opening with '<'.
+     */
+    public function testOtherTagsAreNotTreatedAsWrapped()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $this->assertFalse($assets_obj->isWrappedContent('<div>nope</div>'));
+        $this->assertFalse($assets_obj->isWrappedContent('   <div>nope</div>'));
+        $this->assertFalse($assets_obj->isWrappedContent('    '));
     }
 
     public function testMissingSourceThrows()
@@ -622,7 +684,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertLessThan($third_pos, $second_pos);
     }
 
-    public function testDefaultPriorityMatchesHooksDefault()
+    public function testAssetThatNamesNoPriorityCarriesNone()
     {
         $res_obj = Dj_App_Assets::register([ 'js' => 'var defaulted = 1;', ]);
 
@@ -630,7 +692,62 @@ class Dj_App_Assets_Test extends TestCase {
         $queue = $assets_obj->getQueue();
         $item = $queue[$res_obj->id];
 
-        $this->assertEquals(Dj_App_Hooks::DEFAULT_PRIORITY, $item['priority']);
+        $this->assertArrayNotHasKey('priority', $item);
+    }
+
+    public function testAssetsRenderInRegistrationOrderWhenNoPriorityIsGiven()
+    {
+        $this->registerAsset([ 'js' => 'var one = 1;', ]);
+        $this->registerAsset([ 'js' => 'var two = 1;', ]);
+        $this->registerAsset([ 'js' => 'var three = 1;', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $one_pos = strpos($footer_html, 'var one = 1;');
+        $two_pos = strpos($footer_html, 'var two = 1;');
+        $three_pos = strpos($footer_html, 'var three = 1;');
+
+        $this->assertLessThan($two_pos, $one_pos);
+        $this->assertLessThan($three_pos, $two_pos);
+    }
+
+    /**
+     * The one that earns the whole design: an asset that named nothing must still sort against
+     * the ones that did, or a plugin could never place itself relative to somebody else's.
+     */
+    public function testAssetWithoutPriorityOrdersAsTheHooksDefault()
+    {
+        $this->registerAsset([ 'js' => 'var unpriced = 1;', ]);
+        $this->registerAsset([ 'js' => 'var early = 1;', 'priority' => 5, ]);
+        $this->registerAsset([ 'js' => 'var late = 1;', 'priority' => 90, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $early_pos = strpos($footer_html, 'var early = 1;');
+        $unpriced_pos = strpos($footer_html, 'var unpriced = 1;');
+        $late_pos = strpos($footer_html, 'var late = 1;');
+
+        $this->assertLessThan($unpriced_pos, $early_pos);
+        $this->assertLessThan($late_pos, $unpriced_pos);
+    }
+
+    /**
+     * Zero is a real priority and the earliest one — it must not be read as "no priority given".
+     */
+    public function testPriorityZeroIsHonored()
+    {
+        $this->registerAsset([ 'js' => 'var normal = 1;', ]);
+        $this->registerAsset([ 'js' => 'var first = 1;', 'priority' => 0, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+        $first_pos = strpos($footer_html, 'var first = 1;');
+        $normal_pos = strpos($footer_html, 'var normal = 1;');
+
+        $this->assertLessThan($normal_pos, $first_pos);
     }
 
     // ---------------------------------------------------------------- duplicates

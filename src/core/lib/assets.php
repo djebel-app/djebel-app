@@ -54,6 +54,11 @@ class Dj_App_Assets {
     // ALREADY SITS, which is what makes an explicit id an override handle rather than a move.
     private $queue = [];
 
+    // Flipped the first time an asset asks to be ordered. While it is false the queue renders
+    // in the order it was registered — no bucketing, no sort, nothing to compare. Assets are
+    // registered far more often than they are ordered, so the common page pays nothing.
+    private $has_priority = false;
+
     /**
      * Singleton pattern i.e. we have only one instance of this obj
      * @staticvar static $instance
@@ -126,7 +131,11 @@ class Dj_App_Assets {
      *   - plugin / theme: the slug 'file' is relative to
      *   - kind: 'css' or 'js', overriding what the key implied
      *   - target: TARGET_HEAD / TARGET_BODY_START / TARGET_FOOTER
-     *   - priority: lower renders earlier; defaults to Dj_App_Hooks::DEFAULT_PRIORITY
+     *   - priority: lower renders earlier. OMIT IT and the asset renders where it was
+     *     registered; pass one only to move against assets you do not control. An asset that
+     *     names none is ordered as Dj_App_Hooks::DEFAULT_PRIORITY once anything else does.
+     *   - v / ver / version: the cache-busting stamp. Given one, the file is never stat'ed
+     *     for a filemtime. Applies to 'file' only — an explicit url carries its own query.
      *   - attrs / attribs: extra tag attributes; a true value renders the attribute bare
      *   - id: an explicit handle. Registering it again REPLACES the entry in place.
      * @return Dj_App_Result status + id, or an error carrying a checkable code
@@ -151,7 +160,16 @@ class Dj_App_Assets {
                 return $res_obj;
             }
 
-            $delivery_res = $this->resolveFileDelivery($source_res->abs_file);
+            // A caller that already knows the version — a build id, a release tag — hands it
+            // over so the file never has to be stat'ed for one.
+            $version = Dj_App_Util::getField('v|ver|version', $params);
+
+            $delivery_args = [
+                'file' => $source_res->abs_file,
+                'version' => $version,
+            ];
+
+            $delivery_res = $this->resolveFileDelivery($delivery_args);
 
             if ($delivery_res->isError()) {
                 return $delivery_res;
@@ -161,7 +179,7 @@ class Dj_App_Assets {
             $content = $delivery_res->content;
         }
 
-        $priority = Dj_App_Util::getField('priority', $params, Dj_App_Hooks::DEFAULT_PRIORITY);
+        $priority = Dj_App_Util::getField('priority', $params);
         $attrs = Dj_App_Util::getField('attrs|attribs', $params, []);
         $target = Dj_App_Util::getField('target', $params);
 
@@ -194,12 +212,19 @@ class Dj_App_Assets {
             'id' => $source_res->id,
             'kind' => $kind,
             'target' => $target,
-            'priority' => $priority,
             'url' => $url,
             'content' => $content,
             'attrs' => $attrs,
             'source_hash' => $source_res->source_hash,
         ];
+
+        // Only an asset that ASKED to be ordered carries a priority; absent means "where I was
+        // registered". getField answers '' for a key that is not there and 0 for one that is,
+        // so this cannot be an empty() test — priority 0 is a real answer and the earliest one.
+        if ($priority !== '') {
+            $item['priority'] = $priority;
+            $this->has_priority = true;
+        }
 
         $item = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_ITEM, $item, $params);
 
@@ -315,6 +340,7 @@ class Dj_App_Assets {
     public function removeAll()
     {
         $this->queue = [];
+        $this->has_priority = false;
 
         $res_obj = new Dj_App_Result();
         $res_obj->status(true);
@@ -344,8 +370,29 @@ class Dj_App_Assets {
             return false;
         }
 
+        // One byte settles almost everything: a bare JS or CSS blob opens with a letter, a
+        // brace, a dot or a comment — never with a tag. Those return here having allocated
+        // nothing and called nothing.
+        $first_char = $content[0];
+
+        if ($first_char != '<' && !ctype_space($first_char)) {
+            return false;
+        }
+
+        // Bounded before any search: stripos() below answers a question about the START of the
+        // content, and on a large inlined file it would otherwise scan all of it to say no.
         $lead_chunk = substr($content, 0, Dj_App_Assets::SNIFF_CHUNK_SIZE);
-        $lead_chunk = Dj_App_String_Util::trim($lead_chunk);
+
+        // Only content that did NOT already open with the tag pays for the trim — leading
+        // whitespace ahead of a tag is ordinary in a template or a heredoc.
+        if ($first_char != '<') {
+            $lead_chunk = ltrim($lead_chunk);
+
+            if (empty($lead_chunk) || $lead_chunk[0] != '<') {
+                return false;
+            }
+        }
+
         $is_wrapped = (stripos($lead_chunk, '<script') === 0) || (stripos($lead_chunk, '<style') === 0);
 
         return $is_wrapped;
@@ -820,14 +867,17 @@ class Dj_App_Assets {
      * content dir, the file's own bytes inlined when it does not. Cache busting rides the
      * URL half as ?v=<filemtime>.
      *
-     * @param string $abs_file
+     * @param array $args file, version — version optional; filemtime answers when it is absent
      * @return Dj_App_Result url, content
      */
-    public function resolveFileDelivery($abs_file)
+    public function resolveFileDelivery($args = [])
     {
         $res_obj = new Dj_App_Result();
         $res_obj->url = '';
         $res_obj->content = '';
+
+        $abs_file = empty($args['file']) ? '' : $args['file'];
+        $version = empty($args['version']) ? '' : $args['version'];
 
         $content_dir = Dj_App_Util::getContentDir();
         $content_dir_prefix = $content_dir . '/';
@@ -837,7 +887,13 @@ class Dj_App_Assets {
             $rel_url_file = substr($abs_file, strlen($content_dir));
             $content_url = Dj_App_Util::getContentDirUrl();
             $url = $content_url . $rel_url_file;
-            $version = filemtime($abs_file);
+
+            // Only stat when nobody told us. A stat per asset per request is the kind of cost
+            // that is invisible until a page carries a dozen of them.
+            if (empty($version)) {
+                $version = filemtime($abs_file);
+            }
+
             $url = Dj_App_Request::addQueryParam('v', $version, $url);
 
             // The url is BUILT here, but not out of thin air: the host half comes from the
@@ -888,31 +944,47 @@ class Dj_App_Assets {
             return $html;
         }
 
-        // Bucketed rather than sorted: insertion order inside a bucket IS the tiebreak, so
-        // two plugins at the same priority never have to coordinate, and there is no
-        // comparator to get wrong on a PHP whose sort is not stable.
-        $buckets = [];
-
-        foreach ($this->queue as $item) {
-            if ($item['target'] != $target) {
-                continue;
-            }
-
-            $buckets[$item['priority']][] = $item;
-        }
-
-        if (empty($buckets)) {
-            return $html;
-        }
-
-        ksort($buckets);
-
         $queue_items = [];
 
-        foreach ($buckets as $bucket_items) {
-            foreach ($bucket_items as $item) {
+        // Nobody asked to be ordered, so the order they were registered in IS the order. No
+        // buckets, no ksort, nothing compared — the whole reason a priority is not invented
+        // for assets that never wanted one.
+        if (empty($this->has_priority)) {
+            foreach ($this->queue as $item) {
+                if ($item['target'] != $target) {
+                    continue;
+                }
+
                 $queue_items[] = $item;
             }
+        } else {
+            // Bucketed rather than sorted: insertion order inside a bucket IS the tiebreak, so
+            // two plugins at the same priority never have to coordinate, and there is no
+            // comparator to get wrong on a PHP whose sort is not stable. An asset that named no
+            // priority takes the framework's default, which is what lets it order against the
+            // ones that did.
+            $buckets = [];
+
+            foreach ($this->queue as $item) {
+                if ($item['target'] != $target) {
+                    continue;
+                }
+
+                $priority = Dj_App_Util::getField('priority', $item, Dj_App_Hooks::DEFAULT_PRIORITY);
+                $buckets[$priority][] = $item;
+            }
+
+            ksort($buckets);
+
+            foreach ($buckets as $bucket_items) {
+                foreach ($bucket_items as $item) {
+                    $queue_items[] = $item;
+                }
+            }
+        }
+
+        if (empty($queue_items)) {
+            return $html;
         }
 
         $ctx = [ 'target' => $target, ];
