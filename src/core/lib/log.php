@@ -188,21 +188,16 @@ class Dj_App_Log {
             $parent_dir = dirname($file);
 
             if (!is_dir($parent_dir)) {
-                // The raw call, not the file utility's mkdir(), on purpose: that one chmods
-                // OUTSIDE its own is_dir guard, so it would re-apply the mode on every entry
-                // written — four syscalls a line, and a directory an admin widened on purpose
-                // silently narrowed back. The MODE still comes from there, so the two cannot
-                // drift apart.
-                $mkdir_res = mkdir($parent_dir, Dj_App_File_Util::DEFAULT_DIR_PERM, true);
+                $mk_res = Dj_App_File_Util::mkdir($parent_dir);
 
-                // The END STATE decides, not the return value: a concurrent request creating
-                // the same dir makes mkdir answer false for a directory that now exists.
+                // The END STATE decides, not the result: a concurrent request creating the same
+                // dir fails the create for a directory that now exists.
                 //
                 // Where it really is missing the file cannot be written, so the entry goes to
                 // PHP's own log right away rather than spending the retry loop — and its
-                // sleeps — on a write that has nowhere to land. Nothing can be logged ABOUT
-                // a logger that cannot reach its own directory.
-                if (empty($mkdir_res) && !is_dir($parent_dir)) {
+                // sleeps — on a write that has nowhere to land. Nothing can be logged ABOUT a
+                // logger that cannot reach its own directory.
+                if ($mk_res->isError() && !is_dir($parent_dir)) {
                     $file = '';
                 }
             }
