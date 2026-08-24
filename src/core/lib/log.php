@@ -188,7 +188,18 @@ class Dj_App_Log {
             $parent_dir = dirname($file);
 
             if (!is_dir($parent_dir)) {
-                mkdir($parent_dir, 0770, true);
+                $mkdir_res = mkdir($parent_dir, 0700, true);
+
+                // The END STATE decides, not the return value: a concurrent request creating
+                // the same dir makes mkdir answer false for a directory that now exists.
+                //
+                // Where it really is missing the file cannot be written, so the entry goes to
+                // PHP's own log right away rather than spending the retry loop — and its
+                // sleeps — on a write that has nowhere to land. Nothing can be logged ABOUT
+                // a logger that cannot reach its own directory.
+                if (empty($mkdir_res) && !is_dir($parent_dir)) {
+                    $file = '';
+                }
             }
         }
 
@@ -206,8 +217,12 @@ class Dj_App_Log {
             }
         }
 
-        // The entry must never be lost: when the FILE write kept failing, fall back
-        // to PHP's default error log. Last resort — nowhere further to report.
+        // The entry must never be lost: when the FILE write kept failing, fall back to PHP's
+        // own error log. Last resort — nowhere further to report.
+        //
+        // Its result deliberately does NOT feed the return. Empty means the entry did not
+        // reach the file the caller named, which stays true however well the fallback went,
+        // and there is nothing a caller could do about a failure of the last resort itself.
         if (empty($log_ok)) {
             if (!empty($file)) {
                 error_log($line_nl);
@@ -348,7 +363,15 @@ class Dj_App_Log {
             return;
         }
 
-        $output = is_scalar($msg) ? $msg : json_encode($msg, JSON_PRETTY_PRINT);
+        // Only a non-scalar needs converting, so the call is skipped for the message a caller
+        // almost always passes. export() rather than json_encode: that answers FALSE on a
+        // resource, a recursive structure or invalid UTF-8, and the line printed empty — the
+        // one time a diagnostic is worth reading is the time the value is odd.
+        $output = $msg;
+
+        if (!is_scalar($msg)) {
+            $output = Dj_App_String_Util::export($msg);
+        }
 
         if (!empty($label)) {
             $output = "[$label] $output";
