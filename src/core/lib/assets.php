@@ -36,6 +36,9 @@ class Dj_App_Assets {
     const FILTER_ITEM = 'app.core.assets.filter.item';
     const ACTION_ADDED = 'app.core.assets.action.added';
 
+    // Whether a minified build is preferred over the file a caller named.
+    const FILTER_USE_MIN = 'app.core.assets.filter.use_min';
+
     // Around rendering.
     const FILTER_QUEUE = 'app.core.assets.filter.queue';
     const FILTER_TAG_HTML = 'app.core.assets.filter.tag_html';
@@ -62,6 +65,11 @@ class Dj_App_Assets {
     // Same idea for prerequisites: while nothing declares one there is no graph to walk, so
     // the reordering pass is never entered.
     private $has_prereq = false;
+
+    // What the environment and the site config say about minified builds — the value the filter
+    // is then handed. Null until asked, a bool after; null rather than false, because a site
+    // that answered NO must not read as "not asked yet" and send the env scan around again.
+    private $use_min_default = null;
 
     /**
      * Singleton pattern i.e. we have only one instance of this obj
@@ -422,6 +430,10 @@ class Dj_App_Assets {
         $this->queue = [];
         $this->has_priority = false;
         $this->has_prereq = false;
+
+        // The memoized env/config answer goes too. A suite drives that half through real env
+        // vars, so one carried over from an earlier test would decide the next one instead.
+        $this->use_min_default = null;
 
         $res_obj = new Dj_App_Result();
         $res_obj->status(true);
@@ -819,6 +831,36 @@ class Dj_App_Assets {
 
         // Only a file that exists can leak, and only a found one is ever delivered.
         if ($file_found) {
+            $min_file = '';
+
+            if ($this->checkUseMinified()) {
+                $dot_pos = strrpos($abs_file, '.');
+
+                // No extension leaves nothing to mark, and the marker needs four characters of
+                // room in front of the dot. One comparison settles both, and it keeps the offset
+                // below from counting back from the END of the string instead.
+                if ($dot_pos >= 4) {
+                    $min_tail = substr($abs_file, $dot_pos - 4, 4);
+
+                    // Those four are read where the marker would sit, never anywhere in the
+                    // string, so a DIRECTORY spelled that way cannot pass a source file off as a
+                    // build. Case-insensitive: the name came from a caller, not from disk.
+                    if (strcasecmp($min_tail, '.min') != 0) {
+                        $min_file = substr_replace($abs_file, '.min', $dot_pos, 0);
+                    }
+                }
+            }
+
+            // The build sits beside its source, so this ONE stat runs on a file already found.
+            // Looking beside every candidate instead would have doubled a scan that mostly
+            // misses — a syscall per miss on every site that ships no builds at all.
+            //
+            // is_file, not file_exists: a DIRECTORY carrying that name would otherwise replace a
+            // perfectly good file with something that can be neither read nor served.
+            if (!empty($min_file) && is_file($min_file)) {
+                $abs_file = $min_file;
+            }
+
             $containment_args = [
                 'file' => $abs_file,
                 'allowed_dirs' => $allowed_dirs,
@@ -843,6 +885,37 @@ class Dj_App_Assets {
         $res_obj->status(true);
 
         return $res_obj;
+    }
+
+    /**
+     * Whether a minified build should be preferred over the file a caller named.
+     *
+     * The environment sets the default: a dev box serves what was asked for, so what runs is
+     * what you are editing and a stale build cannot quietly shadow a source change. Everywhere
+     * else — staging included, which is what isLive() answers — prefers the build.
+     *
+     * `app.core.assets.use_min` overrides that, and the filter gets the last word.
+     *
+     * Only the environment and config half is remembered. Neither can change between two assets
+     * in one request, and the env scan behind isLive() costs several times over what everything
+     * else here does put together. The FILTER still runs on every call, so it stays a live seam
+     * — one registered after the first asset resolved is honored just the same, and a site free
+     * to answer differently per call keeps that freedom.
+     *
+     * @return bool
+     */
+    public function checkUseMinified()
+    {
+        if (is_null($this->use_min_default)) {
+            $use_min = Dj_App_Env::isLive();
+            $use_min = Dj_App_Config::cfg('app.core.assets.use_min', $use_min);
+            $this->use_min_default = Dj_App_Util::isEnabled($use_min);
+        }
+
+        $use_min = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_USE_MIN, $this->use_min_default);
+        $use_min = !empty($use_min);
+
+        return $use_min;
     }
 
     /**

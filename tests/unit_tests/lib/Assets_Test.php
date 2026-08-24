@@ -23,12 +23,39 @@ class Dj_App_Assets_Test extends TestCase {
             $this->content_dir . '/plugins/djebel-test-plugin/assets/main.css' => ".dj-test { color: red; }\n",
             $this->content_dir . '/themes/djebel-test-theme/style.css' => ".dj-theme { color: blue; }\n",
             $this->non_public_plugins_dir . '/djebel-private-plugin/assets/hidden.js' => "var djPrivatePlugin = 1;\n",
+
+            // A source WITH a build beside it. The fixtures above deliberately have none, so the
+            // tests written before builds existed keep resolving to the file they name.
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/app.js' => "var djTestApp = 0;\n",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/app.min.js' => "var djTestApp=1;\n",
+
+            // Already a build, plus a TRAP beside each: nothing may ever ask for a doubled
+            // suffix, so a file by that name EXISTING is what makes the test fail if the guard
+            // is dropped. The upper-case pair is the same trap for a case-blind comparison.
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/vendor.min.js' => "var djTestVendor=1;\n",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/vendor.min.min.js' => "var djTestTrap=1;\n",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/lib.MIN.js' => "var djTestLib=1;\n",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/lib.MIN.min.js' => "var djTestTrap=2;\n",
+
+            // Its build is the directory created below, so the source has to survive.
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/dirtrap.js' => "var djTestDirTrap = 1;\n",
+
+            // A source inside a DIRECTORY named like the marker — the build is still the sibling
+            // file, never anything the enclosing dir is called.
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/.min/boxed.js' => "var djTestBoxed = 0;\n",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/.min/boxed.min.js' => "var djTestBoxed=1;\n",
         ];
 
         foreach ($fixture_files as $fixture_file => $fixture_content) {
             $write_res = Dj_App_File_Util::write($fixture_file, $fixture_content);
             $this->assertTrue($write_res->isSuccess(), 'Failed to write the asset fixture: ' . $fixture_file);
         }
+
+        // A DIRECTORY where a build would go. Nothing can read or serve one, so a mere
+        // existence check picking it up would swap a good file for an unusable answer.
+        $dir_trap_dir = $this->content_dir . '/plugins/djebel-test-plugin/assets/dirtrap.min.js';
+        $mkdir_res = Dj_App_File_Util::mkdir($dir_trap_dir);
+        $this->assertTrue($mkdir_res->isSuccess(), 'Failed to create the directory trap fixture');
 
         Dj_App_Hooks::addFilter('app.config.content_dir', ['Dj_App_Assets_Test', 'filterContentDir']);
         Dj_App_Hooks::addFilter('app.core.plugins.non_public_plugins_dir', ['Dj_App_Assets_Test', 'filterNonPublicPluginsDir']);
@@ -379,6 +406,222 @@ class Dj_App_Assets_Test extends TestCase {
         }
 
         $this->assertEquals('app.core.assets.invalid_url', $code);
+    }
+
+    // ---------------------------------------------------------------- minified builds
+
+    /**
+     * Every case here drives the decision through the filter rather than the ambient
+     * environment. The suite runs wherever it is checked out, and a test whose answer depends
+     * on which box it ran on is not asserting the behaviour, it is reporting the machine.
+     */
+    public function testMinifiedBuildIsPreferredWhenPresent()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/app.min.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/app.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    public function testSourceIsServedWhenNoBuildExists()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/main.css', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+
+            $this->assertStringContainsString('/assets/main.css', $head_html);
+            $this->assertStringNotContainsString('.min.css', $head_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    public function testBuildIsIgnoredWhenMinifiedAssetsAreOff()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOff']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/app.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOff']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    /**
+     * The site config turns it off where the environment would have turned it on, with no plugin
+     * registering a filter to say so.
+     *
+     * The raw dotted key is cleared first because cfg() memoizes each resolved value under it
+     * and reads it BEFORE the conventional uppercase one — an earlier test's answer would
+     * otherwise decide this one.
+     */
+    public function testConfigTurnsMinifiedAssetsOff()
+    {
+        $cfg_attribs = [ 'override' => 1, ];
+        $cleared = Dj_App_Config::cfg('app.core.assets.use_min', '', $cfg_attribs);
+        $this->assertEmpty($cleared, 'The memoized config key survived the clear');
+
+        $env_set = Dj_App_Env::set('DJEBEL_APP_CORE_ASSETS_USE_MIN', 0);
+        $this->assertTrue($env_set, 'Failed to set the config env var');
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/app.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
+        } finally {
+            // null REMOVES the variable, so the setting cannot outlive the test and decide a
+            // later one.
+            $env_set = Dj_App_Env::set('DJEBEL_APP_CORE_ASSETS_USE_MIN', null);
+            $this->assertTrue($env_set, 'The config env var leaked out of the test');
+
+            $cleared = Dj_App_Config::cfg('app.core.assets.use_min', '', $cfg_attribs);
+            $this->assertEmpty($cleared, 'The memoized config key leaked out of the test');
+        }
+    }
+
+    /**
+     * A name that already carries the marker is served as it stands. The doubled-suffix file
+     * EXISTS in the fixtures, so dropping the guard makes this fail instead of quietly falling
+     * back to the same answer for the wrong reason.
+     */
+    public function testAlreadyBuiltFileIsNotDoubled()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/vendor.min.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/vendor.min.js', $footer_html);
+            $this->assertStringNotContainsString('vendor.min.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    public function testAlreadyBuiltFileIsRecognizedWhateverItsCase()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/lib.MIN.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/lib.MIN.js', $footer_html);
+            $this->assertStringNotContainsString('lib.MIN.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    /**
+     * The filter is a LIVE seam, not a question asked once and remembered. Only the environment
+     * and config half is memoized, so a filter registered after the first asset already resolved
+     * still decides the next one — and a site free to answer per asset keeps that freedom.
+     *
+     * The alternating filter says NO, then YES. Consulted once, both assets would take the first
+     * answer and the build would never appear.
+     */
+    public function testFilterIsConsultedForEveryAssetNotOncePerRequest()
+    {
+        self::$use_min_calls = 0;
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinAlternating']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/.min/boxed.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertEquals(2, self::$use_min_calls, 'The filter was not consulted once per asset');
+
+            // First asset answered NO, so it keeps its source.
+            $this->assertStringContainsString('/assets/app.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
+
+            // Second answered YES, so it takes the build.
+            $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinAlternating']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            self::$use_min_calls = 0;
+        }
+    }
+
+    /**
+     * A directory answers an existence check exactly as a file does, and neither reading nor
+     * serving one is possible — so the source has to stand rather than be swapped for it.
+     */
+    public function testDirectoryStandingWhereTheBuildWouldBeIsNotServed()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/dirtrap.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/dirtrap.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/dirtrap.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    /**
+     * The marker is read where it would sit — in front of the extension — and never anywhere in
+     * the string, so an enclosing directory spelled that way cannot pass a source off as built.
+     */
+    public function testDirectoryNamedLikeTheMarkerIsNotABuild()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/.min/boxed.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+
+            $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
     }
 
     // ---------------------------------------------------------------- delivery mode
@@ -1221,6 +1464,7 @@ class Dj_App_Assets_Test extends TestCase {
     // ---------------------------------------------------------------- filter callbacks
 
     public static $added_asset_ids = [];
+    public static $use_min_calls = 0;
 
     /**
      * @param array $cur_val
@@ -1295,5 +1539,41 @@ class Dj_App_Assets_Test extends TestCase {
         $html = "<!-- dj-assets-start -->\n" . $cur_val;
 
         return $html;
+    }
+
+    /**
+     * @param bool $cur_val
+     * @param array $ctx
+     * @return bool
+     */
+    public static function filterUseMinOn($cur_val, $ctx = [])
+    {
+        return true;
+    }
+
+    /**
+     * @param bool $cur_val
+     * @param array $ctx
+     * @return bool
+     */
+    public static function filterUseMinOff($cur_val, $ctx = [])
+    {
+        return false;
+    }
+
+    /**
+     * Answers NO the first time and YES afterwards, so a seam that is consulted once and one
+     * that is consulted per asset produce visibly different pages.
+     *
+     * @param bool $cur_val
+     * @param array $ctx
+     * @return bool
+     */
+    public static function filterUseMinAlternating($cur_val, $ctx = [])
+    {
+        self::$use_min_calls++;
+        $use_min = self::$use_min_calls > 1;
+
+        return $use_min;
     }
 }
