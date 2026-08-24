@@ -187,16 +187,26 @@ class Dj_App_Cli_Util {
      * @return bool whether the write landed
      */
     static function stderr($msg = '', $params = []) {
+        // A caller reaching for stderr is usually reporting something that went wrong, and the
+        // value that explains it is not always a string. Converted before the newline is
+        // appended, because concatenating onto an array prints "Array" and warns.
+        if (!is_scalar($msg)) {
+            $msg = Dj_App_String_Util::export($msg);
+        }
+
         $with_newline = Dj_App_Util::getField('newline|new_line|nl', $params, true);
 
         if (!empty($with_newline)) {
             $msg .= "\n";
         }
 
-        // fputs reports bytes written or FALSE — 0 is a legitimate write of an
-        // empty chunk, so only FALSE means the write did not land.
+        // The write reports the BYTE COUNT it managed, or false. Anything SHORT of the whole
+        // message failed just as surely as false did — a full pipe reports a partial count,
+        // not an error — so the count is compared against the length rather than tested for
+        // falseness. An empty message writes 0 of 0 and still counts as landed.
         $write_result = fputs(STDERR, $msg);
-        $is_written = $write_result !== false;
+        $msg_len = strlen($msg);
+        $is_written = $write_result === $msg_len;
 
         return $is_written;
     }
