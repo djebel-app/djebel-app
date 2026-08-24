@@ -10,7 +10,7 @@
  * Dj_App_Assets::register([ 'url'    => 'https://cdn.example.com/x.css', ]);
  *
  * The KEY the caller used declares both the source and the kind, so the common cases need
- * no 'kind' and no 'target'. CSS lands in the head, JS in the footer, and every inference
+ * no 'kind' and no 'placement'. CSS lands in the head, JS in the footer, and every inference
  * is overridable.
  *
  * Only dj-content is served over the web. A plugin installed in the private tree therefore
@@ -18,16 +18,23 @@
  * to know where their plugin was installed.
  */
 class Dj_App_Assets {
-    // Where a tag goes. TARGET_BODY_START rides the seam core already injects after <body.
-    const TARGET_HEAD = 'head';
-    const TARGET_BODY_START = 'body_start';
-    const TARGET_FOOTER = 'footer';
+    // Where a tag goes. PLACEMENT_BODY_START rides the seam core already injects after <body.
+    const PLACEMENT_HEAD = 'head';
+    const PLACEMENT_BODY_START = 'body_start';
+    const PLACEMENT_FOOTER = 'footer';
 
     const KIND_CSS = 'css';
     const KIND_JS = 'js';
 
+    // The kinds a tag can be built for. Anything else renders nothing.
+    const SUPPORTED_KINDS = [ self::KIND_CSS => 1, self::KIND_JS => 1, ];
+
+    // Extensions a minified build is looked for. Separate from the kinds above on purpose:
+    // fonts and images would join the KINDS the day they render, and nobody minifies a font.
+    const SUPPORTED_MIN_EXTS = [ 'css' => 1, 'js' => 1, ];
+
     // The page seams this echoes on. Registered on all three with ONE listener, which reads
-    // back the firing hook to learn which target it is rendering.
+    // back the firing hook to learn which placement it is rendering.
     const HOOK_PAGE_HEAD = 'app.page.html.head';
     const HOOK_PAGE_BODY_START = 'app.page.html.body.start';
     const HOOK_PAGE_BODY_END = 'app.page.html.body.end';
@@ -142,9 +149,9 @@ class Dj_App_Assets {
      *   Plus, all optional:
      *   - plugin / theme: the slug 'file' is relative to
      *   - kind: 'css' or 'js', overriding what the key implied
-     *   - target: TARGET_HEAD / TARGET_BODY_START / TARGET_FOOTER
+     *   - placement: PLACEMENT_HEAD / PLACEMENT_BODY_START / PLACEMENT_FOOTER
      *   - in_head / head / in_footer / footer: shorthand for the two common placements —
-     *     'in_footer' => 1. An explicit 'target' outranks them; asking for both throws.
+     *     'in_footer' => 1. An explicit placement outranks them; asking for both throws.
      *   - priority: lower renders earlier. OMIT IT and the asset renders where it was
      *     registered; pass one only to move against assets you do not control. An asset that
      *     names none is ordered as Dj_App_Hooks::DEFAULT_PRIORITY once anything else does.
@@ -198,59 +205,18 @@ class Dj_App_Assets {
 
         $priority = Dj_App_Util::getField('priority', $params);
         $attrs = Dj_App_Util::getField('attrs|attribs', $params, []);
-        $target = Dj_App_Util::getField('target', $params);
 
-        // Shorthand flags for the two placements anyone actually names, so a caller can say
-        // where without reaching for a constant. An explicit 'target' outranks them, and it is
-        // the only way to reach TARGET_BODY_START.
-        if (empty($target)) {
-            $in_head = Dj_App_Util::getField('in_head|head', $params);
-            $in_footer = Dj_App_Util::getField('in_footer|footer', $params);
+        $placement_args = [
+            'params' => $params,
+            'kind' => $kind,
+        ];
 
-            // Asking for both is not a preference to resolve, it is a contradiction — and
-            // picking one silently is how a caller ends up debugging the wrong half of a page.
-            if (!empty($in_head) && !empty($in_footer)) {
-                throw new Dj_App_Validation_Exception('An asset goes in one place', [
-                    'code' => 'app.core.assets.conflicting_target',
-                ]);
-            }
-
-            if (!empty($in_head)) {
-                $target = Dj_App_Assets::TARGET_HEAD;
-            } elseif (!empty($in_footer)) {
-                $target = Dj_App_Assets::TARGET_FOOTER;
-            }
-        }
-
-        if (empty($target)) {
-            $target = Dj_App_Assets::TARGET_FOOTER;
-
-            if ($kind == Dj_App_Assets::KIND_CSS) {
-                $target = Dj_App_Assets::TARGET_HEAD;
-            }
-        } else {
-            // The constants are underscored; a caller writing body-start means the same thing.
-            $target = str_replace('-', '_', $target);
-            $target = Dj_App_String_Util::formatStringId($target);
-
-            $allowed_targets = [
-                Dj_App_Assets::TARGET_HEAD => 1,
-                Dj_App_Assets::TARGET_BODY_START => 1,
-                Dj_App_Assets::TARGET_FOOTER => 1,
-            ];
-
-            if (!isset($allowed_targets[$target])) {
-                throw new Dj_App_Validation_Exception('Unknown asset target', [
-                    'code' => 'app.core.assets.unknown_target',
-                    'target' => $target,
-                ]);
-            }
-        }
+        $placement = $this->resolvePlacement($placement_args);
 
         $item = [
             'id' => $source_res->id,
             'kind' => $kind,
-            'target' => $target,
+            'placement' => $placement,
             'url' => $url,
             'content' => $content,
             'attrs' => $attrs,
@@ -299,6 +265,78 @@ class Dj_App_Assets {
         $res_obj->status(true);
 
         return $res_obj;
+    }
+
+    /**
+     * Where the tag goes. An explicit placement wins; failing that the in_head / in_footer
+     * shorthands; failing both the kind decides — stylesheets in the head, scripts in the
+     * footer.
+     *
+     * Takes the params bag rather than the three fields, because the shorthands are only read
+     * when no explicit placement was given — pulling them out at the call site would read them
+     * on every asset to answer a question most assets never ask.
+     *
+     * @param array $args params, kind
+     * @return string ALWAYS one of the PLACEMENT_* constants — it throws rather than answer empty
+     * @throws Dj_App_Validation_Exception
+     */
+    public function resolvePlacement($args = [])
+    {
+        $params = empty($args['params']) ? [] : $args['params'];
+        $kind = empty($args['kind']) ? '' : $args['kind'];
+
+        $placement = Dj_App_Util::getField('placement', $params);
+
+        // Shorthand flags for the two placements anyone actually names, so a caller can say
+        // where without reaching for a constant. An explicit placement outranks them, and it is
+        // the only way to reach PLACEMENT_BODY_START.
+        if (empty($placement)) {
+            $in_head = Dj_App_Util::getField('in_head|head', $params);
+            $in_footer = Dj_App_Util::getField('in_footer|footer', $params);
+
+            // Asking for both is not a preference to resolve, it is a contradiction — and
+            // picking one silently is how a caller ends up debugging the wrong half of a page.
+            if (!empty($in_head) && !empty($in_footer)) {
+                throw new Dj_App_Validation_Exception('An asset goes in one place', [
+                    'code' => 'app.core.assets.conflicting_placement',
+                ]);
+            }
+
+            if (!empty($in_head)) {
+                $placement = Dj_App_Assets::PLACEMENT_HEAD;
+            } elseif (!empty($in_footer)) {
+                $placement = Dj_App_Assets::PLACEMENT_FOOTER;
+            }
+        }
+
+        if (empty($placement)) {
+            $placement = Dj_App_Assets::PLACEMENT_FOOTER;
+
+            if ($kind == Dj_App_Assets::KIND_CSS) {
+                $placement = Dj_App_Assets::PLACEMENT_HEAD;
+            }
+
+            return $placement;
+        }
+
+        // The constants are underscored; a caller writing body-start means the same thing.
+        $placement = str_replace('-', '_', $placement);
+        $placement = Dj_App_String_Util::formatStringId($placement);
+
+        $allowed_placements = [
+            Dj_App_Assets::PLACEMENT_HEAD => 1,
+            Dj_App_Assets::PLACEMENT_BODY_START => 1,
+            Dj_App_Assets::PLACEMENT_FOOTER => 1,
+        ];
+
+        if (!isset($allowed_placements[$placement])) {
+            throw new Dj_App_Validation_Exception('Unknown asset placement', [
+                'code' => 'app.core.assets.unknown_placement',
+                'placement' => $placement,
+            ]);
+        }
+
+        return $placement;
     }
 
     /**
@@ -580,7 +618,10 @@ class Dj_App_Assets {
 
             if (empty($source_type)) {
                 $source_type = $source_key;
-                $source_val = $val;
+
+                // Cast at the one boundary a source enters through. PHP coerces an int for
+                // substr() and stripos() but NOT for offset access, which the render path uses.
+                $source_val = (string) $val;
             }
         }
 
@@ -618,8 +659,10 @@ class Dj_App_Assets {
             }
         }
 
+        $inp_kind = Dj_App_Util::getField('kind', $params);
+
         $kind_args = [
-            'params' => $params,
+            'kind' => $inp_kind,
             'source_type' => $source_type,
             'source_val' => $source_val,
         ];
@@ -682,22 +725,21 @@ class Dj_App_Assets {
      * content is treated as JS, which is what an inline blob almost always is; pass 'kind'
      * when it is not.
      *
-     * @param array $args params, source_type, source_val
-     * @return string
+     * @param array $args kind, source_type, source_val
+     * @return string ALWAYS KIND_CSS or KIND_JS — it throws rather than answer empty, so no
+     *   caller has to test what it got back
      * @throws Dj_App_Validation_Exception
      */
     public function resolveKind($args = [])
     {
-        $params = empty($args['params']) ? [] : $args['params'];
+        $kind = empty($args['kind']) ? '' : $args['kind'];
         $source_type = empty($args['source_type']) ? '' : $args['source_type'];
         $source_val = empty($args['source_val']) ? '' : $args['source_val'];
-
-        $kind = Dj_App_Util::getField('kind', $params);
 
         if (!empty($kind)) {
             $kind = Dj_App_String_Util::formatStringId($kind);
 
-            if ($kind != Dj_App_Assets::KIND_CSS && $kind != Dj_App_Assets::KIND_JS) {
+            if (!isset(Dj_App_Assets::SUPPORTED_KINDS[$kind])) {
                 throw new Dj_App_Validation_Exception('Unknown asset kind', [
                     'code' => 'app.core.assets.unknown_kind',
                     'kind' => $kind,
@@ -831,32 +873,10 @@ class Dj_App_Assets {
 
         // Only a file that exists can leak, and only a found one is ever delivered.
         if ($file_found) {
-            $min_file = '';
+            $min_file = $this->resolveMinFile($abs_file);
 
-            if ($this->checkUseMinified()) {
-                $dot_pos = strrpos($abs_file, '.');
-
-                // No extension leaves nothing to mark, and the marker needs four characters of
-                // room in front of the dot. One comparison settles both, and it keeps the offset
-                // below from counting back from the END of the string instead.
-                if ($dot_pos >= 4) {
-                    $min_tail = substr($abs_file, $dot_pos - 4, 4);
-
-                    // Those four are read where the marker would sit, never anywhere in the
-                    // string, so a DIRECTORY spelled that way cannot pass a source file off as a
-                    // build. Case-insensitive: the name came from a caller, not from disk.
-                    if (strcasecmp($min_tail, '.min') != 0) {
-                        $min_file = substr_replace($abs_file, '.min', $dot_pos, 0);
-                    }
-                }
-            }
-
-            // The build sits beside its source, so this ONE stat runs on a file already found.
-            // Looking beside every candidate instead would have doubled a scan that mostly
-            // misses — a syscall per miss on every site that ships no builds at all.
-            //
-            // is_file, not file_exists: a DIRECTORY carrying that name would otherwise replace a
-            // perfectly good file with something that can be neither read nor served.
+            // One stat, on a file already found. is_file rather than file_exists: a DIRECTORY
+            // by that name would otherwise replace a good file with something unservable.
             if (!empty($min_file) && is_file($min_file)) {
                 $abs_file = $min_file;
             }
@@ -885,6 +905,50 @@ class Dj_App_Assets {
         $res_obj->status(true);
 
         return $res_obj;
+    }
+
+    /**
+     * The name a minified build of this file would carry — `.min` ahead of the extension — or
+     * empty when there is no build worth looking for. Everything it needs is in the name.
+     *
+     * @param string $file
+     * @return string Empty when no build applies
+     */
+    public function resolveMinFile($file)
+    {
+        // The master switch leads. It is the only check here that rejects anything in bulk —
+        // off, and every asset on the site stops on this line having done no work at all.
+        if (!$this->checkUseMinified()) {
+            return '';
+        }
+
+        // strrpos answers FALSE with no dot at all, and false compares below 4 — so this one
+        // test refuses that, a dotfile, and a name too short to carry the marker. Without it
+        // the offset below counts back from the END of the string instead.
+        $dot_pos = strrpos($file, '.');
+
+        if ($dot_pos < 4) {
+            return '';
+        }
+
+        $ext = substr($file, $dot_pos + 1);
+        $ext = strtolower($ext);
+
+        if (!isset(Dj_App_Assets::SUPPORTED_MIN_EXTS[$ext])) {
+            return '';
+        }
+
+        // Read where the marker would SIT, so a directory named .min cannot pass a source file
+        // off as a build. Case-insensitive: the name came from a caller, not from disk.
+        $min_marker = substr($file, $dot_pos - 4, 4);
+
+        if (strcasecmp($min_marker, '.min') == 0) {
+            return '';
+        }
+
+        $min_file = substr_replace($file, '.min', $dot_pos, 0);
+
+        return $min_file;
     }
 
     /**
@@ -1084,17 +1148,17 @@ class Dj_App_Assets {
     }
 
     /**
-     * The markup for one target, priority-ordered and stable within a priority. Returns the
+     * The markup for one placement, priority-ordered and stable within a priority. Returns the
      * block rather than echoing it, so the page seams and renderPage() can both use it.
      *
-     * @param string $target TARGET_HEAD / TARGET_BODY_START / TARGET_FOOTER
+     * @param string $placement PLACEMENT_HEAD / PLACEMENT_BODY_START / PLACEMENT_FOOTER
      * @return string
      */
-    public function buildHtml($target)
+    public function buildHtml($placement)
     {
         $html = '';
 
-        if (empty($this->queue) || empty($target)) {
+        if (empty($this->queue) || empty($placement)) {
             return $html;
         }
 
@@ -1105,7 +1169,7 @@ class Dj_App_Assets {
         // for assets that never wanted one.
         if (empty($this->has_priority)) {
             foreach ($this->queue as $item) {
-                if ($item['target'] != $target) {
+                if ($item['placement'] != $placement) {
                     continue;
                 }
 
@@ -1120,7 +1184,7 @@ class Dj_App_Assets {
             $buckets = [];
 
             foreach ($this->queue as $item) {
-                if ($item['target'] != $target) {
+                if ($item['placement'] != $placement) {
                     continue;
                 }
 
@@ -1147,7 +1211,7 @@ class Dj_App_Assets {
             $queue_items = $this->sortByPrereq($queue_items);
         }
 
-        $ctx = [ 'target' => $target, ];
+        $ctx = [ 'placement' => $placement, ];
         $queue_items = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_QUEUE, $queue_items, $ctx);
 
         if (empty($queue_items) || !is_array($queue_items)) {
@@ -1164,7 +1228,7 @@ class Dj_App_Assets {
             }
 
             $tag_ctx = $item;
-            $tag_ctx['target'] = $target;
+            $tag_ctx['placement'] = $placement;
             $tag_html = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_TAG_HTML, $tag_html, $tag_ctx);
 
             if (empty($tag_html)) {
@@ -1288,6 +1352,14 @@ class Dj_App_Assets {
     public function buildTagHtml($item = [])
     {
         $kind = empty($item['kind']) ? Dj_App_Assets::KIND_JS : $item['kind'];
+
+        // Say which kinds render rather than letting "not css" stand in for js: a third kind
+        // would reach the branches below and be emitted as a <script>, handing the browser an
+        // arbitrary file as executable javascript.
+        if (!isset(Dj_App_Assets::SUPPORTED_KINDS[$kind])) {
+            return '';
+        }
+
         $attrs = empty($item['attrs']) ? [] : $item['attrs'];
         $url = empty($item['url']) ? '' : $item['url'];
         $content = empty($item['content']) ? '' : $item['content'];
@@ -1398,26 +1470,26 @@ class Dj_App_Assets {
 
     /**
      * Writes the queued markup into the page. ONE listener for all three page seams: the
-     * firing hook says which target it is, and a caller may name one explicitly instead.
+     * firing hook says which placement it is, and a caller may name one explicitly instead.
      *
-     * @param array $ctx target — optional; defaults to whichever seam is firing
+     * @param array $ctx placement — optional; defaults to whichever seam is firing
      * @return void echoes into the buffer the page is being built in
      */
     public function renderAssets($ctx = [])
     {
-        $target = Dj_App_Util::getField('target', $ctx);
+        $placement = Dj_App_Util::getField('placement', $ctx);
 
-        if (empty($target)) {
-            $target = Dj_App_Assets::TARGET_FOOTER;
+        if (empty($placement)) {
+            $placement = Dj_App_Assets::PLACEMENT_FOOTER;
 
             if (Dj_App_Hooks::currentAction(Dj_App_Assets::HOOK_PAGE_HEAD)) {
-                $target = Dj_App_Assets::TARGET_HEAD;
+                $placement = Dj_App_Assets::PLACEMENT_HEAD;
             } elseif (Dj_App_Hooks::currentAction(Dj_App_Assets::HOOK_PAGE_BODY_START)) {
-                $target = Dj_App_Assets::TARGET_BODY_START;
+                $placement = Dj_App_Assets::PLACEMENT_BODY_START;
             }
         }
 
-        $html = $this->buildHtml($target);
+        $html = $this->buildHtml($placement);
 
         if (empty($html)) {
             return;

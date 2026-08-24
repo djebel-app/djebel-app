@@ -116,6 +116,7 @@ Env/constant only unless the *app.ini* column names a key.
 | `app.core.shortcodes.full_page_replace` | `false` | — | Replace shortcodes in the whole buffer instead of only from `<body>`. |
 | `app.core.shortcodes.process_all` | `false` | `[app] shortcodes.process_all` | Call the callback for EVERY occurrence. See the warning below. |
 | `app.core.assets.load` | `true` | — | Asset queue toggle (`Dj_App_Assets`). Off = plugin `register()` calls have nowhere to go, so no asset tags are emitted. |
+| `app.core.assets.use_min` | `Dj_App_Env::isLive()` | `[app] core.assets.use_min` | Serve `name.min.js` / `name.min.css` when one sits beside the file a plugin named. See below. |
 | `app.core.output.render_generator` | `true` | — | Emit the generator meta tag. |
 | `app.core.process_missing_static_files` | `false` | — | Let the app handle requests for missing static files. |
 | `app.core.log.file` | *(unset)* | — | Log file location. |
@@ -134,6 +135,40 @@ Turning `process_all` on invokes the callback per occurrence. That is what a cou
 a random pick needs, but it applies to **every shortcode on the site** — a page with the
 same expensive shortcode three times pays three renders instead of one. Leave it off
 unless a shortcode genuinely must differ per occurrence.
+
+### `assets.use_min` — serving minified builds
+
+A plugin registers the file it wrote. When this is on, and a build sits **beside** that
+file, the build is what ships:
+
+```
+assets/main.js       <- what the plugin registered
+assets/main.min.js   <- what the browser gets
+```
+
+Only `.js` and `.css` are ever looked for — nobody ships a minified font — and the check
+runs on the file that was already found, so it costs **one** extra `is_file()` and only
+when there was something to serve. A name that already carries the marker is left alone;
+nothing ever asks for `main.min.min.js`.
+
+**The environment decides the default.** A dev box serves what was asked for, so what runs
+is what you are editing and a stale build cannot quietly shadow a source change. Everywhere
+else prefers the build — note that `Dj_App_Env::isLive()` answers **true on staging**, so a
+staging box behaves like production here.
+
+Set it explicitly to override the environment:
+
+```ini
+[app]
+core.assets.use_min = 0
+```
+
+A filter gets the last word, and it runs for **every** asset — so a site can decide per
+request or per asset, and one registered after assets have already been queued still counts:
+
+```php
+Dj_App_Hooks::addFilter('app.core.assets.filter.use_min', ['My_Plugin', 'filterUseMin']);
+```
 
 ## `app.*` — request and error handling
 

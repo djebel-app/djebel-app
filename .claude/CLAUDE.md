@@ -951,6 +951,10 @@ Key configuration points:
 - `app.core.theme.load_theme_functions`: overrides the site's `theme_load_functions`
 - `app.core.assets.load`: load the asset queue (`Dj_App_Assets`) so plugins/themes can
   register CSS/JS in one call (default on)
+- `app.core.assets.use_min`: serve `name.min.js` / `name.min.css` when one sits beside the
+  file a plugin registered (`[app] core.assets.use_min`). Defaults to `Dj_App_Env::isLive()`,
+  which is TRUE on staging as well as live; `app.core.assets.filter.use_min` gets the last
+  word and runs per asset. Only js/css are probed, and only on a file already found
 - `app.core.shortcodes.full_page_replace`: replace shortcodes in the whole buffer, not
   just from `<body>` (default off)
 - `app.core.shortcodes.process_all`: call the callback for EVERY occurrence instead of

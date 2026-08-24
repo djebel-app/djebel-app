@@ -30,7 +30,7 @@ as an inline `<script>` from a hook listener, because there was no way to say *s
 | Topic | Decision |
 |---|---|
 | Entry point | Singleton + `add($ctx)` / `remove($id)`. `register($ctx)` / `deregister($id)` are static wrappers that resolve the instance and delegate. |
-| Kind & target | Inferred from **which key** the caller used. CSS → head, JS → footer. Every inference is overridable. |
+| Kind & placement | Inferred from **which key** the caller used. CSS → head, JS → footer. Every inference is overridable. |
 | Ordering | `priority` field, default **`Dj_App_Hooks::DEFAULT_PRIORITY`** by reference — not a retyped literal. |
 | Return | `add()` returns a `Dj_App_Result` carrying the resolved `id`. |
 | Removal | By id **or** by the same params that added it. |
@@ -59,9 +59,9 @@ Dj_App_Assets::register([ 'js'     => 'var cfg = {};', ]);
 Dj_App_Assets::register([ 'url'    => 'https://cdn.example.com/x.css', ]);
 ```
 
-**The key declares the source and the kind** — no `kind` or `target` needed for common cases:
+**The key declares the source and the kind** — no `kind` or `placement` needed for common cases:
 
-| Key | Source | Kind | Default target |
+| Key | Source | Kind | Default placement |
 |---|---|---|---|
 | `file` | relative to the `plugin` / `theme` context | from extension | by kind |
 | `url` | explicit, external | from extension | by kind |
@@ -72,7 +72,7 @@ Dj_App_Assets::register([ 'url'    => 'https://cdn.example.com/x.css', ]);
 Alias groups are read with `Dj_App_Util::getField('js|script', $ctx)` — see *Reading the
 context* below — so adding a spelling is one more token in a string, never another branch.
 
-### `target` is the flag
+### `placement` is the flag
 
 JS defaults to the footer, but plenty of scripts must run before the page paints — a feature
 flag, a theme switch, an inline config an early template reads. Head placement is first-class:
@@ -81,11 +81,11 @@ flag, a theme switch, an inline config an early template reads. Head placement i
 Dj_App_Assets::register([
     'plugin' => 'my-plugin',
     'file' => '/assets/early.js',
-    'target' => Dj_App_Assets::TARGET_HEAD,
+    'placement' => Dj_App_Assets::PLACEMENT_HEAD,
 ]);
 ```
 
-Constants: `TARGET_HEAD`, `TARGET_FOOTER`, and `TARGET_BODY_START` (the
+Constants: `PLACEMENT_HEAD`, `PLACEMENT_FOOTER`, and `PLACEMENT_BODY_START` (the
 `app.page.html.body.start` seam already exists and costs nothing to expose). One key carries
 the choice — no boolean shorthand beside it, so there is exactly one way to say it.
 
@@ -140,7 +140,7 @@ should match its keys exactly.
 Each step is skipped when the caller passed the value explicitly:
 
 1. **source + kind** — from the key used, per the table above.
-2. **target** — else CSS → head, JS → footer.
+2. **placement** — else CSS → head, JS → footer.
 3. **url** — else built from `file` plus the `plugin` / `theme` context.
 4. **id** — else `Dj_App_Util::generateHash()` of the source; drives dedupe.
 5. **wrapping** — content already carrying its own `<script>` / `<style>` passes through
@@ -211,6 +211,54 @@ Two rules, depending on whether the caller named the asset:
   override a plugin's asset by re-registering under the same handle, without needing to
   `remove()` first.
 
+### Minified builds — `assets.use_min` (added 2026-08-24)
+
+A plugin registers the file it wrote. When a build sits **beside** that file, the build is
+what ships — `assets/main.js` → `assets/main.min.js`. The caller never names it and never
+has to know whether one exists.
+
+**Resolved AFTER the candidate scan, not during it.** Probing beside every candidate would
+have doubled a lookup that mostly misses — a plugin file is searched across four dirs, so a
+site with no builds would pay eight `is_file()` calls where it used to pay four. Resolving
+the real file first and then checking one sibling costs **one** extra stat, and only when a
+file was actually found.
+
+Four things make it empty, checked cheapest-first, and all four are deducible from the name
+alone — nothing is passed in beside it:
+
+| Rejected | Why |
+|---|---|
+| No extension, or under four characters before the dot | Nothing to mark, and no room for the marker |
+| Extension outside `SUPPORTED_MIN_EXTS` | Only js/css are ever built; probing for a minified font spends a syscall per request to learn that |
+| The name already ends `.min` before its extension | Nothing asks for `main.min.min.js` |
+| The site is not taking builds | Below |
+
+`SUPPORTED_MIN_EXTS` is deliberately **not** `SUPPORTED_KINDS`, and is not spelled with the
+`KIND_*` constants. They hold the same two values today by coincidence: the day fonts become
+renderable they join the KINDS, and a min lookup reading that list would immediately start
+stat'ing for `font.min.woff2` on every request.
+
+The marker is read **at the position it would occupy** — the four characters before the
+extension — never searched for anywhere in the string, so a directory named `.min/` cannot
+make a source file look built.
+
+The swap runs **before** the containment check, so a `.min` file that is a symlink out of the
+plugin dir is refused exactly as its source would be. It also uses `is_file()`, not
+`file_exists()`: a directory answers an existence check the same way a file does, and swapping
+a good file for an unreadable directory is worse than not swapping at all.
+
+**The environment sets the default; config overrides it; the filter gets the last word.**
+`Dj_App_Env::isLive()` is the default — note it answers **true on staging**, so staging
+behaves like production. A dev box therefore serves what was asked for, which keeps what runs
+the same as what you are editing.
+
+Only the env+config half is memoized per request. Neither can change between two assets, and
+the environment scan behind `isLive()` measured **3,734 ns** — several times what every other
+check in the path costs put together, so paying it per asset was the entire cost of the
+feature. **The filter is never memoized**, so it stays a live seam: one registered after the
+first asset resolved is honored just the same, and a site free to answer per asset keeps that
+freedom.
+
 ### Failure split
 
 - **Caller bug → throw `Dj_App_Validation_Exception`**: conflicting source keys (`file` *and*
@@ -244,17 +292,18 @@ editing any plugin. Naming uses the `.filter.` / `.action.` infix already used b
 
 | Hook | Type | Purpose |
 |---|---|---|
-| `app.core.assets.filter.add_params` | filter | The `$params` **before** normalization — rewrite a URL to a CDN, force a target, bump priority, swap in a minified build. |
+| `app.core.assets.filter.add_params` | filter | The `$params` **before** normalization — rewrite a URL to a CDN, force a placement, bump priority, swap in a minified build. |
 | `app.core.assets.filter.item` | filter | The normalized item just before it enters the queue. **Returning empty vetoes it** — the one seam for "this site never loads that asset". |
 | `app.core.assets.action.added` | action | After queueing; `$ctx` carries the item. Logging / auditing, changes nothing. |
+| `app.core.assets.filter.use_min` | filter | Whether a minified build is preferred, after the environment and config have had their say. Runs for **every** asset — never memoized — so it stays a live seam. |
 
 **Around rendering:**
 
 | Hook | Type | Purpose |
 |---|---|---|
-| `app.core.assets.filter.queue` | filter | The whole queue for a target, after sort, before rendering. Bulk drop / reorder, with visibility of everything else present. |
+| `app.core.assets.filter.queue` | filter | The whole queue for a placement, after sort, before rendering. Bulk drop / reorder, with visibility of everything else present. |
 | `app.core.assets.filter.tag_html` | filter | **Each rendered tag**; `$ctx` is the item. Stamp `nonce`, add `integrity` / `crossorigin`, swap `defer` ↔ `async`. |
-| `app.core.assets.filter.html` | filter | The assembled block for a target, right before it is echoed. |
+| `app.core.assets.filter.html` | filter | The assembled block for a placement, right before it is echoed. |
 
 **This supersedes TODO #1's reserved `app.assets.nonce`.** That entry set aside a
 special-purpose nonce hook; a per-tag `tag_html` filter does the same job generically, and the
@@ -407,7 +456,7 @@ for a test-reset seam.
 - plugin + file → correct URL
 - `?v=` present when the file exists, absent when it does not
 - explicit `url` left untouched
-- default targets (CSS head, JS footer); **JS forced to head via `target`**
+- default placements (CSS head, JS footer); **JS forced to head via `placement`**
 - priority ordering; stable sort within one priority; **default priority equals
   `Dj_App_Hooks::DEFAULT_PRIORITY`**
 - **non-public plugin → inlined, not linked**

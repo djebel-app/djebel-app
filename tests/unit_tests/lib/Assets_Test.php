@@ -126,7 +126,7 @@ class Dj_App_Assets_Test extends TestCase {
         return $dir;
     }
 
-    // ---------------------------------------------------------------- kind + target
+    // ---------------------------------------------------------------- kind + placement
 
     public function testKindInferredFromUrlExtension()
     {
@@ -134,8 +134,8 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'url' => 'https://cdn.example.com/x.js', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('<link', $head_html);
         $this->assertStringContainsString('x.css', $head_html);
@@ -152,8 +152,8 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/main.js', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('main.css', $head_html);
         $this->assertStringContainsString('main.js', $footer_html);
@@ -165,8 +165,8 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'content' => '<script>var sniffed_js = 1;</script>', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('.sniffed-css', $head_html);
         $this->assertStringContainsString('sniffed_js', $footer_html);
@@ -177,7 +177,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'style' => '.a { color: red; }', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringContainsString('<style>.a { color: red; }</style>', $head_html);
     }
@@ -187,7 +187,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var cfg = {};', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('<script>var cfg = {};</script>', $footer_html);
     }
@@ -198,25 +198,25 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'content' => $content, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString($content, $footer_html);
         $this->assertStringNotContainsString('<script><script', $footer_html);
     }
 
-    public function testJsForcedToHeadViaTarget()
+    public function testJsForcedToHeadViaPlacement()
     {
         $ctx = [
             'plugin' => 'djebel-test-plugin',
             'file' => '/assets/main.js',
-            'target' => Dj_App_Assets::TARGET_HEAD,
+            'placement' => Dj_App_Assets::PLACEMENT_HEAD,
         ];
 
         $this->registerAsset($ctx);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('main.js', $head_html);
         $this->assertEmpty($footer_html);
@@ -228,8 +228,8 @@ class Dj_App_Assets_Test extends TestCase {
 
         $assets_obj = Dj_App_Assets::getInstance();
 
-        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
-        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER));
     }
 
     public function testHeadFlagIsAcceptedAsTheShortSpelling()
@@ -238,7 +238,7 @@ class Dj_App_Assets_Test extends TestCase {
 
         $assets_obj = Dj_App_Assets::getInstance();
 
-        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD));
     }
 
     public function testInFooterFlagPlacesTheAssetInTheFooter()
@@ -247,18 +247,18 @@ class Dj_App_Assets_Test extends TestCase {
 
         $assets_obj = Dj_App_Assets::getInstance();
 
-        $this->assertStringContainsString('.a { color: red; }', $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
-        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+        $this->assertStringContainsString('.a { color: red; }', $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD));
     }
 
-    public function testExplicitTargetOutranksTheShorthandFlag()
+    public function testExplicitPlacementOutranksTheShorthandFlag()
     {
-        $this->registerAsset([ 'js' => 'var probe = 1;', 'in_head' => 1, 'target' => Dj_App_Assets::TARGET_FOOTER, ]);
+        $this->registerAsset([ 'js' => 'var probe = 1;', 'in_head' => 1, 'placement' => Dj_App_Assets::PLACEMENT_FOOTER, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
 
-        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER));
-        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD));
+        $this->assertStringContainsString('var probe = 1;', $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER));
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD));
     }
 
     /**
@@ -275,32 +275,32 @@ class Dj_App_Assets_Test extends TestCase {
             $code = $e->getErrorCode();
         }
 
-        $this->assertEquals('app.core.assets.conflicting_target', $code);
+        $this->assertEquals('app.core.assets.conflicting_placement', $code);
     }
 
-    public function testBodyStartTargetAcceptsDashedSpelling()
+    public function testBodyStartPlacementAcceptsDashedSpelling()
     {
-        $this->registerAsset([ 'js' => 'var underscored = 1;', 'target' => 'body_start', ]);
-        $this->registerAsset([ 'js' => 'var dashed = 1;', 'target' => 'body-start', ]);
+        $this->registerAsset([ 'js' => 'var underscored = 1;', 'placement' => 'body_start', ]);
+        $this->registerAsset([ 'js' => 'var dashed = 1;', 'placement' => 'body-start', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $body_start_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_BODY_START);
+        $body_start_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_BODY_START);
 
         $this->assertStringContainsString('var underscored = 1;', $body_start_html);
         $this->assertStringContainsString('var dashed = 1;', $body_start_html);
     }
 
-    public function testUnknownTargetThrows()
+    public function testUnknownPlacementThrows()
     {
         $code = '';
 
         try {
-            $this->registerAsset([ 'js' => 'var x = 1;', 'target' => 'nowhere', ]);
+            $this->registerAsset([ 'js' => 'var x = 1;', 'placement' => 'nowhere', ]);
         } catch (Dj_App_Validation_Exception $e) {
             $code = $e->getErrorCode();
         }
 
-        $this->assertEquals('app.core.assets.unknown_target', $code);
+        $this->assertEquals('app.core.assets.unknown_placement', $code);
     }
 
     // ---------------------------------------------------------------- urls + versioning
@@ -310,7 +310,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/main.js', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('/dj-content/plugins/djebel-test-plugin/assets/main.js', $footer_html);
     }
@@ -320,7 +320,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'theme' => 'djebel-test-theme', 'file' => '/style.css', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringContainsString('/dj-content/themes/djebel-test-theme/style.css', $head_html);
     }
@@ -333,7 +333,7 @@ class Dj_App_Assets_Test extends TestCase {
         $version = filemtime($asset_file);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('v=' . $version, $footer_html);
     }
@@ -354,7 +354,7 @@ class Dj_App_Assets_Test extends TestCase {
         $mtime = filemtime($asset_file);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('v=1.2.3', $footer_html);
         $this->assertStringNotContainsString('v=' . $mtime, $footer_html);
@@ -369,7 +369,7 @@ class Dj_App_Assets_Test extends TestCase {
         ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('v=abc123', $footer_html);
     }
@@ -379,7 +379,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'url' => 'https://cdn.example.com/x.js', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('src="https://cdn.example.com/x.js"', $footer_html);
         $this->assertStringNotContainsString('v=', $footer_html);
@@ -390,9 +390,69 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'url' => '//cdn.example.com/x.js', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('src="//cdn.example.com/x.js"', $footer_html);
+    }
+
+    /**
+     * An extension the system does not handle is a BAD USE, not a runtime miss — so it throws
+     * the way a conflicting source or a javascript: url does, rather than coming back as an
+     * error Result the caller may ignore.
+     */
+    public function testUnsupportedExtensionThrows()
+    {
+        $code = '';
+
+        try {
+            Dj_App_Assets::register([ 'url' => 'https://cdn.example.com/x.woff2', ]);
+        } catch (Dj_App_Validation_Exception $e) {
+            $code = $e->getErrorCode();
+        }
+
+        $this->assertEquals('app.core.assets.unknown_kind', $code);
+    }
+
+    /**
+     * And it is refused BEFORE any file work: an unsupported extension reports the kind, never
+     * file_not_found, which is what proves the filesystem was never touched for it.
+     */
+    public function testUnsupportedExtensionIsRefusedBeforeTheFileIsLookedFor()
+    {
+        $code = '';
+
+        try {
+            Dj_App_Assets::register([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/nope.woff2', ]);
+        } catch (Dj_App_Validation_Exception $e) {
+            $code = $e->getErrorCode();
+        }
+
+        $this->assertEquals('app.core.assets.unknown_kind', $code);
+    }
+
+    /**
+     * A caller may hand over a number — a build stamp, a counter — and it is cast at the one
+     * boundary it enters through, so nothing downstream reads a character off an int. PHP
+     * coerces ints for substr() and stripos() but NOT for offset access, so an uncast value
+     * reaches the render path and warns there.
+     *
+     * The stored type is what is asserted, not the absence of a warning: this suite does not
+     * fail on warnings, so a rendering check alone would pass whether or not the cast is there.
+     */
+    public function testNumericSourceIsStoredAsAString()
+    {
+        $this->registerAsset([ 'js' => 12345, ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $queue = $assets_obj->getQueue();
+        $item = reset($queue);
+
+        $this->assertIsString($item['content']);
+
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('12345', $footer_html);
+        $this->assertStringContainsString('<script', $footer_html);
     }
 
     public function testUnusableUrlThrows()
@@ -406,6 +466,31 @@ class Dj_App_Assets_Test extends TestCase {
         }
 
         $this->assertEquals('app.core.assets.invalid_url', $code);
+    }
+
+    /**
+     * "Not css" is not a way to spell js. A kind this cannot render produces nothing, rather
+     * than falling through to the script branch and handing an arbitrary url to a <script> tag.
+     *
+     * Asserted against the builder directly, because no third kind can be registered yet —
+     * which is exactly why the guard has to be here before one can be.
+     */
+    public function testTagBuilderRefusesAKindItCannotRender()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $font_item = [ 'kind' => 'font', 'url' => 'https://cdn.example.com/x.woff2', ];
+        $this->assertEmpty($assets_obj->buildTagHtml($font_item));
+
+        $inline_item = [ 'kind' => 'font', 'content' => 'not javascript', ];
+        $this->assertEmpty($assets_obj->buildTagHtml($inline_item));
+
+        // The two it does render are untouched.
+        $css_item = [ 'kind' => Dj_App_Assets::KIND_CSS, 'url' => 'https://cdn.example.com/x.css', ];
+        $this->assertStringContainsString('<link', $assets_obj->buildTagHtml($css_item));
+
+        $js_item = [ 'kind' => Dj_App_Assets::KIND_JS, 'url' => 'https://cdn.example.com/x.js', ];
+        $this->assertStringContainsString('<script', $assets_obj->buildTagHtml($js_item));
     }
 
     // ---------------------------------------------------------------- minified builds
@@ -423,7 +508,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/app.min.js', $footer_html);
             $this->assertStringNotContainsString('/assets/app.js', $footer_html);
@@ -441,7 +526,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/main.css', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+            $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
             $this->assertStringContainsString('/assets/main.css', $head_html);
             $this->assertStringNotContainsString('.min.css', $head_html);
@@ -459,7 +544,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/app.js', $footer_html);
             $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
@@ -490,7 +575,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/app.js', $footer_html);
             $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
@@ -518,7 +603,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/vendor.min.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/vendor.min.js', $footer_html);
             $this->assertStringNotContainsString('vendor.min.min.js', $footer_html);
@@ -536,7 +621,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/lib.MIN.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/lib.MIN.js', $footer_html);
             $this->assertStringNotContainsString('lib.MIN.min.js', $footer_html);
@@ -564,7 +649,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/.min/boxed.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertEquals(2, self::$use_min_calls, 'The filter was not consulted once per asset');
 
@@ -582,6 +667,44 @@ class Dj_App_Assets_Test extends TestCase {
     }
 
     /**
+     * Only stylesheets and scripts get built. Nothing else may be probed for a build — that
+     * would be a syscall per request spent learning what the extension already said.
+     *
+     * Asserted against the method rather than through register(), because a font cannot be
+     * enqueued yet: resolveKind() refuses the extension before a file is ever resolved. The
+     * guard is here for when it can be, so the probe never has to be remembered and removed.
+     */
+    public function testOnlyStylesheetsAndScriptsGetABuildName()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $assets_obj = Dj_App_Assets::getInstance();
+
+            $this->assertEquals('/assets/app.min.js', $assets_obj->resolveMinFile('/assets/app.js'));
+            $this->assertEquals('/assets/app.min.css', $assets_obj->resolveMinFile('/assets/app.css'));
+
+            // Case is the caller's, not disk's.
+            $this->assertEquals('/assets/app.min.JS', $assets_obj->resolveMinFile('/assets/app.JS'));
+
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/font.woff2'));
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/logo.svg'));
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/photo.png'));
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/data.json'));
+
+            // Nothing to mark, and nothing left to mark it against.
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/README'));
+            $this->assertEmpty($assets_obj->resolveMinFile(''));
+
+            // Already a build.
+            $this->assertEmpty($assets_obj->resolveMinFile('/assets/app.min.js'));
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
+    /**
      * A directory answers an existence check exactly as a file does, and neither reading nor
      * serving one is possible — so the source has to stand rather than be swapped for it.
      */
@@ -593,7 +716,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/dirtrap.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/dirtrap.js', $footer_html);
             $this->assertStringNotContainsString('/assets/dirtrap.min.js', $footer_html);
@@ -615,7 +738,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/.min/boxed.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
         } finally {
@@ -632,7 +755,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertTrue($res_obj->isSuccess());
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('var djPrivatePlugin = 1;', $footer_html);
         $this->assertStringNotContainsString('src=', $footer_html);
@@ -699,7 +822,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertTrue($res_obj->isSuccess());
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
         $this->assertStringContainsString('var owns_its_tag = 1;', $footer_html);
     }
 
@@ -834,7 +957,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'script' => 'var via_script = 1;', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('<script>var via_script = 1;</script>', $footer_html);
     }
@@ -844,7 +967,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'buffer' => '<style>.via-buffer {}</style>', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringContainsString('.via-buffer', $head_html);
     }
@@ -854,7 +977,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'data' => '<style>.via-data {}</style>', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringContainsString('.via-data', $head_html);
     }
@@ -869,7 +992,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset($ctx);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString(' defer>', $footer_html);
     }
@@ -889,7 +1012,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset($ctx);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('crossorigin="anonymous"', $footer_html);
         $this->assertStringContainsString(' defer ', $footer_html);
@@ -906,7 +1029,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset($ctx);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('&quot;', $footer_html);
         $this->assertStringNotContainsString('onload="alert(1)"', $footer_html);
@@ -927,7 +1050,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertTrue($res_obj->isSuccess());
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringNotContainsString('javascript:', $head_html);
         $this->assertStringNotContainsString('href=', $head_html);
@@ -944,7 +1067,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset($ctx);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $head_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_HEAD);
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
 
         $this->assertStringContainsString('rel="preload"', $head_html);
         $this->assertStringNotContainsString('rel="stylesheet"', $head_html);
@@ -958,7 +1081,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var early = 1;', 'priority' => 5, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $early_pos = strpos($footer_html, 'var early = 1;');
         $late_pos = strpos($footer_html, 'var late = 1;');
@@ -973,7 +1096,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var third = 1;', 'priority' => 30, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $first_pos = strpos($footer_html, 'var first = 1;');
         $second_pos = strpos($footer_html, 'var second = 1;');
@@ -1001,7 +1124,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var three = 1;', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $one_pos = strpos($footer_html, 'var one = 1;');
         $two_pos = strpos($footer_html, 'var two = 1;');
@@ -1022,7 +1145,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var late = 1;', 'priority' => 90, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $early_pos = strpos($footer_html, 'var early = 1;');
         $unpriced_pos = strpos($footer_html, 'var unpriced = 1;');
@@ -1041,7 +1164,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var first = 1;', 'priority' => 0, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $first_pos = strpos($footer_html, 'var first = 1;');
         $normal_pos = strpos($footer_html, 'var normal = 1;');
@@ -1057,7 +1180,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $jq_pos = strpos($footer_html, 'var jq = 1;');
         $app_pos = strpos($footer_html, 'var app = 1;');
@@ -1075,7 +1198,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', 'priority' => 99, ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $jq_pos = strpos($footer_html, 'var jq = 1;');
         $app_pos = strpos($footer_html, 'var app = 1;');
@@ -1090,7 +1213,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var a = 1;', 'id' => 'a', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $c_pos = strpos($footer_html, 'var c = 1;');
 
@@ -1105,7 +1228,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var a = 1;', 'id' => 'a', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $c_pos = strpos($footer_html, 'var c = 1;');
 
@@ -1114,7 +1237,7 @@ class Dj_App_Assets_Test extends TestCase {
     }
 
     /**
-     * A prerequisite naming something nobody registered — or something in another target — is
+     * A prerequisite naming something nobody registered — or something in another placement — is
      * already satisfied. Waiting for it would drop a working asset over a name that will never
      * arrive.
      */
@@ -1123,7 +1246,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var solo = 1;', 'id' => 'solo', 'prereq' => 'never-registered', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('var solo = 1;', $footer_html);
     }
@@ -1137,7 +1260,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var y = 1;', 'id' => 'y', 'prereq' => 'x', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $this->assertStringContainsString('var x = 1;', $footer_html);
         $this->assertStringContainsString('var y = 1;', $footer_html);
@@ -1153,7 +1276,7 @@ class Dj_App_Assets_Test extends TestCase {
         $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', ]);
 
         $assets_obj = Dj_App_Assets::getInstance();
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
         $jq_pos = strpos($footer_html, 'var jq = 1;');
         $app_pos = strpos($footer_html, 'var app = 1;');
@@ -1172,7 +1295,7 @@ class Dj_App_Assets_Test extends TestCase {
         $queue = $assets_obj->getQueue();
         $this->assertCount(1, $queue);
 
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
         $this->assertEquals(1, substr_count($footer_html, 'var shared = 1;'));
     }
 
@@ -1192,7 +1315,7 @@ class Dj_App_Assets_Test extends TestCase {
         $ids = array_keys($queue);
         $this->assertEquals('my-asset', $ids[1]);
 
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
         $this->assertStringContainsString('var overridden = 1;', $footer_html);
         $this->assertStringNotContainsString('var original = 1;', $footer_html);
 
@@ -1281,7 +1404,7 @@ class Dj_App_Assets_Test extends TestCase {
         $ids = array_keys($queue);
         $this->assertEquals('swap-me', $ids[1]);
 
-        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
         $swapped_pos = strpos($footer_html, 'var swapped = 1;');
         $three_pos = strpos($footer_html, 'var three = 1;');
 
@@ -1311,7 +1434,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'url' => 'https://cdn.example.com/x.js', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('https://rewritten.example.com/x.js', $footer_html);
         } finally {
@@ -1363,7 +1486,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'js' => 'var stamped = 1;', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('nonce="dj-test-nonce"', $footer_html);
         } finally {
@@ -1381,7 +1504,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'js' => 'var dropped = 1;', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('var kept = 1;', $footer_html);
             $this->assertStringNotContainsString('var dropped = 1;', $footer_html);
@@ -1399,7 +1522,7 @@ class Dj_App_Assets_Test extends TestCase {
             $this->registerAsset([ 'js' => 'var wrapped = 1;', ]);
 
             $assets_obj = Dj_App_Assets::getInstance();
-            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::TARGET_FOOTER);
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
 
             $this->assertStringContainsString('<!-- dj-assets-start -->', $footer_html);
             $this->assertStringContainsString('var wrapped = 1;', $footer_html);
