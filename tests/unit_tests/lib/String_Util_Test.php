@@ -210,6 +210,47 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertEquals(['a', 'b', 'c'], $result);
     }
 
+    /**
+     * '0' is a name like any other, but it is empty() and falsy in PHP — so both the entry
+     * guard and the list filter used to discard it, and a caller naming it got back a list
+     * that silently did not contain it.
+     */
+    public function testSplitOnSeparatorsKeepsZero()
+    {
+        // assertSame throughout: a list of NAMES is a list of strings, and assertEquals would
+        // sit green on [0] for an int that never went through the splitter's trim.
+        $this->assertSame([ '0', ], Dj_App_String_Util::splitOnSeparators('0'));
+        $this->assertSame([ '0', ], Dj_App_String_Util::splitOnSeparators(0));
+
+        // Mid-list is the case that lost it quietly, since the list came back non-empty.
+        $this->assertSame([ 'a', '0', 'b', ], Dj_App_String_Util::splitOnSeparators('a, 0, b'));
+        $this->assertSame([ 'a', '0', ], Dj_App_String_Util::splitOnSeparators([ 'a', '0', ]));
+        $this->assertSame([ 'a', '0', 'b', ], Dj_App_String_Util::splitOnSeparators([ 'a', [ '0', 'b', ], ]));
+
+        // Blanks are still dropped — only truthiness was the wrong test, not the filtering.
+        $this->assertSame([ 'a', 'b', ], Dj_App_String_Util::splitOnSeparators('a,,b'));
+    }
+
+    /**
+     * Nothing to split still answers with an empty ARRAY, whichever shape it arrives in.
+     *
+     * Two assertions per input on purpose. assertEmpty says what the answer means — nothing
+     * came back — while the type check holds the method to the list it promises on EVERY path,
+     * which assertEmpty alone would let slip if a branch ever returned '' or null instead.
+     */
+    public function testSplitOnSeparatorsEmptyShapes()
+    {
+        $empty_inputs = [ null, false, [], '   ', ];
+
+        foreach ($empty_inputs as $empty_input) {
+            $label = var_export($empty_input, true);
+            $result = Dj_App_String_Util::splitOnSeparators($empty_input);
+
+            $this->assertIsArray($result, 'Not a list for ' . $label);
+            $this->assertEmpty($result, 'Not empty for ' . $label);
+        }
+    }
+
     public function testSplitOnSeparatorsEmpty()
     {
         $result = Dj_App_String_Util::splitOnSeparators('');

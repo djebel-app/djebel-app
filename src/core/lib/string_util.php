@@ -152,11 +152,17 @@ class Dj_App_String_Util
      */
     public static function splitOnSeparators($buff)
     {
-        if (empty($buff)) {
+        // Null is nothing to split. NOT an empty() test — that would take '0' with it, and a
+        // caller naming the item '0' means it just as much as any other name.
+        if (is_null($buff)) {
             return [];
         }
 
         if (is_array($buff)) {
+            if (empty($buff)) {
+                return [];
+            }
+
             $items = [];
 
             foreach ($buff as $one_buff) {
@@ -176,6 +182,12 @@ class Dj_App_String_Util
             throw new Dj_App_Validation_Exception('splitOnSeparators buffer must be scalar or array', ['type' => $buff_type]);
         }
 
+        // Length, not empty(), for the same reason as above — '' and false have nothing to
+        // split, while '0' is a one-item list.
+        if (strlen($buff) == 0) {
+            return [];
+        }
+
         // FAST PATH: strpbrk scans once — no separator anywhere means the answer
         // is the single trimmed item, skipping the replace/explode machinery.
         if (strpbrk($buff, Dj_App_String_Util::SPLIT_SEPARATOR_CHARS) === false) {
@@ -193,7 +205,10 @@ class Dj_App_String_Util
 
         $items = explode(',', $buff);
         $items = Dj_App_String_Util::trim($items);
-        $items = array_filter($items);
+
+        // Filtered on LENGTH rather than truthiness: a bare array_filter() drops '0' along with
+        // the blanks left by 'a,,b', so 'a, 0, b' silently came back two items long.
+        $items = array_filter($items, 'strlen');
         $items = array_unique($items);
         $items = array_values($items);
 
