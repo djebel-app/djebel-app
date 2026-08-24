@@ -1426,6 +1426,11 @@ class Dj_App_Util {
     const CAST_ABS_INT = 4;
     const PARTIAL_MATCH = 32;
 
+    // How many parsed field names getField() remembers. A field name is a code literal at
+    // nearly every call site, so the real population is a few dozen for the life of a process
+    // — the cap only exists so a caller that BUILDS names cannot grow the map without end.
+    const FIELD_CACHE_MAX = 512;
+
     /**
      * Gets field from the params. The key can partially match internal vars —
      * the dash and underscore forms of a key are interchangeable in BOTH
@@ -1480,54 +1485,88 @@ class Dj_App_Util {
             return $field_val;
         }
 
+        // Parsing a field NAME is pure — the same name always yields the same tokens — and at
+        // nearly every call site the name is a code literal, so a handful of them repeat for
+        // the life of the process. Remembered once, which takes the split/trim/unique pipeline
+        // off every MISS, where it used to run in full before the fuzzy pass below.
+        static $field_tokens_cache = [];
+
+        $field_cache_key = is_string($field) ? $field : '';
         $multiple_fields = [];
 
-        if (is_array($field)) {
-            $multiple_fields = $field;
-        } elseif (is_scalar($field)) {
-            $alias_separator_chars = [ '|', ';', ];
-            $field = str_replace($alias_separator_chars, ',', $field);
-            $multiple_fields = explode(',', $field);
-        } else {
-            $field_type = is_object($field) ? get_class($field) : gettype($field);
-
-            throw new Dj_App_Exception('Bad variable type for field', [
-                'code' => 'app.core.lib.util.get_field.bad_field_type',
-                'field_type' => $field_type,
-            ]);
+        if (strlen($field_cache_key) > 0 && isset($field_tokens_cache[$field_cache_key])) {
+            $multiple_fields = $field_tokens_cache[$field_cache_key];
         }
 
-        // Skip non-scalar keys and trim
-        $multiple_fields = array_filter($multiple_fields, 'is_scalar');
-        $multiple_fields = Dj_App_String_Util::trim($multiple_fields);
-        $multiple_fields = array_unique($multiple_fields);
-        $multiple_fields = array_filter($multiple_fields);
+        if (empty($multiple_fields)) {
+            if (is_array($field)) {
+                $multiple_fields = $field;
+            } elseif (is_scalar($field)) {
+                $alias_separator_chars = [ '|', ';', ];
+                $field_tokens_str = str_replace($alias_separator_chars, ',', $field);
+                $multiple_fields = explode(',', $field_tokens_str);
+            } else {
+                $field_type = is_object($field) ? get_class($field) : gettype($field);
 
-        // Try each field option
-        foreach ($multiple_fields as $one_option) {
-            // A key name never contains whitespace (surrounding spaces were trimmed above); a token
-            // that STILL has whitespace is a caller bug. strpbrk (not preg) — C byte scan, no regex.
-            if (strpbrk($one_option, " \t\n\r\0\x0B") !== false) {
-                throw new Dj_App_Exception('Field name contains whitespace', [
-                    'code' => 'app.core.lib.util.get_field.field_has_whitespace',
-                    'field' => $one_option,
+                throw new Dj_App_Exception('Bad variable type for field', [
+                    'code' => 'app.core.lib.util.get_field.bad_field_type',
+                    'field_type' => $field_type,
                 ]);
             }
 
-            // The spelling variants, probed in PRIORITY order: the exact form, then
-            // the fully dashed / fully underscored forms, then the COLLAPSED form —
-            // so when a params bag carries several spellings, the one closest to
-            // what the caller asked for wins deterministically.
-            $option_variants = [ $one_option, ];
-            $has_separator = strpbrk($one_option, '-_') !== false;
+            // Skip non-scalar keys and trim
+            $multiple_fields = array_filter($multiple_fields, 'is_scalar');
+            $multiple_fields = Dj_App_String_Util::trim($multiple_fields);
+            $multiple_fields = array_unique($multiple_fields);
+            $multiple_fields = array_filter($multiple_fields);
 
-            if ($has_separator) {
-                $strip_separator_chars = [ '-', '_', ];
+            if (strlen($field_cache_key) > 0 && count($field_tokens_cache) < Dj_App_Util::FIELD_CACHE_MAX) {
+                $field_tokens_cache[$field_cache_key] = $multiple_fields;
+            }
+        }
 
-                $option_variants[] = str_replace('_', '-', $one_option);
-                $option_variants[] = str_replace('-', '_', $one_option);
-                $option_variants[] = str_replace($strip_separator_chars, '', $one_option);
-                $option_variants = array_unique($option_variants);
+        // The spellings a token can wear depend on the TOKEN and nothing else, so they are
+        // remembered with it. A token that throws below is never reached by the cache and
+        // throws every time, exactly as before.
+        static $option_variants_cache = [];
+
+        // Try each field option
+        foreach ($multiple_fields as $one_option) {
+            $option_variants = [];
+
+            if (isset($option_variants_cache[$one_option])) {
+                $option_variants = $option_variants_cache[$one_option];
+            }
+
+            if (empty($option_variants)) {
+                // A key name never contains whitespace (surrounding spaces were trimmed above); a
+                // token that STILL has whitespace is a caller bug. strpbrk (not preg) — C byte scan.
+                if (strpbrk($one_option, " \t\n\r\0\x0B") !== false) {
+                    throw new Dj_App_Exception('Field name contains whitespace', [
+                        'code' => 'app.core.lib.util.get_field.field_has_whitespace',
+                        'field' => $one_option,
+                    ]);
+                }
+
+                // The spelling variants, probed in PRIORITY order: the exact form, then
+                // the fully dashed / fully underscored forms, then the COLLAPSED form —
+                // so when a params bag carries several spellings, the one closest to
+                // what the caller asked for wins deterministically.
+                $option_variants = [ $one_option, ];
+                $has_separator = strpbrk($one_option, '-_') !== false;
+
+                if ($has_separator) {
+                    $strip_separator_chars = [ '-', '_', ];
+
+                    $option_variants[] = str_replace('_', '-', $one_option);
+                    $option_variants[] = str_replace('-', '_', $one_option);
+                    $option_variants[] = str_replace($strip_separator_chars, '', $one_option);
+                    $option_variants = array_unique($option_variants);
+                }
+
+                if (count($option_variants_cache) < Dj_App_Util::FIELD_CACHE_MAX) {
+                    $option_variants_cache[$one_option] = $option_variants;
+                }
             }
 
             foreach ($option_variants as $option_variant) {
@@ -1572,34 +1611,61 @@ class Dj_App_Util {
         $keys = array_keys($params_filtered);
         rsort($keys);
 
-        $field = implode('__PIPE__', $multiple_fields);
+        // The pattern is built from the field NAME and the partial-match flag and nothing else,
+        // so it is remembered against them — a miss used to quote, fold and compile a fresh
+        // regex on every single call. The folded lookup name rides along, because it is what
+        // stands in when the grep below matches nothing.
+        static $field_search_cache = [];
 
-        // Bound the lookup key length — field names are short; this caps the
-        // regex built below so a pathological input can't blow it up.
-        $field = substr($field, 0, 100);
+        $partial_match = $flags & Dj_App_Util::PARTIAL_MATCH;
+        $search_cache_key = $field_cache_key . '#' . $partial_match;
+        $search_pattern = '';
+        $lookup_field = '';
 
-        // Fold the lookup key's dashes to underscores up front so the dash and
-        // underscore forms are interchangeable in BOTH directions ('verify-email'
-        // lookup matches a 'verify_email' key, not just the reverse). Folded
-        // FIRST on purpose: the leading-strip below would otherwise drop a
-        // leading '-' (a word-char '_' survives it), and preg_quote escapes '-'
-        // to '\-' which the [-_] expansion further down would corrupt.
-        $field = str_replace('-', '_', $field);
+        if (strlen($field_cache_key) > 0 && isset($field_search_cache[$search_cache_key])) {
+            $search_pattern = $field_search_cache[$search_cache_key]['pattern'];
+            $lookup_field = $field_search_cache[$search_cache_key]['lookup_field'];
+        }
 
-        $field = preg_replace('#^[^\w]+#si', '', $field);
+        if (strlen($search_pattern) == 0) {
+            $lookup_field = implode('__PIPE__', $multiple_fields);
 
-        $field_esc = preg_quote($field, '#');
-        $field_esc = str_replace('__PIPE__', '|', $field_esc);
+            // Bound the lookup key length — field names are short; this caps the
+            // regex built below so a pathological input can't blow it up.
+            $lookup_field = substr($lookup_field, 0, 100);
 
-        // Expand each underscore to a [-_]* class so the key matches either form —
-        // or the COLLAPSED form with no separator at all ('new_line' finds 'newline').
-        $field_esc = str_replace('_', '[\-\_]*', $field_esc);
+            // Fold the lookup key's dashes to underscores up front so the dash and
+            // underscore forms are interchangeable in BOTH directions ('verify-email'
+            // lookup matches a 'verify_email' key, not just the reverse). Folded
+            // FIRST on purpose: the leading-strip below would otherwise drop a
+            // leading '-' (a word-char '_' survives it), and preg_quote escapes '-'
+            // to '\-' which the [-_] expansion further down would corrupt.
+            $lookup_field = str_replace('-', '_', $lookup_field);
 
-        $multi_field_search_prefix = ($flags & self::PARTIAL_MATCH) ? '' : '^';
-        $search_pattern = '#' . $multi_field_search_prefix . '[\-\_]*(' . $field_esc . ')$#si';
+            $lookup_field = preg_replace('#^[^\w]+#si', '', $lookup_field);
+
+            $field_esc = preg_quote($lookup_field, '#');
+            $field_esc = str_replace('__PIPE__', '|', $field_esc);
+
+            // Expand each underscore to a [-_]* class so the key matches either form —
+            // or the COLLAPSED form with no separator at all ('new_line' finds 'newline').
+            $field_esc = str_replace('_', '[\-\_]*', $field_esc);
+
+            $multi_field_search_prefix = empty($partial_match) ? '^' : '';
+            $search_pattern = '#' . $multi_field_search_prefix . '[\-\_]*(' . $field_esc . ')$#si';
+
+            if (strlen($field_cache_key) > 0 && count($field_search_cache) < Dj_App_Util::FIELD_CACHE_MAX) {
+                $cache_entry = [
+                    'pattern' => $search_pattern,
+                    'lookup_field' => $lookup_field,
+                ];
+
+                $field_search_cache[$search_cache_key] = $cache_entry;
+            }
+        }
+
         $actual_field_name_arr = preg_grep($search_pattern, $keys);
-
-        $actual_field_name = $field;
+        $actual_field_name = $lookup_field;
 
         if (!empty($actual_field_name_arr)) {
             $actual_field_name = array_shift($actual_field_name_arr);
