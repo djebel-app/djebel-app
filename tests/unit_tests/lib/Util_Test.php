@@ -802,11 +802,10 @@ BUFF_EOF;
         // Should not have trailing slash
         $this->assertStringEndsNotWith('/', $content_url);
 
-        // Should be a valid URL format (contains protocol or starts with /)
-        $this->assertTrue(
-            strpos($content_url, 'http') === 0 || strpos($content_url, '/') === 0,
-            'Content URL should be a valid URL format'
-        );
+        // Should be a valid URL format (carries a protocol, or is rooted at /)
+        $is_absolute = (strpos($content_url, 'http') === 0) || (strpos($content_url, '/') === 0);
+
+        $this->assertTrue($is_absolute, 'Content URL should be a valid URL format');
     }
 
     /**
@@ -1916,6 +1915,64 @@ META;
 
         $this->assertEquals('a@b.com', Dj_App_Util::getField('email', $params, '', Dj_App_Util::PARTIAL_MATCH));
         $this->assertEquals('', Dj_App_Util::getField('email', $params));
+    }
+
+    /**
+     * The parsed NAME is remembered; the resolved VALUE never is. The same field against two
+     * different bags has to answer for the bag it was handed — a cache holding the value would
+     * hand the first bag's answer to the second, and call sites share field names constantly.
+     */
+    public function testGetFieldRemembersTheParseNotTheValue()
+    {
+        $first_params = [ 'user_email' => 'a@b.com', ];
+        $second_params = [ 'user_email' => 'c@d.com', ];
+
+        $this->assertEquals('a@b.com', Dj_App_Util::getField('user_email', $first_params));
+        $this->assertEquals('c@d.com', Dj_App_Util::getField('user_email', $second_params));
+        $this->assertEquals('a@b.com', Dj_App_Util::getField('user_email', $first_params));
+
+        // A MISS is what populates the variant and pattern caches, so the same absent name is
+        // asked against a bag without it, then one WITH it, then without again.
+        $present_params = [ 'later_key' => 'found', ];
+
+        $this->assertEquals('', Dj_App_Util::getField('later_key', $first_params));
+        $this->assertEquals('found', Dj_App_Util::getField('later_key', $present_params));
+        $this->assertEquals('', Dj_App_Util::getField('later_key', $first_params));
+    }
+
+    /**
+     * An alias list is parsed once per NAME, so two different lists must not blur together and
+     * each must keep resolving against the bag it is given.
+     */
+    public function testGetFieldAliasParseStaysPerName()
+    {
+        $params = [ 'script' => 'a.js', 'buffer' => 'raw', ];
+
+        $this->assertEquals('a.js', Dj_App_Util::getField('js|script', $params));
+        $this->assertEquals('raw', Dj_App_Util::getField('content|buffer|data', $params));
+        $this->assertEquals('a.js', Dj_App_Util::getField('js|script', $params));
+        $this->assertEquals('', Dj_App_Util::getField('nope|nada', $params));
+    }
+
+    /**
+     * A bad name is refused on EVERY call. The whitespace guard sits beside the variant build,
+     * so a cache that answered before reaching it would wave the second call through.
+     */
+    public function testGetFieldWhitespaceFieldThrowsOnEveryCall()
+    {
+        $params = [ 'x' => 1, ];
+        $throw_count = 0;
+
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            try {
+                $field_val = Dj_App_Util::getField('bad name', $params);
+                $this->fail('a bad field name must throw, got ' . var_export($field_val, true));
+            } catch (Dj_App_Exception $e) {
+                $throw_count++;
+            }
+        }
+
+        $this->assertEquals(3, $throw_count, 'a bad field name is refused every time, not just once');
     }
 
     public function testGetFieldBadFieldTypeThrows()
