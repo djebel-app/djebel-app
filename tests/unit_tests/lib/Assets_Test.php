@@ -1453,6 +1453,31 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertEmpty($queue);
     }
 
+    /**
+     * '0' is a usable handle — it survives the formatter untouched — but it is empty() in PHP,
+     * so a caller who names it must not have it silently swapped for a content hash they never
+     * saw and cannot deregister by.
+     */
+    public function testZeroIsAUsableAssetId()
+    {
+        $res_obj = Dj_App_Assets::register([ 'js' => 'var zero_id = 1;', 'id' => 0, ]);
+
+        $this->assertTrue($res_obj->isSuccess());
+        $this->assertEquals('0', $res_obj->id);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $queue = $assets_obj->getQueue();
+
+        $this->assertArrayHasKey('0', $queue);
+
+        // And it round-trips, which is the whole point of naming a handle.
+        $remove_res = Dj_App_Assets::deregister('0');
+        $this->assertTrue($remove_res->isSuccess());
+
+        $queue = $assets_obj->getQueue();
+        $this->assertEmpty($queue);
+    }
+
     public function testRemoveOnUnqueuedIdIsNoOpSuccess()
     {
         $remove_res = Dj_App_Assets::deregister('never-registered');
@@ -1552,6 +1577,34 @@ class Dj_App_Assets_Test extends TestCase {
         } finally {
             $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsToCdn']);
             $this->assertTrue($removed, 'The add_params filter leaked out of the test');
+        }
+    }
+
+    /**
+     * Only an EMPTY return vetoes. A listener that rebuilds the item and drops the handle has
+     * said nothing about whether the asset should load, so the id resolved before the filter
+     * ran stands back in rather than the registration failing in the filter's name.
+     */
+    public function testItemFilterDroppingTheIdGetsItBack()
+    {
+        Dj_App_Hooks::addFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemDropId']);
+
+        try {
+            $res_obj = Dj_App_Assets::register([ 'js' => 'var kept_anyway = 1;', ]);
+
+            $this->assertTrue($res_obj->isSuccess());
+            $this->assertNotEmpty($res_obj->id);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $queue = $assets_obj->getQueue();
+
+            $this->assertArrayHasKey($res_obj->id, $queue);
+
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+            $this->assertStringContainsString('var kept_anyway = 1;', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemDropId']);
+            $this->assertTrue($removed, 'The item filter leaked out of the test');
         }
     }
 
@@ -1721,6 +1774,20 @@ class Dj_App_Assets_Test extends TestCase {
     public static function filterItemVeto($cur_val, $ctx = [])
     {
         return [];
+    }
+
+    /**
+     * Rebuilds the item without its handle — a listener reshaping an entry, not vetoing it.
+     *
+     * @param array $cur_val
+     * @param array $ctx
+     * @return array
+     */
+    public static function filterItemDropId($cur_val, $ctx = [])
+    {
+        unset($cur_val['id']);
+
+        return $cur_val;
     }
 
     /**

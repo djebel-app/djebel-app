@@ -280,12 +280,20 @@ class Dj_App_Assets {
 
         $item = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_ITEM, $item, $params);
 
-        // An empty return is the veto seam — the one way a site says "never load that".
-        if (empty($item) || !is_array($item) || empty($item['id'])) {
+        // An empty return is the veto seam — the ONE way a site says "never load that".
+        if (empty($item) || !is_array($item)) {
             $res_obj->msg('Asset vetoed');
             $res_obj->code('app.core.assets.vetoed');
 
             return $res_obj;
+        }
+
+        // A listener that rebuilt the item may simply have left the handle out. That is not a
+        // veto, and refusing the asset in the filter's name would be a lie — the id resolved
+        // before the filter ran still names this source, so it stands back in. Length, not
+        // empty(): '0' is a handle a caller may have chosen.
+        if (!isset($item['id']) || strlen($item['id']) == 0) {
+            $item['id'] = $source_res->id;
         }
 
         // Run on the FINAL item, so content arriving through the filter above is covered too.
@@ -413,7 +421,10 @@ class Dj_App_Assets {
 
             $prereq_id = Dj_App_String_Util::formatStringId($prereq_token);
 
-            if (empty($prereq_id)) {
+            // strlen, not empty(): a formatted '0' is a real name, and an asset may well be
+            // registered under it — dropping it here would lose the ordering constraint with
+            // nothing said about why.
+            if (strlen($prereq_id) == 0) {
                 continue;
             }
 
@@ -435,7 +446,14 @@ class Dj_App_Assets {
         $res_obj = new Dj_App_Result();
         $res_obj->status(true);
 
-        if (empty($id)) {
+        // An empty ARRAY genuinely names nothing, and resolving one would throw for no source.
+        // A scalar is length-tested instead: '0' is a handle a caller may have registered, and
+        // empty() would quietly report it removed while leaving it in the queue.
+        if (is_array($id)) {
+            if (empty($id)) {
+                return $res_obj;
+            }
+        } elseif (strlen($id) == 0) {
             return $res_obj;
         }
 
@@ -485,7 +503,8 @@ class Dj_App_Assets {
     {
         $asset_id = Dj_App_String_Util::formatStringId($id);
 
-        if (empty($asset_id) || !isset($this->queue[$asset_id])) {
+        // strlen, not empty(): '0' is a handle a caller may legitimately have registered.
+        if (strlen($asset_id) == 0 || !isset($this->queue[$asset_id])) {
             $res_obj = new Dj_App_Result();
             $res_obj->msg('Asset is not queued');
             $res_obj->code('app.core.assets.not_queued');
@@ -692,12 +711,16 @@ class Dj_App_Assets {
         $inp_asset_id = Dj_App_Util::getField('id', $params);
         $asset_id = $source_hash;
 
-        if (!empty($inp_asset_id)) {
+        // strlen, not empty(): getField answers '' for a key that is not there and '0' for one
+        // that is, and '0' formats to a perfectly usable handle. An empty() test here threw the
+        // caller's id away and queued the asset under a hash they never saw.
+        if (strlen($inp_asset_id) > 0) {
             $asset_id = Dj_App_String_Util::formatStringId($inp_asset_id);
 
             // Reported as the caller wrote it, not as the formatter left it — the formatter
-            // returned nothing, so it has nothing to name the offending input with.
-            if (empty($asset_id)) {
+            // returned nothing, so it has nothing to name the offending input with. strlen
+            // again: the formatter passes '0' straight through, and it is a usable handle.
+            if (strlen($asset_id) == 0) {
                 throw new Dj_App_Validation_Exception('Unusable asset id', [
                     'code' => 'app.core.assets.invalid_id',
                     'id' => $inp_asset_id,
