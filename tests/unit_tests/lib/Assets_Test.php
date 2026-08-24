@@ -518,6 +518,33 @@ class Dj_App_Assets_Test extends TestCase {
         }
     }
 
+    /**
+     * One asset opts out while the rest of the site keeps taking builds — so the flag has to
+     * reach only the asset that set it, with min still on everywhere else in the same request.
+     */
+    public function testSkipMinServesTheNamedFileForThatAssetAlone()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+
+        try {
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/app.js', 'skip_min' => 1, ]);
+            $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/.min/boxed.js', ]);
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+            // Opted out, so its own build is left on disk untouched.
+            $this->assertStringContainsString('/assets/app.js', $footer_html);
+            $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
+
+            // The other asset never asked to opt out and still gets its build.
+            $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+        }
+    }
+
     public function testSourceIsServedWhenNoBuildExists()
     {
         Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
@@ -698,6 +725,10 @@ class Dj_App_Assets_Test extends TestCase {
 
             // Already a build.
             $this->assertEmpty($assets_obj->resolveMinFile('/assets/app.min.js'));
+
+            // The per-asset opt-out is the decision method's job, not the name derivation's.
+            $this->assertFalse($assets_obj->checkUseMinified([ 'skip_min' => 1, ]));
+            $this->assertTrue($assets_obj->checkUseMinified());
         } finally {
             $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
             $this->assertTrue($removed, 'The use_min filter leaked out of the test');

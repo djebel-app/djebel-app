@@ -29,6 +29,13 @@ class Dj_App_Assets {
     // The kinds a tag can be built for. Anything else renders nothing.
     const SUPPORTED_KINDS = [ self::KIND_CSS => 1, self::KIND_JS => 1, ];
 
+    // Where each kind lands when the caller names no placement. A new kind declares its own
+    // default by joining this list, rather than by another branch inside resolvePlacement().
+    const DEFAULT_PLACEMENTS = [
+        self::KIND_CSS => self::PLACEMENT_HEAD,
+        self::KIND_JS => self::PLACEMENT_FOOTER,
+    ];
+
     // Extensions a minified build is looked for. Separate from the kinds above on purpose:
     // fonts and images would join the KINDS the day they render, and nobody minifies a font.
     const SUPPORTED_MIN_EXTS = [ 'css' => 1, 'js' => 1, ];
@@ -160,6 +167,8 @@ class Dj_App_Assets {
      *     priority arranged. A name that was never registered is treated as satisfied.
      *   - v / ver / version: the cache-busting stamp. Given one, the file is never stat'ed
      *     for a filemtime. Applies to 'file' only — an explicit url carries its own query.
+     *   - skip_min: serve the named file even where a .min sibling exists. For the one asset
+     *     that must not be swapped; the site keeps using builds for everything else.
      *   - attrs / attribs: extra tag attributes; a true value renders the attribute bare
      *   - id: an explicit handle. Registering it again REPLACES the entry in place.
      * @return Dj_App_Result status + id, or an error carrying a checkable code
@@ -310,10 +319,12 @@ class Dj_App_Assets {
         }
 
         if (empty($placement)) {
+            // The footer is where anything unclassified belongs — the end of the document
+            // cannot block rendering, so it is the safe answer for a kind with no entry.
             $placement = Dj_App_Assets::PLACEMENT_FOOTER;
 
-            if ($kind == Dj_App_Assets::KIND_CSS) {
-                $placement = Dj_App_Assets::PLACEMENT_HEAD;
+            if (isset(Dj_App_Assets::DEFAULT_PLACEMENTS[$kind])) {
+                $placement = Dj_App_Assets::DEFAULT_PLACEMENTS[$kind];
             }
 
             return $placement;
@@ -873,12 +884,17 @@ class Dj_App_Assets {
 
         // Only a file that exists can leak, and only a found one is ever delivered.
         if ($file_found) {
-            $min_file = $this->resolveMinFile($abs_file);
+            // Asked before anything is derived for it, so a site not taking builds stops here
+            // having done nothing at all.
+            if ($this->checkUseMinified($params)) {
+                $min_file = $this->resolveMinFile($abs_file);
 
-            // One stat, on a file already found. is_file rather than file_exists: a DIRECTORY
-            // by that name would otherwise replace a good file with something unservable.
-            if (!empty($min_file) && is_file($min_file)) {
-                $abs_file = $min_file;
+                // One stat, on a file already found. is_file rather than file_exists: a
+                // DIRECTORY by that name would otherwise replace a good file with something
+                // that can be neither read nor served.
+                if (!empty($min_file) && is_file($min_file)) {
+                    $abs_file = $min_file;
+                }
             }
 
             $containment_args = [
@@ -916,12 +932,6 @@ class Dj_App_Assets {
      */
     public function resolveMinFile($file)
     {
-        // The master switch leads. It is the only check here that rejects anything in bulk —
-        // off, and every asset on the site stops on this line having done no work at all.
-        if (!$this->checkUseMinified()) {
-            return '';
-        }
-
         // strrpos answers FALSE with no dot at all, and false compares below 4 — so this one
         // test refuses that, a dotfile, and a name too short to carry the marker. Without it
         // the offset below counts back from the END of the string instead.
@@ -966,10 +976,21 @@ class Dj_App_Assets {
      * — one registered after the first asset resolved is honored just the same, and a site free
      * to answer differently per call keeps that freedom.
      *
+     * An asset opts itself out with `skip_min` and leaves the rest of the site alone.
+     *
+     * @param array $params See add() — read for 'skip_min'
      * @return bool
      */
-    public function checkUseMinified()
+    public function checkUseMinified($params = [])
     {
+        // The asset's own answer leads: it is a plain array read, and it settles the question
+        // without reaching the hook dispatch below.
+        $skip_min = Dj_App_Util::getField('skip_min', $params);
+
+        if (!empty($skip_min)) {
+            return false;
+        }
+
         if (is_null($this->use_min_default)) {
             $use_min = Dj_App_Env::isLive();
             $use_min = Dj_App_Config::cfg('app.core.assets.use_min', $use_min);

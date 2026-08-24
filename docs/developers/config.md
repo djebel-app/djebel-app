@@ -170,6 +170,16 @@ request or per asset, and one registered after assets have already been queued s
 Dj_App_Hooks::addFilter('app.core.assets.filter.use_min', ['My_Plugin', 'filterUseMin']);
 ```
 
+A single asset opts out with `skip_min`, leaving the rest of the site on builds:
+
+```php
+Dj_App_Assets::register([
+    'plugin' => 'my-plugin',
+    'file' => '/assets/main.js',
+    'skip_min' => 1,
+]);
+```
+
 ## `app.*` — request and error handling
 
 | Key | Default | What it does |
