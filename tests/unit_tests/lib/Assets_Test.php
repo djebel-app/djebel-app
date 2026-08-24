@@ -26,6 +26,9 @@ class Dj_App_Assets_Test extends TestCase {
 
             // A source WITH a build beside it. The fixtures above deliberately have none, so the
             // tests written before builds existed keep resolving to the file they name.
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/favicon.ico' => "\x00\x00\x01\x00",
+            $this->content_dir . '/plugins/djebel-test-plugin/assets/icon.png' => "\x89PNG\r\n",
+
             $this->content_dir . '/plugins/djebel-test-plugin/assets/app.js' => "var djTestApp = 0;\n",
             $this->content_dir . '/plugins/djebel-test-plugin/assets/app.min.js' => "var djTestApp=1;\n",
 
@@ -490,6 +493,84 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertStringContainsString('<link', $assets_obj->buildTagHtml($css_item));
 
         $js_item = [ 'kind' => Dj_App_Assets::KIND_JS, 'url' => 'https://cdn.example.com/x.js', ];
+        $this->assertStringContainsString('<script', $assets_obj->buildTagHtml($js_item));
+    }
+
+    // ---------------------------------------------------------------- icons
+
+    /**
+     * A .ico needs nothing said about it — the extension declares the kind, the kind picks the
+     * head, and the tag carries rel="icon" rather than the stylesheet rel every other <link>
+     * in this class was hardcoded to.
+     */
+    public function testIcoIsRecognisedFromItsExtension()
+    {
+        $this->registerAsset([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/favicon.ico', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringContainsString('<link', $head_html);
+        $this->assertStringContainsString('rel="icon"', $head_html);
+        $this->assertStringContainsString('/assets/favicon.ico', $head_html);
+        $this->assertStringNotContainsString('stylesheet', $head_html);
+
+        // Head by default, so it is not sitting at the bottom of the document.
+        $this->assertEmpty($assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER));
+    }
+
+    /**
+     * An icon shipped as .png or .svg cannot be told apart from any other image by its name, so
+     * the caller names the kind and the extension is not consulted at all.
+     */
+    public function testIconKindCarriesAnExtensionThatCannotDeclareItself()
+    {
+        $this->registerAsset([
+            'plugin' => 'djebel-test-plugin',
+            'file' => '/assets/icon.png',
+            'kind' => Dj_App_Assets::KIND_ICON,
+        ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringContainsString('rel="icon"', $head_html);
+        $this->assertStringContainsString('/assets/icon.png', $head_html);
+    }
+
+    /**
+     * Without the kind, the same .png is still refused — recognising .ico must not have turned
+     * the extension check into a guess about images generally.
+     */
+    public function testPngWithoutAKindIsStillRefused()
+    {
+        $code = '';
+
+        try {
+            Dj_App_Assets::register([ 'plugin' => 'djebel-test-plugin', 'file' => '/assets/icon.png', ]);
+        } catch (Dj_App_Validation_Exception $e) {
+            $code = $e->getErrorCode();
+        }
+
+        $this->assertEquals('app.core.assets.unknown_kind', $code);
+    }
+
+    /**
+     * Nothing can spell an icon as markup, so inline content for one renders nothing rather
+     * than being wrapped in whichever tag the fallthrough happened to reach.
+     */
+    public function testIconHasNoInlineForm()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        $inline_item = [ 'kind' => Dj_App_Assets::KIND_ICON, 'content' => 'not markup', ];
+        $this->assertEmpty($assets_obj->buildTagHtml($inline_item));
+
+        // The kinds that DO have one are untouched.
+        $css_item = [ 'kind' => Dj_App_Assets::KIND_CSS, 'content' => '.a { color: red; }', ];
+        $this->assertStringContainsString('<style', $assets_obj->buildTagHtml($css_item));
+
+        $js_item = [ 'kind' => Dj_App_Assets::KIND_JS, 'content' => 'var a = 1;', ];
         $this->assertStringContainsString('<script', $assets_obj->buildTagHtml($js_item));
     }
 

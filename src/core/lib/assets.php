@@ -25,15 +25,35 @@ class Dj_App_Assets {
 
     const KIND_CSS = 'css';
     const KIND_JS = 'js';
+    const KIND_ICON = 'icon';
 
     // The kinds a tag can be built for. Anything else renders nothing.
-    const SUPPORTED_KINDS = [ self::KIND_CSS => 1, self::KIND_JS => 1, ];
+    const SUPPORTED_KINDS = [ self::KIND_CSS => 1, self::KIND_JS => 1, self::KIND_ICON => 1, ];
+
+    // The extension a caller wrote against the kind it declares. Worth a table rather than a
+    // branch precisely because it is NOT one-to-one — an icon arrives named .ico.
+    const EXT_KINDS = [
+        'css' => self::KIND_CSS,
+        'js' => self::KIND_JS,
+        'ico' => self::KIND_ICON,
+    ];
+
+    // The kinds that render as <link>, against the rel each one carries.
+    const LINK_RELS = [
+        self::KIND_CSS => 'stylesheet',
+        self::KIND_ICON => 'icon',
+    ];
+
+    // The kinds that can be written INTO the page. Deliberately not the inverse of the list
+    // above — css is both, an icon is neither, since nothing can spell an icon as markup.
+    const INLINE_KINDS = [ self::KIND_CSS => 1, self::KIND_JS => 1, ];
 
     // Where each kind lands when the caller names no placement. A new kind declares its own
     // default by joining this list, rather than by another branch inside resolvePlacement().
     const DEFAULT_PLACEMENTS = [
         self::KIND_CSS => self::PLACEMENT_HEAD,
         self::KIND_JS => self::PLACEMENT_FOOTER,
+        self::KIND_ICON => self::PLACEMENT_HEAD,
     ];
 
     // Extensions a minified build is looked for. Separate from the kinds above on purpose:
@@ -63,6 +83,16 @@ class Dj_App_Assets {
     const SOURCE_STYLE = 'style';
     const SOURCE_JS = 'js';
     const SOURCE_CONTENT = 'content';
+
+    // Each source, in precedence order, against the field names it is read from. A new source
+    // joins here and nowhere else, and the list costs nothing at runtime — it is compiled.
+    const SOURCE_FIELDS = [
+        self::SOURCE_FILE => 'file',
+        self::SOURCE_URL => 'url',
+        self::SOURCE_STYLE => 'style',
+        self::SOURCE_JS => 'js|script',
+        self::SOURCE_CONTENT => 'content|buffer|data',
+    ];
 
     // Enough of a value to see a leading <script / <style and no more.
     const SNIFF_CHUNK_SIZE = 32;
@@ -155,7 +185,8 @@ class Dj_App_Assets {
      *   - content / buffer / data: inline, kind sniffed from a leading <script / <style
      *   Plus, all optional:
      *   - plugin / theme: the slug 'file' is relative to
-     *   - kind: 'css' or 'js', overriding what the key implied
+     *   - kind: KIND_CSS / KIND_JS / KIND_ICON, overriding what the key implied. A .ico is
+     *     recognised on its own; name the kind for an icon shipped as .png or .svg
      *   - placement: PLACEMENT_HEAD / PLACEMENT_BODY_START / PLACEMENT_FOOTER
      *   - in_head / head / in_footer / footer: shorthand for the two common placements —
      *     'in_footer' => 1. An explicit placement outranks them; asking for both throws.
@@ -602,53 +633,9 @@ class Dj_App_Assets {
     {
         $res_obj = new Dj_App_Result();
 
-        $inp_file = Dj_App_Util::getField('file', $params);
-        $inp_url = Dj_App_Util::getField('url', $params);
-        $inp_style = Dj_App_Util::getField('style', $params);
-        $inp_js = Dj_App_Util::getField('js|script', $params);
-        $inp_content = Dj_App_Util::getField('content|buffer|data', $params);
-
-        $sources = [
-            Dj_App_Assets::SOURCE_FILE => $inp_file,
-            Dj_App_Assets::SOURCE_URL => $inp_url,
-            Dj_App_Assets::SOURCE_STYLE => $inp_style,
-            Dj_App_Assets::SOURCE_JS => $inp_js,
-            Dj_App_Assets::SOURCE_CONTENT => $inp_content,
-        ];
-
-        $source_type = '';
-        $source_val = '';
-        $given_source_keys = [];
-
-        foreach ($sources as $source_key => $val) {
-            if (!is_scalar($val) || strlen($val) == 0) {
-                continue;
-            }
-
-            $given_source_keys[] = $source_key;
-
-            if (empty($source_type)) {
-                $source_type = $source_key;
-
-                // Cast at the one boundary a source enters through. PHP coerces an int for
-                // substr() and stripos() but NOT for offset access, which the render path uses.
-                $source_val = (string) $val;
-            }
-        }
-
-        if (empty($source_type)) {
-            throw new Dj_App_Validation_Exception('An asset needs a source', [
-                'code' => 'app.core.assets.no_source',
-            ]);
-        }
-
-        // Which key wins must never become folklore, so two sources is a hard error.
-        if (count($given_source_keys) > 1) {
-            throw new Dj_App_Validation_Exception('An asset takes exactly one source', [
-                'code' => 'app.core.assets.conflicting_source',
-                'source_keys' => $given_source_keys,
-            ]);
-        }
+        $type_res = $this->resolveSourceType($params);
+        $source_type = $type_res->source_type;
+        $source_val = $type_res->source_val;
 
         $url = '';
         $content = '';
@@ -702,17 +689,18 @@ class Dj_App_Assets {
 
         $hash_input = $kind . '|' . $source_key_val;
         $source_hash = Dj_App_Util::generateHash($hash_input);
-        $asset_id = Dj_App_Util::getField('id', $params);
+        $inp_asset_id = Dj_App_Util::getField('id', $params);
+        $asset_id = $source_hash;
 
-        if (empty($asset_id)) {
-            $asset_id = $source_hash;
-        } else {
-            $asset_id = Dj_App_String_Util::formatStringId($asset_id);
+        if (!empty($inp_asset_id)) {
+            $asset_id = Dj_App_String_Util::formatStringId($inp_asset_id);
 
+            // Reported as the caller wrote it, not as the formatter left it — the formatter
+            // returned nothing, so it has nothing to name the offending input with.
             if (empty($asset_id)) {
                 throw new Dj_App_Validation_Exception('Unusable asset id', [
                     'code' => 'app.core.assets.invalid_id',
-                    'id' => $params['id'],
+                    'id' => $inp_asset_id,
                 ]);
             }
         }
@@ -725,6 +713,64 @@ class Dj_App_Assets {
         $res_obj->content = $content;
         $res_obj->abs_file = $abs_file;
         $res_obj->file_found = $file_found;
+        $res_obj->status(true);
+
+        return $res_obj;
+    }
+
+    /**
+     * Which ONE of the five source keys the caller used, and the value it carried.
+     *
+     * Exactly one may be given. Which would win otherwise becomes folklore nobody can recall at
+     * the call site, so two is a hard error rather than a precedence rule. That is also why all
+     * five are read even once the first has hit — a conflict is only visible by looking at all
+     * of them.
+     *
+     * @param array $params See add()
+     * @return Dj_App_Result source_type, source_val
+     * @throws Dj_App_Validation_Exception When none is given, or more than one
+     */
+    public function resolveSourceType($params = [])
+    {
+        $res_obj = new Dj_App_Result();
+
+        $source_type = '';
+        $source_val = '';
+        $given_source_keys = [];
+
+        foreach (Dj_App_Assets::SOURCE_FIELDS as $source_key => $field_names) {
+            $val = Dj_App_Util::getField($field_names, $params);
+
+            if (!is_scalar($val) || strlen($val) == 0) {
+                continue;
+            }
+
+            $given_source_keys[] = $source_key;
+
+            if (empty($source_type)) {
+                $source_type = $source_key;
+
+                // Cast at the one boundary a source enters through. PHP coerces an int for
+                // substr() and stripos() but NOT for offset access, which the render path uses.
+                $source_val = (string) $val;
+            }
+        }
+
+        if (empty($source_type)) {
+            throw new Dj_App_Validation_Exception('An asset needs a source', [
+                'code' => 'app.core.assets.no_source',
+            ]);
+        }
+
+        if (count($given_source_keys) > 1) {
+            throw new Dj_App_Validation_Exception('An asset takes exactly one source', [
+                'code' => 'app.core.assets.conflicting_source',
+                'source_keys' => $given_source_keys,
+            ]);
+        }
+
+        $res_obj->source_type = $source_type;
+        $res_obj->source_val = $source_val;
         $res_obj->status(true);
 
         return $res_obj;
@@ -790,12 +836,8 @@ class Dj_App_Assets {
 
         $ext = Dj_App_File_Util::getExt($ext_source);
 
-        if ($ext == 'css') {
-            return Dj_App_Assets::KIND_CSS;
-        }
-
-        if ($ext == 'js') {
-            return Dj_App_Assets::KIND_JS;
+        if (isset(Dj_App_Assets::EXT_KINDS[$ext])) {
+            return Dj_App_Assets::EXT_KINDS[$ext];
         }
 
         throw new Dj_App_Validation_Exception('Cannot tell the asset kind from the extension', [
@@ -1386,8 +1428,8 @@ class Dj_App_Assets {
         $content = empty($item['content']) ? '' : $item['content'];
 
         if (!empty($url)) {
-            if ($kind == Dj_App_Assets::KIND_CSS) {
-                $tag_attrs = [ 'rel' => 'stylesheet', ];
+            if (isset(Dj_App_Assets::LINK_RELS[$kind])) {
+                $tag_attrs = [ 'rel' => Dj_App_Assets::LINK_RELS[$kind], ];
                 $tag_attrs['href'] = $url;
                 $tag_attrs = array_replace($tag_attrs, $attrs);
                 $attrs_html = $this->buildAttrsHtml($tag_attrs);
@@ -1405,6 +1447,13 @@ class Dj_App_Assets {
         }
 
         if (empty($content)) {
+            return '';
+        }
+
+        // Not the same question as LINK_RELS: css is BOTH, an icon is neither. A kind with no
+        // inline form reaches the page as a url or not at all, so content for one is a caller
+        // mistake rather than markup to invent a wrapper for.
+        if (!isset(Dj_App_Assets::INLINE_KINDS[$kind])) {
             return '';
         }
 
