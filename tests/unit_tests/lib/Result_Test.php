@@ -127,8 +127,10 @@ class Dj_App_Result_Test extends TestCase {
 
         $json = json_encode($result_obj);
 
-        // A raw (array) cast would emit the mangled private property
-        // "\0Dj_App_Result\0expected_system_keys_regex" (an internal regex).
+        // The system-key list used to be a private property, and a raw (array)
+        // cast emitted it mangled as "\0Dj_App_Result\0expected_system_keys_regex".
+        // It is a const now, so nothing internal is left to serialize — this
+        // stays as the guard against a member being added back.
         $this->assertStringNotContainsString('expected_system_keys_regex', $json);
         $this->assertStringNotContainsString("\0", $json);
     }
@@ -284,5 +286,60 @@ class Dj_App_Result_Test extends TestCase {
 
         $this->assertNotEmpty($json);
         $this->assertIsArray(json_decode($json, true));
+    }
+
+    /**
+     * The dump helpers must not expose class internals. They read the object's
+     * raw members, so JsonSerializable does not apply to them — and var_export
+     * has no hook at all that could hide a member. That is why the system-key
+     * list is a const and not a property: an error log that dumps a Result
+     * shows the envelope and nothing else.
+     */
+    public function testDumpFunctionsDoNotExposeInternals()
+    {
+        $result_obj = new Dj_App_Result();
+        $result_obj->status(true);
+        $result_obj->data([ 'user_id' => 42, ]);
+
+        ob_start();
+        var_dump($result_obj);
+        $dumped = ob_get_clean();
+
+        $exported = var_export($result_obj, 1);
+        $printed = print_r($result_obj, 1);
+
+        $this->assertStringNotContainsString('expected_system_keys_regex', $dumped);
+        $this->assertStringNotContainsString('expected_system_keys_regex', $exported);
+        $this->assertStringNotContainsString('expected_system_keys_regex', $printed);
+        $this->assertStringNotContainsString('private', $dumped);
+    }
+
+    /**
+     * An (array) cast exposes ONLY the envelope keys — a private member would
+     * ride along as a mangled "\0Dj_App_Result\0field" entry.
+     */
+    public function testArrayCastExposesOnlyTheEnvelopeKeys()
+    {
+        $result_obj = new Dj_App_Result();
+        $result_obj->status(true);
+
+        $cast_arr = (array) $result_obj;
+        $cast_keys = array_keys($cast_arr);
+
+        $this->assertSame([ 'msg', 'code', 'status', 'data', ], $cast_keys);
+    }
+
+    /**
+     * The system-field gate is case-sensitive, so an off-case key rides in data.
+     * That is where the old case-insensitive regex left it too: STATUS passed
+     * that gate and then assigned to an undefined property, and __set() puts
+     * those in data.
+     */
+    public function testOffCaseSystemFieldLandsInData()
+    {
+        $result_obj = new Dj_App_Result([ 'status' => 1, 'STATUS' => 'upper', ]);
+
+        $this->assertTrue((bool) $result_obj->status);
+        $this->assertEquals('upper', $result_obj->data('STATUS'));
     }
 }

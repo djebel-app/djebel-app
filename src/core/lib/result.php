@@ -12,13 +12,26 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
     // word and it goes.
     const CODE_EXTRA_ALLOWED_CHARS = [ '_', ];
 
+    // The envelope fields, as a LOOKUP MAP — the names are the KEYS, so the gate
+    // is one hash lookup. in_array() would scan the list and the old regex spun
+    // up the regex engine: ~74ns / ~111ns / ~312ns per check, PHP 8.4, no Xdebug.
+    //
+    // Case-sensitive now that the old regex's /i is gone. That is NOT a behavior
+    // change: an off-case key like STATUS passed the old gate and then assigned
+    // to an undefined property, which __set() routes into data — the very place
+    // the case-sensitive gate puts it.
+    //
+    // A const and NOT a property: a private property still shows up in var_dump,
+    // var_export, print_r and an (array) cast — var_export has no hook that can
+    // hide it — which is how the old regex field leaked into the error logs.
+    const SYSTEM_FIELDS = [ 'status' => 1, 'msg' => 1, 'code' => 1, 'data' => 1, ];
+
     // I put them as public even though I need them private.
     // reason: private fields don't appear in a JSON output
     public $msg = '';
     public $code = '';
     public $status = false;
     public $data = [];
-    private $expected_system_keys_regex = '#^(status|msg|code|data)$#si';
 
     /**
      * Populates the internal variables from contr params.
@@ -44,7 +57,7 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
                 foreach ( $json_arr as $key => $value ) {
                     // Some recognized keys' values will go as internal fields
                     // and the rest as data.
-                    if (preg_match( $this->expected_system_keys_regex, $key)) {
+                    if (isset(self::SYSTEM_FIELDS[$key])) {
                         $this->$key = $value;
                     } else {
                         $this->data[$key] = $value;
@@ -240,7 +253,7 @@ class Dj_App_Result implements \JsonSerializable, \ArrayAccess {
                     $key = strtolower( $key );
                 }
 
-                if (preg_match( $this->expected_system_keys_regex, $key)) {
+                if (isset(self::SYSTEM_FIELDS[$key])) {
                     $this->$key = $value;
                 } else {
                     $this->data[ $key ] = $value;
