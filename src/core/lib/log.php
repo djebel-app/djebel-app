@@ -188,7 +188,12 @@ class Dj_App_Log {
             $parent_dir = dirname($file);
 
             if (!is_dir($parent_dir)) {
-                $mkdir_res = mkdir($parent_dir, 0700, true);
+                // The raw call, not the file utility's mkdir(), on purpose: that one chmods
+                // OUTSIDE its own is_dir guard, so it would re-apply the mode on every entry
+                // written — four syscalls a line, and a directory an admin widened on purpose
+                // silently narrowed back. The MODE still comes from there, so the two cannot
+                // drift apart.
+                $mkdir_res = mkdir($parent_dir, Dj_App_File_Util::DEFAULT_DIR_PERM, true);
 
                 // The END STATE decides, not the return value: a concurrent request creating
                 // the same dir makes mkdir answer false for a directory that now exists.
