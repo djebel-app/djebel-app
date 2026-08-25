@@ -239,12 +239,21 @@ class Dj_App_File_Util_Test extends TestCase {
     public function testMkdirExistingDirectory()
     {
         $test_subdir = $this->test_dir . '/existing_dir';
-        mkdir($test_subdir, 0755);
+        $mkdir_res = mkdir($test_subdir, 0755);
+
+        $this->assertTrue($mkdir_res, 'the fixture dir was created');
 
         $res_obj = Dj_App_File_Util::mkdir($test_subdir);
 
         $this->assertTrue($res_obj->status);
         $this->assertDirectoryExists($test_subdir);
+
+        // A dir that was already there keeps ITS permissions. write() calls mkdir() for the
+        // parent of every file, so re-applying the default here would narrow a shared dir to
+        // owner-only on an ordinary write.
+        $perms = fileperms($test_subdir) & 0777;
+
+        $this->assertEquals(0755, $perms, 'an existing dir keeps its own permissions');
     }
 
     public function testMkdirNestedDirectories()

@@ -249,16 +249,24 @@ class Dj_App_File_Util {
             $old_mask = umask();
             umask(0);
 
+            // ONLY a dir this call created gets its permissions set. One that was already
+            // there belongs to somebody else — a shared upload dir, a cache dir the web
+            // server also reads, the system temp dir — and since write() calls this for the
+            // parent of every file it writes, an unconditional chmod would narrow those to
+            // owner-only from an ordinary write, with nothing in the logs pointing back here.
+            //
+            // The umask above is what makes the DEPTH correct: the recursive create masks
+            // $perm on every level, and the chmod below only ever reaches the last one.
             if (!is_dir($dir)) {
                 $res = mkdir($dir, $perm, true);
 
                 if (!$res) {
                     throw new Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
                 }
-            }
 
-            $chmod_res = chmod($dir, $perm); // jic
-            $res_obj->chmod_res = $chmod_res;
+                $chmod_res = chmod($dir, $perm); // jic
+                $res_obj->chmod_res = $chmod_res;
+            }
 
             $res_obj->status = true;
         } catch (Exception $e) {
