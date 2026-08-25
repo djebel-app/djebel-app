@@ -166,11 +166,19 @@ class Dj_App_Plugins {
             // sort by (load) priority
             uasort( $plugins, 'Dj_App_Util::sortByPriority' );
 
+            // Read ONCE: it cannot change between two plugins, and re-reading it per plugin
+            // spends a config lookup on every one of them to learn the same answer.
+            $continue_after_crash = Dj_App_Config::cfg('app.core.plugins.continue_loading', true);
+
             foreach ($plugins as $plugin_file => $plugin_meta_info) {
+                $plugin_crashed = false;
+
                 try {
                     $load_time = Dj_App_Util::microtime($plugin_file);
                     include_once $plugin_file;
                 } catch (Throwable $e) {
+                    $plugin_crashed = true;
+
                     // A crashed plugin must leave a trace — full detail (message,
                     // file, line, trace) goes to the app error log. The page shows
                     // the raw message only on a dev/debug setup.
@@ -212,18 +220,30 @@ class Dj_App_Plugins {
                     $plugin_load_times[$plugin_file] = $load_time;
                 }
                 
-                // Allow plugins to control further loading via config or filter
-                $continue_loading = Dj_App_Config::cfg('app.core.plugins.continue_loading', true);
-                
-                if (!$continue_loading) {
+                // The config decides what happens AFTER a crash — that is the whole question
+                // it answers. Consulted only when one actually happened, so a clean run is
+                // never cut short by it.
+                if ($plugin_crashed && !$continue_after_crash) {
                     break;
                 }
-                
+
+                // A plugin can stop the run for reasons of its own, so the filter is asked
+                // after every load — but ONLY when something is listening. Its context costs
+                // a search plus a slice plus two key-scans of the whole list, per plugin,
+                // and with no listener every bit of that is thrown away.
+                if (!Dj_App_Hooks::hasFilter('app.core.plugins.continue_loading')) {
+                    continue;
+                }
+
+                $plugin_names = array_keys($plugins);
+                $plugin_idx = array_search($plugin_file, $plugin_names);
+                $remaining_plugins = array_slice($plugin_names, $plugin_idx + 1);
+
                 $load_ctx = [];
                 $load_ctx['current_plugin'] = $plugin_file;
                 $load_ctx['current_plugin_meta'] = $plugin_meta_info;
                 $load_ctx['loaded_plugins'] = array_keys($plugin_load_times);
-                $load_ctx['remaining_plugins'] = array_keys(array_slice($plugins, array_search($plugin_file, array_keys($plugins)) + 1, null, true));
+                $load_ctx['remaining_plugins'] = $remaining_plugins;
 
                 $continue_loading = Dj_App_Hooks::applyFilter('app.core.plugins.continue_loading', true, $load_ctx);
 
