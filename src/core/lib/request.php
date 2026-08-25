@@ -11,6 +11,13 @@ class Dj_App_Request {
     const SKIP_STRIP_ALL_TAGS = 256;
     const REDIRECT_EXTERNAL_SITE = 2;
 
+    // PHP's OWN name for a buffer opened with no callback — the literal string it puts in
+    // ob_get_status()['name'], spaces and all. Not a name this chose and not something to
+    // prefix: it is matched against what the engine reports, so it has to stay byte-identical
+    // to PHP's. Every plain ob_start() reports it, including the one php.ini's output_buffering
+    // opens, so a level named anything ELSE carries a handler that can rewrite what it passes.
+    const PHP_DEFAULT_OUTPUT_HANDLER = 'default output handler';
+
     /**
      * @var array
      * @see https://codex.wordpress.org/Function_Reference/wp_kses
@@ -1933,6 +1940,39 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Is any buffer in the stack owned by something that REWRITES what passes through it?
+     *
+     * A plain buffer hands bytes along untouched, so what is measured across the stack is what
+     * the client receives. A buffer opened WITH a callback does not: the handler runs when that
+     * buffer closes and may return anything, so the body and its length are not settled until
+     * after it has. An auto-prepended asset optimizer and zlib compression are both this.
+     *
+     * Asked HERE rather than remembered from bootstrap on purpose — a handler can be installed
+     * at any point in the request, so the only reading that is true is the one taken at the
+     * moment the response is about to be framed.
+     *
+     * @return bool
+     */
+    public function hasForeignOutputHandler()
+    {
+        $buffer_statuses = ob_get_status(true);
+
+        if (empty($buffer_statuses)) {
+            return false;
+        }
+
+        foreach ($buffer_statuses as $buffer_status) {
+            $handler_name = empty($buffer_status['name']) ? '' : $buffer_status['name'];
+
+            if ($handler_name != Dj_App_Request::PHP_DEFAULT_OUTPUT_HANDLER) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Flush the HTTP response to the client and continue PHP execution in the background.
      * Useful for deferring slow tasks (e.g., push notifications, email) after the response.
      *
@@ -1948,6 +1988,20 @@ CLEAR_AND_REDIRECT_HTML;
         // Close session early to prevent blocking concurrent requests
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
+        }
+
+        // Somebody else's handler is in the buffer stack and will rewrite the body when its
+        // buffer closes. Every part of finishing early depends on knowing the final bytes, so
+        // none of it is safe here: a length measured now is taken BEFORE that rewrite, and
+        // handing the connection back would close it while the body is still sitting inside a
+        // buffer this does not own — which loses the response outright rather than truncating
+        // it. So stand down completely and let PHP unwind the stack at shutdown: the handler
+        // runs, the body goes out whole, and the SAPI frames it (chunked) instead of a length
+        // that was never going to match. One connection held slightly longer, and correct.
+        $has_foreign_handler = $this->hasForeignOutputHandler();
+
+        if ($has_foreign_handler) {
+            return;
         }
 
         // PHP must never compress — it burns a request worker on work the web server does

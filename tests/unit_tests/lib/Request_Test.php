@@ -941,6 +941,106 @@ class Dj_App_Request_Test extends TestCase
     }
 
     /**
+     * Plain buffers hand bytes along untouched, so what was measured is what the client gets
+     * and the response can safely be framed with a length.
+     */
+    public function testPlainBuffersAreNotSeenAsForeign()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            ob_start();
+
+            $has_foreign = $req_obj->hasForeignOutputHandler();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $this->assertFalse($has_foreign, 'a stack of plain buffers changes nothing on the way out');
+    }
+
+    /**
+     * The live failure this exists for: an asset optimizer installed by auto_prepend_file opens
+     * ob_start() with a CALLBACK, so the body is rewritten when that buffer closes — after
+     * finishRequest() has already measured and announced a length. The declared count then does
+     * not match the bytes sent and whatever honors it cuts the response mid-character.
+     */
+    public function testACallbackBufferIsSeenAsForeign()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start(['Dj_App_Request_Test', 'rewriteAssetUrls']);
+            ob_start();
+
+            $has_foreign = $req_obj->hasForeignOutputHandler();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $this->assertTrue($has_foreign, 'a handler that can rewrite the body must be detected');
+    }
+
+    /**
+     * The reason detection matters, demonstrated rather than asserted in the abstract: what the
+     * length would have been measured as, against what the callback actually emits.
+     */
+    public function testACallbackBufferChangesTheBodyLengthAfterItIsMeasured()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $asset_html = '<link href="a.css?v=1">';
+
+        try {
+            $buffer_level = ob_get_level();
+
+            // A capture buffer of this test's OWN, so flushing the callback below lands here
+            // instead of in the runner's buffer — closing that one is what makes a test risky.
+            ob_start();
+            ob_start(['Dj_App_Request_Test', 'rewriteAssetUrls']);
+            $baseline = $req_obj->getBufferedContentLength();
+
+            echo $asset_html;
+            $measured_total = $req_obj->getBufferedContentLength();
+
+            ob_end_flush();
+            $sent_html = ob_get_clean();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $measured_bytes = $measured_total - $baseline;
+        $sent_bytes = strlen($sent_html);
+
+        $this->assertSame(23, $measured_bytes, 'what a length header would have announced');
+        $this->assertNotSame($measured_bytes, $sent_bytes, 'the callback made the body a different size');
+    }
+
+    /**
+     * Stands in for the auto-prepended asset optimizer: rewrites a versioned asset URL into the
+     * longer rewritten form, which is what moves the byte count.
+     *
+     * @param string $buff
+     * @return string
+     */
+    public static function rewriteAssetUrls($buff)
+    {
+        $buff_rewritten = str_replace('.css?v=1', '.statopt_ver.1.css', $buff);
+
+        return $buff_rewritten;
+    }
+
+    /**
      * The wire needs BYTES. Cyrillic is 2 bytes per character in UTF-8, so a character
      * count would under-report and cut the body mid-character — invalid UTF-8 the browser
      * renders as U+FFFD.
