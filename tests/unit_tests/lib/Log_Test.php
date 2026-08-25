@@ -6,14 +6,24 @@ class Dj_App_Log_Test extends TestCase {
 
     private $backup_error_logging = false;
     private $backup_error_log_file = false;
+    private $backup_djebel_env = false;
+    private $backup_app_env = false;
 
     protected function setUp(): void
     {
         $this->backup_error_logging = getenv('DJEBEL_APP_ERROR_LOGGING');
         $this->backup_error_log_file = getenv('DJEBEL_APP_ERROR_LOG_FILE');
+        $this->backup_djebel_env = getenv('DJEBEL_APP_ENV');
+        $this->backup_app_env = getenv('APP_ENV');
 
         putenv('DJEBEL_APP_ERROR_LOGGING');
         putenv('DJEBEL_APP_ERROR_LOG_FILE');
+
+        // dump() gates on the environment, so each case declares its own. Cleared through the
+        // framework rather than putenv: the resolved name is remembered for the request, and
+        // only this path drops it. Both keys, since either can answer.
+        Dj_App_Env::set('DJEBEL_APP_ENV', null);
+        Dj_App_Env::set('APP_ENV', null);
 
         // cfg() memoizes resolved values under the RAW dotted key — drop those
         // so each test resolves fresh through the conventional env keys above.

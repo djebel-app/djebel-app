@@ -390,17 +390,22 @@ class Dj_App_Log {
      * @return void|string
      */
     public static function dump($data, $label = '', $print = true) {
+        $is_printing = !empty($print);
+
+        // The environment gate LEADS: on a live box it rejects every call, and serializing a
+        // whole structure only to discover there is nothing to print is the one place this
+        // costs anything. isDevIP() reads and splits an env var, so it trails isWorkEnv(),
+        // which is already resolved. A caller that only wants the string back emits nothing,
+        // so the environment has no say over it.
+        if ($is_printing && !Dj_App_Env::isWorkEnv() && !Dj_App_Env::isDevIP()) {
+            return;
+        }
+
         $data = Dj_App_String_Util::export($data);
         $data = Dj_App_Log::removeNotEssentialStuff($data);
 
-        if (empty($print)) {
+        if (!$is_printing) {
             return $data;
-        }
-
-        $is_dev = Dj_App_Env::isDev() || Dj_App_Env::isStaging() || Dj_App_Env::isDevIP();
-
-        if (empty($is_dev)) {
-            return;
         }
 
         $label = empty($label) ? 'Data' : $label;
