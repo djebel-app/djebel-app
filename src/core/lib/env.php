@@ -4,6 +4,58 @@
  * Environment related functions.
  */
 class Dj_App_Env {
+    // The environment NAME, after the config has spoken. A listener answers for every app at
+    // once — by host, by install dir, by whatever a fleet decides — instead of each install
+    // carrying the answer in its own .env.
+    const FILTER_ENV_NAME = 'app.core.env.filter.name';
+
+    // Resolved once per request. Every predicate below asks the same question, and answering
+    // it means an env scan plus a hook dispatch — paid four times over when each asked alone.
+    // Null until asked; set() clears it, because that is where the answer can change.
+    private static $env_name = null;
+
+    /**
+     * The environment this install is running as — 'dev', 'staging', 'live', or whatever a
+     * site calls its own. Empty when nothing has declared one.
+     *
+     * Read the predicates below rather than comparing this by hand: 'live', 'prod' and
+     * 'production' all mean the same thing, and only isLive() knows that.
+     *
+     * @return string Lowercased; empty when undeclared
+     */
+    public static function getAppEnv()
+    {
+        if (!is_null(Dj_App_Env::$env_name)) {
+            return Dj_App_Env::$env_name;
+        }
+
+        $env_name = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
+
+        // A desktop session means a workstation, and a workstation is a dev box. It is only a
+        // DEFAULT now: an install that declares an environment, and a listener that overrides
+        // one, both outrank it — where before it beat everything and could not be argued with.
+        if (empty($env_name) && !empty($_SERVER['DESKTOP_SESSION'])) {
+            $env_name = 'dev';
+        }
+
+        // Hooks load after this file, so an env question asked during bootstrap has no seam to
+        // pass through. Such an answer is deliberately NOT remembered either — the value taken
+        // before the filter existed would otherwise outlive it for the whole request.
+        $has_hooks = class_exists('Dj_App_Hooks');
+
+        if ($has_hooks) {
+            $env_name = Dj_App_Hooks::applyFilter(Dj_App_Env::FILTER_ENV_NAME, $env_name);
+        }
+
+        $env_name = Dj_App_String_Util::formatStringId($env_name);
+
+        if ($has_hooks) {
+            Dj_App_Env::$env_name = $env_name;
+        }
+
+        return $env_name;
+    }
+
     /**
      * Dj_App_Env::isLinux();
      * @return bool
@@ -31,21 +83,16 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isDev() {
-        if (!empty($_SERVER['DESKTOP_SESSION'])) { // vm env
-            return true;
-        }
-
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
+        $dj_app_env = Dj_App_Env::getAppEnv();
 
         if (empty($dj_app_env)) {
             return false;
         }
 
-        if (in_array($dj_app_env, [ 'dev', 'development'])) {
-            return true;
-        }
+        $dev_names = [ 'dev', 'development', ];
+        $is_dev = in_array($dj_app_env, $dev_names);
 
-        return false;
+        return $is_dev;
     }
 
     /**
@@ -80,9 +127,12 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isCli() {
-        $yes = (stripos(php_sapi_name(), 'cli') !== false)
-            || (defined('PHP_SAPI') && PHP_SAPI === 'cli'); // JIC
-        return $yes;
+        // PHP_SAPI is a core constant — always defined, and read without a function call.
+        // Matched EXACTLY: 'cli-server' is the built-in web server, which serves real HTTP
+        // requests, so a substring match would hand it the command-line answer.
+        $is_cli = PHP_SAPI == 'cli';
+
+        return $is_cli;
     }
 
     /**
@@ -91,21 +141,39 @@ class Dj_App_Env {
      * @return bool
      */
     public static function isWebRequest() {
-        return !self::isCli() && !empty($_SERVER['REQUEST_METHOD']) && !empty($_SERVER['REQUEST_URI']);
+        // The two superglobal reads are free language constructs; isCli() is a call into
+        // php_sapi_name(), so it only runs once the cheap pair has failed to reject.
+        if (empty($_SERVER['REQUEST_METHOD']) || empty($_SERVER['REQUEST_URI'])) {
+            return false;
+        }
+
+        $is_cli = Dj_App_Env::isCli();
+        $is_web_request = empty($is_cli);
+
+        return $is_web_request;
     }
 
     public static function isLive() {
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
+        $dj_app_env = Dj_App_Env::getAppEnv();
 
+        // Undeclared answers LIVE on purpose: an install that never said what it is gets the
+        // careful treatment, not the permissive one.
         if (empty($dj_app_env)) {
             return true;
         }
 
-        if (in_array($dj_app_env, [ 'live', 'prod', 'production'])) {
+        $live_names = [ 'live', 'prod', 'production', ];
+
+        if (in_array($dj_app_env, $live_names)) {
             return true;
         }
 
-        return !self::isDev();
+        // Anything else named — staging included — is live in the sense this asks about: not
+        // a developer's machine. isWorkEnv() is the one that separates staging from production.
+        $is_dev = Dj_App_Env::isDev();
+        $is_live = empty($is_dev);
+
+        return $is_live;
     }
 
     /**
@@ -135,10 +203,10 @@ class Dj_App_Env {
      * @return bool
      */
     static public function isStaging() {
-        $dj_app_env = Dj_App_Env::getEnvConst('DJEBEL_APP_ENV,APP_ENV');
-        $s = stripos( $dj_app_env, 'staging' ) !== false;
+        $dj_app_env = Dj_App_Env::getAppEnv();
+        $is_staging = strpos($dj_app_env, 'staging') !== false;
 
-        return $s;
+        return $is_staging;
     }
 
     /**
@@ -216,6 +284,11 @@ class Dj_App_Env {
         if (!is_array($key)) {
             $key = [ $key => $val, ];
         }
+
+        // Any of these may BE the environment key, so the resolved name is dropped rather than
+        // compared against — a suite that flips the env between cases would otherwise keep
+        // answering with the one the first test happened to settle.
+        Dj_App_Env::$env_name = null;
 
         $env_vars = array_change_key_case($key, CASE_UPPER);
 

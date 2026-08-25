@@ -15,23 +15,104 @@ class Dj_App_Env_Test extends TestCase
         $this->backup_djebel_env = getenv('DJEBEL_APP_ENV');
         $this->backup_app_env = getenv('APP_ENV');
 
-        putenv('DJEBEL_APP_ENV');
-        putenv('APP_ENV');
+        // Cleared through the framework, not putenv: the resolved environment is remembered
+        // for the request, and only this path drops it. A raw putenv would leave the previous
+        // test's answer standing while the variable behind it was already gone.
+        Dj_App_Env::set('APP_ENV', null);
+        Dj_App_Env::set('DJEBEL_APP_ENV', null);
     }
 
     protected function tearDown(): void
     {
-        if ($this->backup_djebel_env === false) {
-            putenv('DJEBEL_APP_ENV');
-        } else {
-            putenv('DJEBEL_APP_ENV=' . $this->backup_djebel_env);
-        }
+        // Restored through the framework for the same reason setUp() clears through it: a raw
+        // putenv puts the variable back but leaves the resolved environment remembered, so the
+        // next class to ask would be answered with this class's value for a name that is no
+        // longer set. false means the variable was absent, and null is how set() removes one.
+        $djebel_env = $this->backup_djebel_env === false ? null : $this->backup_djebel_env;
+        Dj_App_Env::set('DJEBEL_APP_ENV', $djebel_env);
 
-        if ($this->backup_app_env === false) {
-            putenv('APP_ENV');
-        } else {
-            putenv('APP_ENV=' . $this->backup_app_env);
+        $app_env = $this->backup_app_env === false ? null : $this->backup_app_env;
+        Dj_App_Env::set('APP_ENV', $app_env);
+    }
+
+    /**
+     * Whatever an install declares is normalized before anything compares against it, so a
+     * name typed in caps or with stray whitespace still answers the predicates.
+     */
+    public function testGetAppEnvNormalizesTheDeclaredName()
+    {
+        Dj_App_Env::set('DJEBEL_APP_ENV', '  LIVE  ');
+
+        $env_name = Dj_App_Env::getAppEnv();
+
+        $this->assertEquals('live', $env_name);
+        $this->assertTrue(Dj_App_Env::isLive());
+        $this->assertFalse(Dj_App_Env::isDev());
+    }
+
+    /**
+     * The filter is the whole point of the seam — a fleet answers for every install at once,
+     * by host or by install dir — so its word outranks what the install declared for itself.
+     */
+    public function testGetAppEnvFilterOutranksTheDeclaredName()
+    {
+        Dj_App_Env::set('DJEBEL_APP_ENV', 'live');
+        Dj_App_Hooks::addFilter(Dj_App_Env::FILTER_ENV_NAME, ['Dj_App_Env_Test', 'filterEnvNameToDev']);
+
+        try {
+            $env_name = Dj_App_Env::getAppEnv();
+
+            $this->assertEquals('dev', $env_name);
+            $this->assertTrue(Dj_App_Env::isDev());
+            $this->assertFalse(Dj_App_Env::isLive());
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Env::FILTER_ENV_NAME, ['Dj_App_Env_Test', 'filterEnvNameToDev']);
+            $this->assertTrue($removed, 'The env name filter leaked out of the test');
         }
+    }
+
+    /**
+     * The resolved name is remembered for the whole request, so the drop inside set() is the
+     * only thing keeping a later change from being answered with the earlier one.
+     */
+    public function testSetDropsTheRememberedEnvName()
+    {
+        Dj_App_Env::set('DJEBEL_APP_ENV', 'live');
+        $this->assertEquals('live', Dj_App_Env::getAppEnv());
+
+        Dj_App_Env::set('DJEBEL_APP_ENV', 'dev');
+        $this->assertEquals('dev', Dj_App_Env::getAppEnv());
+    }
+
+    /**
+     * The bootstrap primes REQUEST_METHOD and REQUEST_URI to fake a web request, so the CLI
+     * check is the only thing left answering false here — drop it and this case fails.
+     */
+    public function testIsWebRequestIsFalseUnderCli()
+    {
+        $this->assertFalse(Dj_App_Env::isWebRequest(), 'The suite runs in CLI, so nothing is serving a request');
+    }
+
+    /**
+     * The SAPI is matched exactly, so widening the comparison to catch 'cli-server' — the
+     * built-in web server, which serves real HTTP — stops answering this one.
+     *
+     * The cli-server case itself cannot be exercised here: PHP_SAPI is a constant, so the
+     * suite can only ever run under one of them.
+     */
+    public function testIsCliUnderTheCliSapi()
+    {
+        $this->assertTrue(Dj_App_Env::isCli(), 'The suite runs under the cli SAPI');
+    }
+
+    /**
+     * @param string $cur_val
+     * @param array $ctx
+     * @return string
+     */
+    public static function filterEnvNameToDev($cur_val, $ctx = [])
+    {
+        return 'dev';
     }
 
     public function testGetEnvAlternatives()
