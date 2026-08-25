@@ -154,3 +154,63 @@ stray `%`. Its docblock explains this — preserve it through any move.
 
 - [ ] One tag helper, in the class its name implies
 - [ ] `grep -rn "Dj_App_Util::replaceTags" app/sites src` is empty
+
+---
+
+## 5. `Dj_App_Cache` — pick its own backend, APCu when there is one
+
+**Status:** agreed in principle, **deliberately NOT scheduled** (user, 2026-08-26:
+*"that's what should transparently handle it. but let's not do it now"*).
+**Location-to-be:** inside `src/core/lib/cache.php` — a backend behind the existing
+`get()` / `set()` / `remove()` / `removeAll()`, **never a second cache class.** Two
+caches drift, and callers should not be choosing a store.
+
+### The decision, and why it is parked
+
+The store is file-only today. APCu is available on the live host (5.1.28,
+`apc.shm_size 128M`, `apc.ttl 1800`), so the obvious move is to use it. It was
+measured first, and the numbers said not yet:
+
+| Measured | Cost |
+|---|---|
+| `parse_ini_file(app.ini)` | 54.7 µs |
+| Asset resolution, 12 fs calls, warm stat cache | 92.7 µs |
+| **Everything cacheable, together** | **~147 µs** |
+| Static file over the same connection — network + TLS, zero PHP | 18–47 ms |
+| Full page — the same, plus every bit of framework work | 40–72 ms |
+
+Serving a static file costs about what serving a rendered page costs, so the
+framework's own share is a few ms and the two ranges overlap. Caching everything
+measurable would win **~0.3% of a page**. Meanwhile one backend API call measured
+`exec_time: 0.181` — roughly triple the entire rest of the page. The milliseconds
+are in call COUNTS per screen, not in the framework.
+
+Two measurement notes worth keeping, both corrections of a first wrong answer:
+`clearstatcache()` costs 0.4 µs, so clearing the cache does NOT meaningfully
+change the fs number (89.7 µs cleared vs 92.7 µs warm — the stat cache is not
+what is being paid for). The cost is concentrated in ONE call: `realpath()` on a
+RELATIVE path is 21 µs against 1.27 µs on an absolute one. Nothing in the asset
+path hits the relative case — both call sites already hold absolute paths.
+
+### What would justify picking this up
+
+- A per-request cost above ~5 ms. Nothing today is within two orders of magnitude.
+- Cross-request state — a rate limiter, a lock, a shared lookup table. This is
+  APCu's real strength and the file store's real weakness, and it is the likeliest
+  trigger.
+- Plugin/theme discovery growing enough that directory scans register.
+
+### Two traps to design against
+
+- **APCu memory is shared between Apache children but dies on restart or deploy.**
+  Anything stored must be re-derivable, never the only copy.
+- **Never cache a `filemtime()` used for cache busting.** It is the tempting one in
+  the asset path, and caching it ships new files behind old `?v=` URLs — a stale
+  asset bug that presents exactly like a truncated or half-broken page.
+
+### Acceptance
+
+- [ ] One store, chosen inside `Dj_App_Cache`; no caller names a backend
+- [ ] CLI keeps working unchanged — live runs `apc.enable_cli = Off`, so the file
+      store must remain the fallback rather than an error path
+- [ ] A benchmark in the commit message showing the win against total request time
