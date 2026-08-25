@@ -84,6 +84,28 @@ class Dj_App_Assets_Test extends TestCase {
         $assets_obj = Dj_App_Assets::getInstance();
         $remove_res = $assets_obj->removeAll();
         $this->assertTrue($remove_res->isSuccess());
+
+        // Config is a process-wide singleton too, and setUp's installHooks() reads it — so a
+        // declaration left behind here would silently register itself into the NEXT test, one
+        // that asked for no assets at all. Dropped through ArrayAccess: it reaches the one
+        // section directly, where reading the config out and writing it back would copy every
+        // OTHER section to remove this one, and would clear the extra-options data as a
+        // side effect of the write.
+        $opt_obj = Dj_App_Options::getInstance();
+        unset($opt_obj[Dj_App_Assets::CONFIG_SECTION]);
+    }
+
+    /**
+     * Puts a config-declared asset section in place, the way a parsed site config carries one —
+     * the section key naming the asset, the keys under it being add() params.
+     *
+     * @param array $entries id => params
+     * @return void
+     */
+    public function declareConfigAssets($entries = [])
+    {
+        $opt_obj = Dj_App_Options::getInstance();
+        $opt_obj[Dj_App_Assets::CONFIG_SECTION] = $entries;
     }
 
     /**
@@ -1282,6 +1304,136 @@ class Dj_App_Assets_Test extends TestCase {
         $normal_pos = strpos($footer_html, 'var normal = 1;');
 
         $this->assertLessThan($normal_pos, $first_pos);
+    }
+
+    // ---------------------------------------------------------------- config-declared assets
+
+    public function testConfigDeclaredAssetsRegisterWithNoCallerAskingForThem()
+    {
+        $config_entries = [
+            'jquery' => [ 'file' => '/plugins/djebel-test-plugin/assets/main.js', ],
+            'theme-css' => [ 'file' => '/themes/djebel-test-theme/style.css', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $loaded_cnt = $assets_obj->loadConfiguredAssets();
+
+        $this->assertSame(2, $loaded_cnt);
+
+        $queue = $assets_obj->getQueue();
+
+        // The section key IS the handle — that is what makes a prereq elsewhere able to name it.
+        $this->assertArrayHasKey('jquery', $queue);
+        $this->assertArrayHasKey('theme-css', $queue);
+    }
+
+    /**
+     * The ordering guarantee is the whole reason a config entry may carry a prereq: config is
+     * read top-to-bottom, so without it a library would render in whatever order someone
+     * happened to type the lines in.
+     */
+    public function testConfigDeclaredPrereqOutranksTheOrderTheyWereDeclaredIn()
+    {
+        $config_entries = [
+            'app' => [ 'js' => 'var app = 1;', 'prereq' => 'jquery', ],
+            'jquery' => [ 'js' => 'var jq = 1;', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $assets_obj->loadConfiguredAssets();
+
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $jq_pos = strpos($footer_html, 'var jq = 1;');
+        $app_pos = strpos($footer_html, 'var app = 1;');
+
+        $this->assertLessThan($app_pos, $jq_pos);
+    }
+
+    /**
+     * A mistyped file name is the likely bad line, and it must cost the site that one asset
+     * rather than every asset declared after it.
+     */
+    public function testABadConfigEntryIsSkippedAndTheRestStillLoad()
+    {
+        $config_entries = [
+            'missing' => [ 'file' => '/plugins/djebel-test-plugin/assets/nope.js', ],
+            'good' => [ 'file' => '/plugins/djebel-test-plugin/assets/main.js', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $loaded_cnt = $assets_obj->loadConfiguredAssets();
+
+        $this->assertSame(1, $loaded_cnt);
+
+        $queue = $assets_obj->getQueue();
+
+        $this->assertArrayHasKey('good', $queue);
+        $this->assertArrayNotHasKey('missing', $queue);
+    }
+
+    /**
+     * A plain "key = value" in the section names no asset. It is skipped rather than treated as
+     * a broken one, so the section stays usable for a setting later.
+     */
+    public function testAScalarConfigEntryIsNotTreatedAsAnAsset()
+    {
+        $config_entries = [
+            'enabled' => '1',
+            'good' => [ 'file' => '/plugins/djebel-test-plugin/assets/main.js', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $loaded_cnt = $assets_obj->loadConfiguredAssets();
+
+        $this->assertSame(1, $loaded_cnt);
+
+        $queue = $assets_obj->getQueue();
+
+        $this->assertArrayNotHasKey('enabled', $queue);
+    }
+
+    public function testNoConfigSectionRegistersNothing()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+        $loaded_cnt = $assets_obj->loadConfiguredAssets();
+
+        $this->assertSame(0, $loaded_cnt);
+
+        $queue = $assets_obj->getQueue();
+
+        $this->assertEmpty($queue);
+    }
+
+    /**
+     * Config is the BASE layer, not the last word — a site declares the library it wants and
+     * code can still swap the file behind that same handle.
+     */
+    public function testRegisteringAConfigIdAgainReplacesTheConfigEntry()
+    {
+        $config_entries = [
+            'jquery' => [ 'js' => 'var jq = 1;', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $assets_obj->loadConfiguredAssets();
+
+        $this->registerAsset([ 'js' => 'var jq = 2;', 'id' => 'jquery', ]);
+
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var jq = 2;', $footer_html);
+        $this->assertStringNotContainsString('var jq = 1;', $footer_html);
     }
 
     // ---------------------------------------------------------------- prerequisites

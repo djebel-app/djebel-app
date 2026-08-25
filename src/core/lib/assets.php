@@ -66,6 +66,9 @@ class Dj_App_Assets {
     const HOOK_PAGE_BODY_START = 'app.page.html.body.start';
     const HOOK_PAGE_BODY_END = 'app.page.html.body.end';
 
+    // The site-config section a site declares its own assets in. See loadConfiguredAssets().
+    const CONFIG_SECTION = 'assets';
+
     // Around adding.
     const FILTER_ITEM = 'app.core.assets.filter.item';
     const ACTION_ADDED = 'app.core.assets.action.added';
@@ -144,6 +147,68 @@ class Dj_App_Assets {
         ];
 
         Dj_App_Hooks::addAction($page_hooks, [$this, 'renderAssets']);
+
+        $this->loadConfiguredAssets();
+    }
+
+    /**
+     * The assets a SITE declares in its own config, registered before the first plugin runs so
+     * a shared library reaches the page without one line of PHP asking for it. Adding one is
+     * then a config line, not an edit to whichever screen happened to need it first.
+     *
+     * The section key IS the asset id; every key under it is a param add() already understands,
+     * so this grows by whatever add() grows by and needs nothing here.
+     *
+     * Registering FIRST is what keeps these overridable rather than final: re-registering an id
+     * replaces that entry in place, so a later registration of the same id wins and everything
+     * that named it as a prerequisite follows the replacement.
+     *
+     * @return int How many registered
+     */
+    public function loadConfiguredAssets()
+    {
+        $opt_obj = Dj_App_Options::getInstance();
+        $section_obj = $opt_obj->getSection(Dj_App_Assets::CONFIG_SECTION);
+        $entries = $section_obj->toArray();
+
+        if (empty($entries)) {
+            return 0;
+        }
+
+        $loaded_cnt = 0;
+
+        foreach ($entries as $asset_id => $params) {
+            // A bare "key = value" in the section names no asset — only a dotted "<id>.<param>"
+            // nests into the params array add() takes. Skipping rather than failing leaves the
+            // section usable for a plain setting later without breaking every site that has one.
+            if (!is_array($params)) {
+                continue;
+            }
+
+            $params['id'] = $asset_id;
+
+            $res_obj = $this->add($params);
+
+            // One bad line must not cost a site the rest of its assets — a mistyped file name is
+            // the likely case and it is the only one that should go missing. The log carries the
+            // id, since a config asset has no call site to be found by.
+            if ($res_obj->isError()) {
+                $error_msg = $res_obj->msg();
+
+                $log_data = [
+                    'asset_id' => $asset_id,
+                    'msg' => $error_msg,
+                ];
+
+                Dj_App_Log::warn($log_data, __METHOD__);
+
+                continue;
+            }
+
+            $loaded_cnt++;
+        }
+
+        return $loaded_cnt;
     }
 
     /**

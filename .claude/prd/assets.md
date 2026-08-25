@@ -259,6 +259,47 @@ feature. **The filter is never memoized**, so it stays a live seam: one register
 first asset resolved is honored just the same, and a site free to answer per asset keeps that
 freedom.
 
+### Site-declared assets — the `[assets]` config section (added 2026-08-25)
+
+A shared library — jQuery, a picker, the stylesheet everything builds on — is not any one
+screen's dependency, so making one screen own the registration is arbitrary: whichever screen
+happened to need it first ends up carrying it for all the others, and every screen added later
+has to know to ask. Declaring it in the site's own `app.ini` removes the question.
+
+```ini
+[assets]
+jquery.file = /site/shared/jquery/jquery.min.js
+select2_css.file = /site/shared/select2/select2.min.css
+select2.file = /site/shared/select2/select2.min.js
+select2.prereq = jquery
+```
+
+`Dj_App_Assets::loadConfiguredAssets()` reads the section from `installHooks()`, so these are
+registered **before the first plugin runs**. The section key IS the asset id, and every key
+under it is a param `add()` already takes — so this grows by whatever `add()` grows by and
+needs no code of its own. `Dj_App_Options` expands dotted INI keys into nested arrays, which
+is why `select2.prereq = jquery` arrives as a param rather than as a second entry.
+
+Three consequences worth stating, because each is a decision rather than a side effect:
+
+- **Registering first is what keeps them overridable.** Re-registering an id replaces that
+  entry in place, so a plugin can still swap the site's jQuery for its own and everything that
+  named it as a prerequisite follows the replacement. Config is the base layer, not the last
+  word.
+- **`prereq` is what orders them, not the line order.** Config is read top-to-bottom, so
+  without it the render order would be whatever order someone typed the lines in. Verified by
+  declaring select2 above jQuery and confirming jQuery still renders first.
+- **A bad line costs one asset, not the rest.** A mistyped file name is the likely case; the
+  entry is logged with its id (a config asset has no call site to be found by) and skipped.
+  A scalar `key = value` in the section names no asset at all and is skipped silently, which
+  leaves the section usable for a plain setting later.
+
+**The cost:** anything declared here is on EVERY page, including ones that never use it — a
+login screen now carries jQuery. That is the trade for never having to ask. If it needs to
+become opt-in, the shape is one optional key whose absence means today's behavior
+(`auto_load = 0` plus an `enqueue()` by id) — `auto_load` is already this framework's word for
+exactly that, so nothing declared today would have to change.
+
 ### Failure split
 
 - **Caller bug → throw `Dj_App_Validation_Exception`**: conflicting source keys (`file` *and*
