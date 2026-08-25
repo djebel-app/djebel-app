@@ -141,13 +141,18 @@ Bootstrap (`index.php`) handles the shutdown phase in this order:
 ```php
 } finally {
     $req_obj->outputContent();              // 1. Echo content into PHP's output buffer
-    $req_obj->finishRequest();              // 2. Flush + Connection: close + fastcgi_finish_request
-    Dj_App_Hooks::doAction('app/shutdown'); // 3. Fire any registered shutdown listeners
-    Dj_App_Hooks::runDeferredActions();     // 4. Drain captured deferred queue in background
+    Dj_App_Util::closeSession();            // 2. Release the session lock — every request
+    Dj_App_Util::flushResponse();           // 3. Flush + Connection: close + fastcgi_finish_request
+    Dj_App_Hooks::doAction('app/shutdown'); // 4. Fire any registered shutdown listeners
+    Dj_App_Hooks::runDeferredActions();     // 5. Drain captured deferred queue in background
 }
 ```
 
-After step 2, the browser already sees the page and disconnects. PHP keeps running for steps 3 and 4, so all deferred work happens **invisible to the user**.
+After step 3, the browser already sees the page and disconnects. PHP keeps running for steps 4 and 5, so all deferred work happens **invisible to the user**.
+
+**Step 3 only runs when there is something to overlap with.** `Dj_App_Hooks::hasPostResponseWork()` gates it on whether any `app/shutdown` listener, deferred action or queued notice exists. Handing the client back costs the response its gzip and the connection its keep-alive, so on an empty shutdown phase that is paid for an idle gap which never happens. Step 2 is not gated — a held session lock serialises everything else the same visitor has in flight, so releasing it is worth doing every time.
+
+**The two framing headers are not always sent.** `Connection: close` and `Content-Length` frame the body, and framing it wrong is worse than not framing it at all. When another output handler sits in the buffer stack — an asset optimizer on `auto_prepend_file`, zlib compression — it rewrites the body as its buffer closes, which happens during the very flush those headers describe. A size measured beforehand is therefore not the size that leaves, so neither header is claimed and the SAPI falls back to chunked, which needs no size and cannot come up short. `Dj_App_Util::hasForeignOutputHandler()` is the check. On mod_php those two headers *are* the whole release mechanism, so a site running such a handler keeps the connection open until the script ends — the body still goes out whole, which is the point.
 
 `runDeferredActions()` is the single source of truth for the drain — it iterates the captured queue and replays each `(hook, params)` via `doAction(..., type=DEFERRED)`, which reads from `$deferred_actions` and runs all deferred callbacks for that hook in priority order with the originally-captured params. Loop prevention is structural: DEFERRED-mode dispatch reads a different registry than NORMAL mode, so the inline skip-and-capture branch never re-fires.
 

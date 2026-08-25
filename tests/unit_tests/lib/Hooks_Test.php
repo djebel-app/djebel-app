@@ -2185,4 +2185,47 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertCount(1, self::$deferred_call_log);
         $this->assertEquals($trigger_params, self::$deferred_call_log[0]['params']);
     }
+
+    /**
+     * With nothing queued the shutdown phase has no work, so disconnecting the client early
+     * buys no overlap — it only spends gzip and keep-alive on an idle gap that never happens.
+     * tearDown() clears all three registries, so this starts genuinely empty.
+     */
+    public function testNoQueuedWorkMeansNothingRunsAfterTheResponse()
+    {
+        $has_work = Dj_App_Hooks::hasPostResponseWork();
+
+        $this->assertFalse($has_work, 'an empty shutdown phase is not worth disconnecting early for');
+    }
+
+    public function testAnAppShutdownListenerCountsAsPostResponseWork()
+    {
+        Dj_App_Hooks::addAction('app/shutdown', ['Dj_App_Hooks_Test', 'deferredCallback']);
+
+        $has_work = Dj_App_Hooks::hasPostResponseWork();
+
+        $this->assertTrue($has_work, 'a shutdown listener runs after the response and must be seen');
+    }
+
+    public function testADeferredActionCountsAsPostResponseWork()
+    {
+        Dj_App_Hooks::addDeferredAction('app.some.hook', ['Dj_App_Hooks_Test', 'deferredCallback']);
+
+        $has_work = Dj_App_Hooks::hasPostResponseWork();
+
+        $this->assertTrue($has_work, 'a deferred action is exactly the work early-finish exists for');
+    }
+
+    /**
+     * Notices drain LAST in the shutdown phase, so a queued one is post-response work even when
+     * no listener and no deferred action is registered.
+     */
+    public function testAQueuedNoticeCountsAsPostResponseWork()
+    {
+        Dj_App_Hooks::addNotice('deferred notice');
+
+        $has_work = Dj_App_Hooks::hasPostResponseWork();
+
+        $this->assertTrue($has_work, 'a queued notice still has to be emitted after the response');
+    }
 }

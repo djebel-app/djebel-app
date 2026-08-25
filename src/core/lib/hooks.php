@@ -76,8 +76,8 @@ class Dj_App_Hooks {
 
     /**
      * Pending notices queued via addNotice(). Drained ONCE per request by
-     * flushNotices() during runShutdownHooks() — after finishRequest() has
-     * already disconnected the client, so emitting costs the user nothing.
+     * flushNotices() during runShutdownHooks() — after the response has already
+     * gone out, so emitting costs the user nothing.
      * Each entry: [ 'message' => string, 'ctx' => array, ].
      * @var array
      */
@@ -327,7 +327,7 @@ class Dj_App_Hooks {
      * // With priority (default: 20)
      * Dj_App_Hooks::addAction('init', [ $obj, 'onInit', ], 30);
      *
-     * // Register as DEFERRED — runs after $req_obj->finishRequest() on app/shutdown
+     * // Register as DEFERRED — runs after the response has gone out, on app/shutdown
      * $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
      * Dj_App_Hooks::addAction('app/messages/insert', [ $obj, 'sendPush', ], 50, $opts);
      * ```
@@ -399,8 +399,9 @@ class Dj_App_Hooks {
      * fires in NORMAL mode, doAction's finally drains the captured queue by replaying each
      * (hook, params) via doAction(..., type=DEFERRED).
      *
-     * Bootstrap should call $req_obj->finishRequest() before firing 'app/shutdown'
-     * so this background work runs after the client connection has been closed.
+     * runShutdownHooks() flushes the response before firing 'app/shutdown', so this
+     * background work runs once the client already has the page. Registering deferred
+     * work is itself what makes that flush worth doing.
      *
      * Note: deferral applies to ACTIONS only. Filters are synchronous because the return
      * value is needed immediately — deferring a filter doesn't make sense.
@@ -900,8 +901,8 @@ class Dj_App_Hooks {
      * Queues a notice for deferred, FILTERABLE emission instead of calling
      * trigger_error() inline. Costs ONE array append — safe to call from hot
      * paths' error branches. The queue is drained once per request by
-     * flushNotices() during runShutdownHooks(), i.e. after finishRequest() has
-     * already disconnected the client, so emission costs the user nothing.
+     * flushNotices() during runShutdownHooks(), i.e. after the response has already
+     * gone out, so emission costs the user nothing.
      *
      * Deferred (vs emitting immediately) also means plugins that load AFTER the
      * notice was raised can still filter it, and no nested hook fires from inside
@@ -982,10 +983,11 @@ class Dj_App_Hooks {
      * function in the bootstrap so it runs on EVERY exit path: normal completion,
      * early return (headless mode), exit(), exceptions, even fatal errors.
      *
-     * Closes the client connection FIRST (via $req_obj->finishRequest()) so any
-     * slow deferred work runs in the background after the user has been disconnected.
-     * Safe to call even when finishRequest already ran from the bootstrap finally —
-     * its !headers_sent() / buffer-level guards make repeat calls effective no-ops.
+     * Releases the session lock, then — only when something is actually queued to run
+     * afterwards — flushes the response FIRST (via Dj_App_Util::flushResponse()) so any
+     * slow deferred work happens once the user already has the page. Safe to call even
+     * when the response was already flushed from the bootstrap finally — the
+     * !headers_sent() / buffer-level guards make repeat calls effective no-ops.
      *
      * Idempotent via state clearing — calling this twice in a row is safe:
      *   1. First call: flush+close, fires 'app/shutdown' listeners, clears them, drains queue
@@ -999,12 +1001,24 @@ class Dj_App_Hooks {
         // user's browser disconnects immediately. Only meaningful for real HTTP
         // requests — skip in CLI (PHPUnit, scripts), where there's no connection to
         // close and buffers this code didn't open would be closed.
-        // class_exists guards a very-early shutdown, before the env class is loaded.
+        // class_exists guards a very-early shutdown, before the util class is loaded.
         $is_web_req = class_exists('Dj_App_Env', false) && Dj_App_Env::isWebRequest();
+        $is_util_loaded = $is_web_req && class_exists('Dj_App_Util', false);
 
-        if ($is_web_req && class_exists('Dj_App_Request', false)) {
-            $req_obj = Dj_App_Request::getInstance();
-            $req_obj->finishRequest();
+        if ($is_util_loaded) {
+            // Releasing the session lock is worth doing on EVERY request — a held lock
+            // serialises anything else that same visitor has in flight. It sits here rather
+            // than behind the flush below, which most requests never reach. False only means
+            // there was no session open, which is a normal outcome and not a failure.
+            $session_closed = Dj_App_Util::closeSession();
+
+            // Handing the client back early only pays for itself when something is queued to
+            // run after they are gone. With nothing waiting there is no background work to
+            // overlap with, and the cost is charged anyway: the response gives up gzip and the
+            // connection gives up keep-alive, both for an idle gap that never happens.
+            if (Dj_App_Hooks::hasPostResponseWork()) {
+                Dj_App_Util::flushResponse();
+            }
         }
 
         Dj_App_Hooks::doAction('app/shutdown');
@@ -1021,14 +1035,44 @@ class Dj_App_Hooks {
     }
 
     /**
+     * Is anything queued to run AFTER the response has gone out?
+     *
+     * The three things runShutdownHooks() does once the client is served: 'app/shutdown'
+     * listeners, the deferred-action replay, and the notice drain. When all three are empty
+     * the shutdown phase has nothing to do, so disconnecting the client early buys no overlap
+     * — it only spends gzip and keep-alive on an idle gap that never happens.
+     *
+     * A listener registering MORE work while 'app/shutdown' fires is already covered: the
+     * listener itself is work, so this answered true before it ever ran.
+     *
+     * @return bool
+     */
+    public static function hasPostResponseWork()
+    {
+        if (!empty(Dj_App_Hooks::$actions['app/shutdown'])) {
+            return true;
+        }
+
+        if (!empty(Dj_App_Hooks::$deferred_actions)) {
+            return true;
+        }
+
+        if (!empty(Dj_App_Hooks::$notices)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Drains the captured deferred-actions queue. Each captured (hook, params)
      * entry is replayed via doAction(..., type=DEFERRED), which iterates
      * $deferred_actions[hook] and runs ALL the deferred callbacks for that hook
      * in priority order with the originally-captured params.
      *
      * Called by runShutdownHooks() in the shutdown phase, AFTER
-     * $req_obj->finishRequest() has flushed the response and closed the
-     * connection — so the deferred work runs in the background.
+     * Dj_App_Util::flushResponse() has pushed the response out — so the deferred
+     * work runs once the client already has the page.
      *
      * Loop prevention: doAction() with type=DEFERRED reads $deferred_actions
      * (not $actions), so the inline skip-and-capture branch never re-fires.

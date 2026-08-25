@@ -87,7 +87,7 @@ class Dj_App_Cli_Util {
         ob_implicit_flush(true);
 
         // Only before output starts — setting it later warns into error_log, even with @.
-        // Same guard as [Dj_App_Request::finishRequest].
+        // Same guard as [Dj_App_Util::flushResponse].
         if (!headers_sent()) {
             ini_set('zlib.output_compression', 0);
         }

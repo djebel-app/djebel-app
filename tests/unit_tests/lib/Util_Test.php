@@ -2167,4 +2167,190 @@ META;
         $this->assertSame($res_obj, $exc_obj->getData());
     }
 
+    /**
+     * Every buffer level counts, not just the topmost one. ob_get_length() reports only
+     * the top buffer, so a nested buffer under-reported the body and the response was
+     * truncated mid-byte by whatever consumed the Content-Length.
+     *
+     * The runner may hold a buffer of its own, so each case asserts on the DELTA it adds.
+     * Assertions run AFTER the buffers are closed — inside them a failure message would
+     * be swallowed by the very buffer under test.
+     */
+    public function testGetBufferedContentLengthSumsEveryLevel()
+    {
+        $baseline = Dj_App_Util::getBufferedContentLength();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            echo str_repeat('a', 10);
+
+            ob_start();
+            echo str_repeat('b', 3);
+
+            $nested_total = Dj_App_Util::getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $nested_bytes = $nested_total - $baseline;
+
+        $this->assertSame(13, $nested_bytes, 'both levels counted (10 + 3), not just the topmost 3');
+    }
+
+    /**
+     * An open but EMPTY buffer contributes nothing, so the caller skips the header.
+     * Emitting Content-Length: 0 there tells the client the body ended before it began.
+     */
+    public function testGetBufferedContentLengthIgnoresAnEmptyBuffer()
+    {
+        $baseline = Dj_App_Util::getBufferedContentLength();
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+
+            $empty_total = Dj_App_Util::getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $empty_bytes = $empty_total - $baseline;
+
+        $this->assertEmpty($empty_bytes, 'an open but empty buffer adds no bytes');
+    }
+
+    /**
+     * The wire needs BYTES. Cyrillic is 2 bytes per character in UTF-8, so a character
+     * count would under-report and cut the body mid-character — invalid UTF-8 the browser
+     * renders as U+FFFD.
+     */
+    public function testGetBufferedContentLengthCountsBytesNotCharacters()
+    {
+        $baseline = Dj_App_Util::getBufferedContentLength();
+        $cyrillic_body = 'Използвания';
+
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            echo $cyrillic_body;
+
+            $cyrillic_total = Dj_App_Util::getBufferedContentLength();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $cyrillic_bytes = $cyrillic_total - $baseline;
+        $expected_bytes = strlen($cyrillic_body);
+        $character_count = mb_strlen($cyrillic_body, 'UTF-8');
+
+        $this->assertGreaterThan($character_count, $expected_bytes, 'the fixture is genuinely multibyte');
+        $this->assertSame($expected_bytes, $cyrillic_bytes, 'byte count, never the character count');
+    }
+
+    /**
+     * The reason detection matters, demonstrated rather than asserted in the abstract: what the
+     * length would have been measured as, against what the callback actually emits.
+     */
+    public function testACallbackBufferChangesTheBodyLengthAfterItIsMeasured()
+    {
+        $asset_html = '<link href="a.css?v=1">';
+
+        try {
+            $buffer_level = ob_get_level();
+
+            // A capture buffer of this test's OWN, so flushing the callback below lands here
+            // instead of in the runner's buffer — closing that one is what makes a test risky.
+            ob_start();
+            ob_start(['Dj_App_Util_Test', 'rewriteAssetUrls']);
+            $baseline = Dj_App_Util::getBufferedContentLength();
+
+            echo $asset_html;
+            $measured_total = Dj_App_Util::getBufferedContentLength();
+
+            ob_end_flush();
+            $sent_html = ob_get_clean();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $measured_bytes = $measured_total - $baseline;
+        $sent_bytes = strlen($sent_html);
+
+        $this->assertSame(23, $measured_bytes, 'what a length header would have announced');
+        $this->assertNotSame($measured_bytes, $sent_bytes, 'the callback made the body a different size');
+    }
+
+    /**
+     * Plain buffers hand bytes along untouched — including the one php.ini's output_buffering
+     * opens — so what is measured across the stack is what the client receives, and a response
+     * can safely be framed with a length.
+     */
+    public function testPlainBuffersAreNotSeenAsForeign()
+    {
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start();
+            ob_start();
+
+            $has_foreign = Dj_App_Util::hasForeignOutputHandler();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $this->assertFalse($has_foreign, 'a stack of plain buffers changes nothing on the way out');
+    }
+
+    /**
+     * The live failure this exists for: an asset optimizer installed through auto_prepend_file
+     * opens ob_start() with a CALLBACK, so the body is rewritten when that buffer closes — after
+     * the response has already been measured and framed. The declared count then does not match
+     * the bytes sent, and whatever honors it cuts the response mid-character.
+     */
+    public function testACallbackBufferIsSeenAsForeign()
+    {
+        try {
+            $buffer_level = ob_get_level();
+
+            ob_start(['Dj_App_Util_Test', 'rewriteAssetUrls']);
+            ob_start();
+
+            $has_foreign = Dj_App_Util::hasForeignOutputHandler();
+        } finally {
+            while (ob_get_level() > $buffer_level) {
+                ob_end_clean();
+            }
+        }
+
+        $this->assertTrue($has_foreign, 'a handler that can rewrite the body must be detected');
+    }
+
+    /**
+     * Stands in for the auto-prepended asset optimizer: rewrites a versioned asset URL into the
+     * longer rewritten form, which is what moves the byte count.
+     *
+     * @param string $buff
+     * @return string
+     */
+    public static function rewriteAssetUrls($buff)
+    {
+        $buff_rewritten = str_replace('.css?v=1', '.statopt_ver.1.css', $buff);
+
+        return $buff_rewritten;
+    }
+
 }

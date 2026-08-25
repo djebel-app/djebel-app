@@ -40,8 +40,206 @@ class Dj_App_Util {
     const INJECT_BEFORE = 1;
     const INJECT_AFTER = 2;
 
+    // PHP's OWN name for a buffer opened with no callback — the literal string it puts in
+    // ob_get_status()['name'], spaces and all. Not a name this chose and not something to
+    // prefix: it is matched against what the engine reports, so it has to stay byte-identical
+    // to PHP's. Every plain ob_start() reports it, including the one php.ini's output_buffering
+    // opens, so a level named anything ELSE carries a handler that can rewrite what it passes.
+    const PHP_DEFAULT_OUTPUT_HANDLER = 'default output handler';
+
     // Add this near other static properties
     protected static $registry = [];
+
+    /**
+     * Push the response out and hand the client back, so PHP can keep working unheard.
+     * Useful for deferring slow tasks (e.g., push notifications, email) after the response.
+     *
+     * Supports: PHP-FPM (fastcgi_finish_request), LiteSpeed, mod_php (Connection: close).
+     *
+     * Named for the half that ALWAYS happens. Whether the client is actually released is
+     * conditional: that needs the response framed with a byte count, and under a foreign output
+     * handler the count is not settled until that handler runs — which happens during the very
+     * flush below. Where mod_php is the SAPI those two headers ARE the whole release mechanism,
+     * so a site running such a handler — an asset optimizer on auto_prepend_file, say — keeps
+     * the connection open until the script ends. Correct beats early: a length that undershoots
+     * is a page cut off mid-character.
+     *
+     * Only worth calling when something is queued to run afterwards; with nothing waiting it
+     * spends gzip and keep-alive on an idle gap that never happens.
+     *
+     * @return void
+     */
+    public static function flushResponse()
+    {
+        $time_limit = Dj_App_Config::cfg('app.request.finish_request_time_limit', 45);
+        $time_limit = Dj_App_Hooks::applyFilter('app/request/finish_request_time_limit', $time_limit);
+        set_time_limit($time_limit);
+        ignore_user_abort(true);
+
+        // PHP must never compress — it burns a request worker on work the web server does
+        // in C and can cache.
+        // zlib.output_compression is INI_ALL but PHP locks it once headers go out;
+        // calling ini_set() after that raises a warning that lands in error_log even
+        // with the @ operator. Guard with !headers_sent() to be silent in production.
+        if (!headers_sent()) {
+            ini_set('zlib.output_compression', 'Off');
+
+            // NOT "no compression" — this RELOCATES it. Leaving the body uncompressed on
+            // this hop keeps the Content-Length below intact, so a proxy in front can
+            // release the client early and compress there (faster, and it can cache the
+            // compressed copy). Let Apache gzip instead and it strips the length, falls
+            // back to chunked, and the early close is gone. A direct-Apache site with no
+            // proxy therefore gets no compression — that is the tradeoff this line makes.
+            if (function_exists('apache_setenv')) {
+                apache_setenv('no-gzip', 1);
+            }
+
+            // Both headers below FRAME the body, and framing it wrong is worse than not framing
+            // it: a length that undershoots is cut to fit, mid-character, and 'Connection: close'
+            // tells the client that whatever arrived was all of it. Somebody else's handler
+            // rewrites what passes through it when its buffer closes — which happens in the
+            // flush BELOW — so under one the real size is not known here and neither header is
+            // claimed. The SAPI falls back to chunked, which needs no size and cannot be short.
+            // Everything after this block still runs: the body goes out either way, so deferred
+            // work still happens after the client has the page.
+            if (!Dj_App_Util::hasForeignOutputHandler()) {
+                // Tell the client to close the TCP connection after this response so the
+                // browser stops waiting and disconnects. Combined with an explicit
+                // Content-Length below, this lets PHP keep running in the background
+                // (e.g. for deferred actions / cleanup) without holding the user's request open.
+                header('Connection: close', true);
+
+                // A zero total means nothing is pending to frame — either the body already
+                // left the buffers or there is none. Emitting Content-Length: 0 there tells
+                // the client (or the proxy in front) the body ended before it began, so it
+                // truncates whatever actually follows.
+                $content_length = Dj_App_Util::getBufferedContentLength();
+
+                if (!empty($content_length)) {
+                    header('Content-Length: ' . $content_length, true);
+                }
+            }
+        }
+
+        // Flush all output buffer levels. ob_end_flush() both flushes AND closes
+        // each buffer, so after the loop ob_get_level() === 0. Do NOT call ob_flush()
+        // here — there's no buffer left to flush and PHP raises a notice ("No buffer
+        // to flush"). flush() below is the system-level flush — independent of PHP's
+        // output buffer stack — and is still needed.
+        //
+        // Check ob_get_status()['flags'] for PHP_OUTPUT_HANDLER_REMOVABLE BEFORE
+        // calling ob_end_flush(). Some buffers (e.g., locked by output_buffering ini
+        // or zlib.output_handler) are non-removable and ob_end_flush() would raise
+        // "Failed to delete buffer" — captured by error_log even with @. The flag
+        // check is the cheap, correct way to bail out cleanly without any warning.
+        while (ob_get_level() > 0) {
+            $buffer_status = ob_get_status();
+
+            if (empty($buffer_status['flags']) || !($buffer_status['flags'] & PHP_OUTPUT_HANDLER_REMOVABLE)) {
+                // Top buffer is locked — can't be removed. Stop trying.
+                break;
+            }
+
+            ob_end_flush();
+        }
+
+        flush();
+
+        // SAPI-specific finish — called after flushing
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        }
+    }
+
+    /**
+     * Release the session lock, if one is held.
+     *
+     * PHP keeps the session file locked until the script ends, and a held lock serialises every
+     * other request from the SAME visitor behind this one. Once the page is built nothing reads
+     * or writes the session, so from that point the lock is pure contention.
+     *
+     * Worth doing on EVERY request, which is why it stands apart from finishing the response
+     * early — that only pays off when there is background work to overlap with. Writes are lost
+     * after this, so anything that needs $_SESSION must run before it.
+     *
+     * @return bool Whether a session was open to close
+     */
+    public static function closeSession()
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return false;
+        }
+
+        session_write_close();
+
+        return true;
+    }
+
+    /**
+     * Total bytes pending across EVERY output buffer level.
+     *
+     * ob_get_length() reports only the TOPMOST buffer while a response is flushed from all of
+     * them, so on a nested buffer it under-reports the body and whatever consumes the resulting
+     * Content-Length truncates the response mid-byte.
+     *
+     * Only meaningful while hasForeignOutputHandler() is false: a handler rewrites what passes
+     * through it when its buffer closes, so anything counted before that describes the body as
+     * it stands rather than as it will leave.
+     *
+     * @return int Byte count; 0 when nothing is buffered.
+     */
+    public static function getBufferedContentLength()
+    {
+        $buffer_statuses = ob_get_status(true);
+
+        if (empty($buffer_statuses)) {
+            return 0;
+        }
+
+        $content_length = 0;
+
+        foreach ($buffer_statuses as $buffer_status) {
+            $content_length += $buffer_status['buffer_used'];
+        }
+
+        return $content_length;
+    }
+
+    /**
+     * Is any output buffer in the stack owned by something that REWRITES what passes through it?
+     *
+     * A plain buffer hands bytes along untouched, so a total measured across the stack is what
+     * the client ends up receiving. A buffer opened WITH a callback does not: the handler runs
+     * when that buffer closes and may return anything, so neither the body nor its length is
+     * settled until after it has. An asset optimizer installed through auto_prepend_file and
+     * zlib compression are both this.
+     *
+     * Asked at the point of use rather than remembered from bootstrap on purpose — a handler
+     * can be installed at any moment in the request, so the only reading that is true is the
+     * one taken just before the answer is acted on.
+     *
+     * @return bool
+     */
+    public static function hasForeignOutputHandler()
+    {
+        $buffer_statuses = ob_get_status(true);
+
+        if (empty($buffer_statuses)) {
+            return false;
+        }
+
+        foreach ($buffer_statuses as $buffer_status) {
+            $handler_name = empty($buffer_status['name']) ? '' : $buffer_status['name'];
+
+            if ($handler_name != Dj_App_Util::PHP_DEFAULT_OUTPUT_HANDLER) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * Returns the start time when an operation takes place so you can later do a delta.
