@@ -88,26 +88,49 @@ class Dj_App_Log_Test extends TestCase {
     {
         $file = Dj_App_File_Util::generateTempFile();
 
-        Dj_App_Log::disableLogging();
-        $res = Dj_App_Log::msg('should not write', '', $file);
-        Dj_App_Log::enableLogging();
+        try {
+            $is_enabled = Dj_App_Log::loggingEnabled(0);
 
-        $this->assertEmpty($res);
-        $this->assertFileDoesNotExist($file);
+            $this->assertFalse($is_enabled);
+
+            $res = Dj_App_Log::msg('should not write', '', $file);
+
+            $this->assertEmpty($res);
+            $this->assertFileDoesNotExist($file);
+        } finally {
+            // Restored in a finally: a failed assert above would otherwise leave logging off
+            // for every test that runs after this one, and they would pass writing nothing.
+            $is_enabled = Dj_App_Log::loggingEnabled(1);
+
+            $this->assertTrue($is_enabled, 'logging stayed off after the test');
+        }
     }
 
     public function testRequestIdTagsTheLine()
     {
         $file = Dj_App_File_Util::generateTempFile();
 
-        $req_obj = Dj_App_Request::getInstance();
-        $req_obj->setRequestId('req-abc');
-        $line = Dj_App_Log::msg('hi', 'L', $file);
-        $req_obj->setRequestId('');
+        // Captured above the try: the read resolves through a filter and can throw, and a
+        // finally firing with this undefined would restore null over a live id.
+        $saved_req_id = Dj_App_Util::reqId();
 
-        $this->assertStringContainsString('req-abc', $line);
+        try {
+            $set_req_id = Dj_App_Util::reqId('req-abc');
 
-        unlink($file);
+            $this->assertEquals('req-abc', $set_req_id);
+
+            $line = Dj_App_Log::msg('hi', 'L', $file);
+
+            $this->assertStringContainsString('req-abc', $line);
+        } finally {
+            $restored_req_id = Dj_App_Util::reqId($saved_req_id);
+
+            $this->assertEquals($saved_req_id, $restored_req_id, 'the test id leaked out of the test');
+        }
+
+        $delete_res = Dj_App_File_Util::delete($file);
+
+        $this->assertFalse($delete_res->isError(), 'the temp log fixture was removed');
     }
 
     public function testFileHonorsExplicitFile()
@@ -216,9 +239,9 @@ class Dj_App_Log_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-        $log_ok = Dj_App_Log::logAppError($entry);
+        $log_ref = Dj_App_Log::logAppError($entry);
 
-        $this->assertTrue($log_ok, 'the entry landed in the app error log');
+        $this->assertNotEmpty($log_ref, 'the entry landed in the app error log');
 
         $read_res = Dj_App_File_Util::read($file);
         $this->assertEquals($entry, $read_res->output, 'the entry is written verbatim — full paths intact');
@@ -242,9 +265,9 @@ class Dj_App_Log_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-        $log_ok = Dj_App_Log::logAppError($error_data);
+        $log_ref = Dj_App_Log::logAppError($error_data);
 
-        $this->assertTrue($log_ok, 'the warning landed in the app error log');
+        $this->assertNotEmpty($log_ref, 'the warning landed in the app error log');
 
         $read_res = Dj_App_File_Util::read($file);
 
@@ -269,9 +292,9 @@ class Dj_App_Log_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-        $log_ok = Dj_App_Log::logAppError($error_data);
+        $log_ref = Dj_App_Log::logAppError($error_data);
 
-        $this->assertTrue($log_ok, 'the entry still logs without a type');
+        $this->assertNotEmpty($log_ref, 'the entry still logs without a type');
 
         $read_res = Dj_App_File_Util::read($file);
 
@@ -371,11 +394,11 @@ class Dj_App_Log_Test extends TestCase {
         $prior_error_log = ini_get('error_log');
         ini_set('error_log', $fallback_file);
 
-        $log_ok = Dj_App_Log::logAppError($entry);
+        $log_ref = Dj_App_Log::logAppError($entry);
 
         ini_set('error_log', $prior_error_log);
 
-        $this->assertTrue($log_ok, 'the entry was still logged');
+        $this->assertNotEmpty($log_ref, 'the entry was still logged');
         $this->assertFileExists($fallback_file, 'the entry landed in the default error log');
 
         $read_res = Dj_App_File_Util::read($fallback_file);
@@ -390,9 +413,9 @@ class Dj_App_Log_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-        $log_ok = Dj_App_Log::logAppError(new Exception('boom'));
+        $log_ref = Dj_App_Log::logAppError(new Exception('boom'));
 
-        $this->assertTrue($log_ok, 'the exception was logged');
+        $this->assertNotEmpty($log_ref, 'the exception was logged');
 
         $read_res = Dj_App_File_Util::read($file);
         $contents = $read_res->output;
@@ -412,9 +435,9 @@ class Dj_App_Log_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $file);
 
-        $log_ok = Dj_App_Log::logAppError($error);
+        $log_ref = Dj_App_Log::logAppError($error);
 
-        $this->assertTrue($log_ok, 'the fatal was logged');
+        $this->assertNotEmpty($log_ref, 'the fatal was logged');
 
         $read_res = Dj_App_File_Util::read($file);
         $this->assertStringContainsString('Fatal Error: oom in /x.php on line 7', $read_res->output, 'the logger built the entry from the error_get_last() array');
@@ -451,9 +474,9 @@ class Dj_App_Log_Test extends TestCase {
             'DJEBEL_APP_ERROR_LOG_FILE' => $file,
         ]);
 
-        $log_ok = Dj_App_Log::logAppError("nope\n");
+        $log_ref = Dj_App_Log::logAppError("nope\n");
 
-        $this->assertFalse($log_ok, 'disabled error logging refuses the write');
+        $this->assertEmpty($log_ref, 'disabled error logging refuses the write');
         $this->assertFileDoesNotExist($file, 'nothing is written when disabled');
     }
 
@@ -468,9 +491,9 @@ class Dj_App_Log_Test extends TestCase {
             'DJEBEL_APP_ERROR_LOG_FILE' => $file,
         ]);
 
-        $log_ok = Dj_App_Log::logAppError("still on\n");
+        $log_ref = Dj_App_Log::logAppError("still on\n");
 
-        $this->assertTrue($log_ok, 'a blank gate value does not kill error logging');
+        $this->assertNotEmpty($log_ref, 'a blank gate value does not kill error logging');
         $this->assertFileExists($file, 'the entry was written');
 
         unlink($file);
