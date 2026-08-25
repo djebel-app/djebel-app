@@ -174,6 +174,58 @@ class Dj_App_Util {
         return $hash;
     }
 
+    // Lets anything supply the run's id instead of one being generated — a proxy's
+    // X-Request-Id, a fleet's own scheme. Consulted once per run.
+    const FILTER_REQ_ID = 'app.core.log.req_id';
+
+    /**
+     * The id for the current run — the one value everything uses to tie a line back to the
+     * request, CLI invocation or cron run that produced it. NEVER empty.
+     *
+     * Owned here rather than by the request object on purpose: a CLI tool, a cron run and a
+     * consumer that loads the framework as a library never construct one, and every one of
+     * them still needs an id.
+     *
+     * Resolved ONCE and remembered — an id that changed halfway through a run would
+     * correlate nothing, so the first ask settles it. Order: a value a caller set, then the
+     * filter, then a generated one.
+     *
+     * The answer is normalized because an id carrying a newline would break the log line it
+     * gets written into. Real ids are unaffected: a hex trace id survives untouched.
+     *
+     * Dj_App_Util::reqId();          // read
+     * Dj_App_Util::reqId($req_id);   // set, e.g. from an upstream header; '' clears it
+     *
+     * @param string|null $req_id Optional. A value SETS the id; omit to read.
+     * @return string
+     */
+    public static function reqId($req_id = null)
+    {
+        static $current_req_id = '';
+
+        if (!is_null($req_id)) {
+            $current_req_id = Dj_App_String_Util::formatStringId($req_id);
+
+            return $current_req_id;
+        }
+
+        // strlen, not empty(): a caller is free to set an id of '0'.
+        if (strlen($current_req_id)) {
+            return $current_req_id;
+        }
+
+        $filtered_req_id = Dj_App_Hooks::applyFilter(Dj_App_Util::FILTER_REQ_ID, '');
+        $current_req_id = Dj_App_String_Util::formatStringId($filtered_req_id);
+
+        if (strlen($current_req_id)) {
+            return $current_req_id;
+        }
+
+        $current_req_id = Dj_App_Util::generateHash();
+
+        return $current_req_id;
+    }
+
     /**
      * Timezone-aware time() - returns current Unix timestamp in configured timezone
      * Falls back to server timezone if not configured in site.timezone

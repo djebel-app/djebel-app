@@ -78,17 +78,27 @@ class Dj_App_Log {
     }
 
     /**
-     * Dj_App_Log::enableLogging();
+     * The master switch — whether entries get written at all. One accessor for both
+     * directions, so the flag behind it is never read or poked directly.
+     *
+     * Any value SETS it, through the shared truthiness helper, so 0 / 'no' / 'off' turn it
+     * off and 1 / 'yes' / 'on' turn it back on. Omit the argument to read.
+     *
+     * Dj_App_Log::loggingEnabled();      // read
+     * Dj_App_Log::loggingEnabled(0);     // off
+     *
+     * @param mixed $enabled Optional. A value SETS the switch; omit to read.
+     * @return bool
      */
-    public static function enableLogging() {
-        self::$logging_enabled = 1;
-    }
+    public static function loggingEnabled($enabled = null)
+    {
+        if (!is_null($enabled)) {
+            Dj_App_Log::$logging_enabled = Dj_App_Util::isEnabled($enabled);
+        }
 
-    /**
-     * Dj_App_Log::disableLogging();
-     */
-    public static function disableLogging() {
-        self::$logging_enabled = 0;
+        $is_enabled = !empty(Dj_App_Log::$logging_enabled);
+
+        return $is_enabled;
     }
 
     /**
@@ -143,7 +153,7 @@ class Dj_App_Log {
      * @return string
      */
     public static function msg($msg, $label = '', $file = '', $extra_opts = []) {
-        if (empty(self::$logging_enabled)) {
+        if (!Dj_App_Log::loggingEnabled()) {
             return '';
         }
 
@@ -168,11 +178,12 @@ class Dj_App_Log {
             $msg = Dj_App_Log::removeNotEssentialStuff($msg);
             $label = Dj_App_Log::removeNotEssentialStuff($label);
 
-            // Decoupled: ask for a request id through a filter — the logger doesn't know who supplies
-            // it. Dj_App_Request registers as the default supplier; a plugin can override.
-            $req_id = Dj_App_Hooks::applyFilter('app.core.log.req_id', '');
+            // Never empty, so there is nothing to guard — every entry carries one, on the web
+            // and on the command line alike. The check is only against stamping it twice on a
+            // label a caller already tagged.
+            $req_id = Dj_App_Util::reqId();
 
-            if (!empty($req_id) && (strpos($label, $req_id) === false)) {
+            if (strpos($label, $req_id) === false) {
                 $label = empty($label) ? "req:$req_id" : "$label req:$req_id";
             }
 
@@ -288,8 +299,9 @@ class Dj_App_Log {
      * so every failure kind lands in the SAME log.
      * Dj_App_Log::logAppError($exception);
      * @param Throwable|array|object|string $data
-     * @return bool true when the entry was logged (the app error log, or PHP's
-     *              default error log when the configured file is blank)
+     * @return string The reference the entry is findable by — hand it to whoever reports
+     *                the failure, so what a visitor quotes locates the line. Empty when
+     *                nothing was written, so it doubles as the success check.
      */
     public static function logAppError($data) {
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
@@ -297,7 +309,7 @@ class Dj_App_Log {
         // Critical facility: stays ON unless REALLY disabled (0/false/off/no) —
         // a blank or garbage value must not silently kill error logging.
         if (Dj_App_Util::isDisabled($log_errors)) {
-            return false;
+            return '';
         }
 
         // A Throwable can arrive bare, under an 'exception' key, or in a result obj.
@@ -325,11 +337,21 @@ class Dj_App_Log {
                 ' in ' . $data['file'] . ' on line ' . $data['line'];
         }
 
+        // The reference this entry is findable by, and what the caller hands the visitor.
+        // Read once, up here, so every exit path below returns the same value — and so a
+        // caller never has to know what the reference is made of.
+        $req_id = Dj_App_Util::reqId();
+
         if (empty($entry_body)) {
             $log_entry = $data; // already a formatted entry
         } else {
             $timestamp = date('Y-m-d H:i:s');
-            $log_entry = "[$timestamp] $entry_body\n" . str_repeat('-', 80) . "\n";
+
+            // This entry is written raw — raw means the caller owns the formatting, so the
+            // reference has to be stamped HERE or it is simply absent. Without it a crash
+            // line cannot be tied to what the visitor was shown, or to the other entries
+            // from the same run.
+            $log_entry = "[$timestamp] [req:$req_id] $entry_body\n" . str_repeat('-', 80) . "\n";
         }
 
         $log_dir = Dj_App_Log::getCurrentLogDir();
@@ -341,14 +363,15 @@ class Dj_App_Log {
         // PHP's default log, so enabled logging never silently drops an entry.
         if (empty($error_log_file)) {
             $log_res = error_log($log_entry);
+            $log_ref = empty($log_res) ? '' : $req_id;
 
-            return $log_res;
+            return $log_ref;
         }
 
         $written_line = Dj_App_Log::msg($log_entry, '', $error_log_file, [ 'raw' => 1, ]);
-        $log_ok = !empty($written_line);
+        $log_ref = empty($written_line) ? '' : $req_id;
 
-        return $log_ok;
+        return $log_ref;
     }
 
     /**

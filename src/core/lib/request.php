@@ -70,12 +70,6 @@ class Dj_App_Request {
     private $request_data = [];
 
     /**
-     * A unique id for the current request — generated on first read. See getRequestId().
-     * @var string
-     */
-    private $req_id = '';
-
-    /**
      * Some sections of the code may pass state so it can be pulled from another spot.
      * @var array
      */
@@ -381,44 +375,9 @@ class Dj_App_Request {
         // no need each sub class to define this method.
         if (is_null($instance)) {
             $instance = new static();
-
-            // Supply this request's id to any logger via the decoupled log filter seam. Registered
-            // here (once, on the singleton) so throwaway `new` instances don't each re-register.
-            Dj_App_Hooks::addFilter('app.core.log.req_id', [$instance, 'getRequestId']);
         }
 
         return $instance;
-    }
-
-    /**
-     * A unique id for the current request — generated and cached on first read so anything that
-     * tags a request (logs, headers, traces) can correlate its lines. Override it (e.g. from an
-     * upstream X-Request-Id) via setRequestId(). getInstance() registers this as the default
-     * supplier of the app.core.log.req_id filter, so the logger picks it up without coupling here.
-     * $req_obj = Dj_App_Request::getInstance();
-     * $req_obj->getRequestId();
-     * @return string
-     */
-    public function getRequestId()
-    {
-        if (empty($this->req_id)) {
-            $this->req_id = Dj_App_Util::generateHash();
-        }
-
-        return $this->req_id;
-    }
-
-    /**
-     * Sets the current request id (overrides the generated one); '' clears it.
-     * $req_obj->setRequestId($req_id);
-     * @param string $req_id
-     * @return string
-     */
-    public function setRequestId($req_id)
-    {
-        $this->req_id = $req_id;
-
-        return $this->req_id;
     }
 
     /**
