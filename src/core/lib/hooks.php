@@ -1001,11 +1001,9 @@ class Dj_App_Hooks {
         // user's browser disconnects immediately. Only meaningful for real HTTP
         // requests — skip in CLI (PHPUnit, scripts), where there's no connection to
         // close and buffers this code didn't open would be closed.
-        // class_exists guards a very-early shutdown, before the util class is loaded.
-        $is_web_req = class_exists('Dj_App_Env', false) && Dj_App_Env::isWebRequest();
-        $is_util_loaded = $is_web_req && class_exists('Dj_App_Util', false);
+        $is_web_req = Dj_App_Env::isWebRequest();
 
-        if ($is_util_loaded) {
+        if ($is_web_req) {
             // Releasing the session lock is worth doing on EVERY request — a held lock
             // serialises anything else that same visitor has in flight. It sits here rather
             // than behind the flush below, which most requests never reach. False only means
