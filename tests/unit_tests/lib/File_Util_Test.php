@@ -226,6 +226,31 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertEmpty($temp_files, 'Temp files should be cleaned up');
     }
 
+    public function testWriteEmptyContentSucceeds()
+    {
+        $file = $this->test_dir . '/empty_write.txt';
+
+        // A new file takes the direct path. file_put_contents answers with a BYTE COUNT, so
+        // empty content writes 0 bytes — a success that a truthiness check calls a failure.
+        $res_obj = Dj_App_File_Util::write($file, '');
+
+        $this->assertFalse($res_obj->isError(), 'writing empty content to a new file succeeds');
+        $this->assertFileExists($file);
+
+        $res_obj = Dj_App_File_Util::write($file, 'now it has content');
+
+        $this->assertFalse($res_obj->isError());
+
+        // An existing file takes the temp-then-rename path, which counts bytes of its own.
+        $res_obj = Dj_App_File_Util::write($file, '');
+
+        $this->assertFalse($res_obj->isError(), 'emptying an existing file succeeds');
+
+        // Reads the file itself, so an unreadable file fails here rather than answering
+        // empty and passing for the wrong reason.
+        $this->assertStringEqualsFile($file, '', 'the file was truncated to empty');
+    }
+
     public function testMkdirNewDirectory()
     {
         $test_subdir = $this->test_dir . '/new_dir';

@@ -185,11 +185,20 @@ class Dj_App_File_Util {
                     }
                 }
 
-                // Write to temp file
-                $res = file_put_contents($tmp_file, $buff, $flags);
+                // file_put_contents answers with the bytes written, or false. ONE comparison
+                // settles every outcome: false, a SHORT count that leaves a truncated file,
+                // and 0 for empty content — which is a success and must not be rejected.
+                // Strict, against the loose default, for the single case loose gets wrong:
+                // false == 0, so != would pass a FAILED write of empty content as success.
+                $written_bytes = file_put_contents($tmp_file, $buff, $flags);
+                $expected_bytes = strlen($buff);
 
-                if (empty($res)) {
-                    throw new Dj_App_File_Util_Exception("Couldn't write to temp file", ['tmp_file' => $tmp_file]);
+                if ($written_bytes !== $expected_bytes) {
+                    throw new Dj_App_File_Util_Exception("Couldn't write to temp file", [
+                        'tmp_file' => $tmp_file,
+                        'written_bytes' => $written_bytes,
+                        'expected_bytes' => $expected_bytes,
+                    ]);
                 }
 
                 // Rename temp to target
@@ -206,11 +215,16 @@ class Dj_App_File_Util {
                     $chmod_res = chmod($file, $target_perm);
                 }
             } else {
-                // File doesn't exist, write directly
-                $res = file_put_contents($file, $buff, $flags);
+                // File doesn't exist, write directly. Same one comparison as the temp path.
+                $written_bytes = file_put_contents($file, $buff, $flags);
+                $expected_bytes = strlen($buff);
 
-                if (empty($res)) {
-                    throw new Dj_App_File_Util_Exception("Couldn't write to file", ['file' => $file]);
+                if ($written_bytes !== $expected_bytes) {
+                    throw new Dj_App_File_Util_Exception("Couldn't write to file", [
+                        'file' => $file,
+                        'written_bytes' => $written_bytes,
+                        'expected_bytes' => $expected_bytes,
+                    ]);
                 }
 
                 $chmod_res = chmod($file, $file_perm);
