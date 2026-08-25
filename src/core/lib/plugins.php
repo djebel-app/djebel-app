@@ -83,7 +83,9 @@ class Dj_App_Plugins {
                 $plugin_dir = Dj_App_Hooks::applyFilter( 'app.plugin.dir', $plugin_dir, $ctx );
 
                 // the plugin must be named exactly plugin.php file no need to check for other stuff.
-                $plugin_id = self::formatId(basename($plugin_dir)); // for now the plugin is determined by the folder name.
+                // for now the plugin is determined by the folder name.
+                $plugin_dir_name = basename($plugin_dir);
+                $plugin_id = Dj_App_Plugins::formatId($plugin_dir_name);
                 $ctx['plugin_id'] = $plugin_id;
                 $plugins_options = Dj_App_Hooks::applyFilter( 'app.plugin.options', $plugins_options, $ctx );
 
@@ -125,7 +127,7 @@ class Dj_App_Plugins {
                 }
 
                 if (!empty($extr_res->plugin_id)) {
-                    $plugin_id = self::formatId($extr_res->plugin_id);
+                    $plugin_id = Dj_App_Plugins::formatId($extr_res->plugin_id);
 
                     // check for activeness using internal plugin id
                     if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
@@ -154,6 +156,10 @@ class Dj_App_Plugins {
                 $plugin_meta_info = $extr_res->data();
                 $plugin_meta_info['plugin_file'] = $plugin_file;
 
+                // Carried so the load loop names a plugin the same way the activation check
+                // and the options filter do, instead of deriving a second id of its own.
+                $plugin_meta_info['plugin_id'] = $plugin_id;
+
                 $plugins[$plugin_file] = $plugin_meta_info;
             }
 
@@ -168,19 +174,39 @@ class Dj_App_Plugins {
                     // A crashed plugin must leave a trace — full detail (message,
                     // file, line, trace) goes to the app error log. The page shows
                     // the raw message only on a dev/debug setup.
-                    $log_ok = Dj_App_Log::logAppError($e);
+                    // The logger hands back the reference the entry is findable by, and an
+                    // empty answer means nothing was written. What that reference is made of
+                    // is the logger's business — nothing here needs to know.
+                    $log_ref = Dj_App_Log::logAppError($e);
 
-                    $is_dev = Dj_App_Config::cfg('app.debug', false);
-                    $basename = basename($plugin_file);
+                    // The id resolved during discovery — the same string the activation check
+                    // and the options filter use, so what the box names is what a site owner
+                    // would put in config. Every plugin's main file carries the same name, so
+                    // that name on its own identifies nothing.
+                    $plugin_id = Dj_App_Util::getField('plugin_id', $plugin_meta_info);
+                    $plugin_id_esc = dj_esc_html($plugin_id);
 
-                    if (empty($is_dev)) {
-                        $msg = empty($log_ok) ? 'error' : 'error logged';
+                    $is_debug = Dj_App_Config::cfg('app.debug', false);
+
+                    if (empty($is_debug)) {
+                        $msg = empty($log_ref) ? 'error' : 'error logged';
                     } else {
                         $msg = $e->getMessage();
                         $msg = dj_esc_html($msg);
                     }
 
-                    echo "Plugin [$basename] crashed: Error: " . Dj_App_Util::msg($msg);
+                    $error_msg = sprintf('Plugin [%s] crashed: %s', $plugin_id_esc, $msg);
+
+                    // Shown so what the visitor quotes locates the entry. Absent only when
+                    // the write itself failed, and then there is nothing to look up anyway.
+                    if (!empty($log_ref)) {
+                        $log_ref_esc = dj_esc_html($log_ref);
+                        $error_msg = sprintf('%s (ref: %s)', $error_msg, $log_ref_esc);
+                    }
+
+                    // The whole line goes THROUGH msg(), not beside it — the prefix used to be
+                    // echoed as bare text next to the box, leaving half the sentence unstyled.
+                    echo Dj_App_Util::msg($error_msg);
                 } finally {
                     $load_time = Dj_App_Util::microtime($plugin_file);
                     $plugin_load_times[$plugin_file] = $load_time;
