@@ -1038,20 +1038,23 @@ if (!function_exists('dj_dec')) {
     }
 }
 
-// Brevity facade — the PRINTING twin of the dj_esc_* functions above.
-// Those RETURN an escaped string, so every template writes `echo dj_esc_html($x)`.
-// These print it, which means the escaping cannot be separated from the output.
-// One class claims ONE global symbol instead of a new global function per context —
-// on 1,000,000 sites every global name is a collision surface.
+// Brevity facade — ONE global symbol instead of a new global function per helper.
+// On 1,000,000 sites every global name is a collision surface, so the framework spends
+// a single one and keeps it.
 //
-// SCOPE — READ BEFORE ADDING A METHOD. `Dj` is the PRINTING facade, not a front door
-// to the framework. Only things that PRINT belong here: a future t() that prints a
-// translated string is in scope; cache(), hook(), cfg() are NOT — those get their own
-// class. That boundary is the only reason one-letter names stay readable. The core
-// domains already compete for nearly every letter (Env/Exception want e, Themes wants
-// t, Util wants u, Hooks/HTML want h, Cache/Cli/Config want c), so the moment this
-// class takes on a second concern the letters turn into guesswork — and by then every
-// call site on every site has frozen the meanings already shipped.
+// SCOPE — READ BEFORE ADDING A METHOD. This is the home for helpers that get typed a
+// LOT and are used WIDELY, wherever they come from. Printing is one such family — the
+// methods below print what the dj_esc_* functions above return, so the escaping cannot
+// be separated from the output — but printing is not the boundary. A helper a template,
+// a theme or a plugin reaches for constantly belongs here. One called once, deep inside
+// a subsystem, does not: it gains nothing from a short name and spends a letter that
+// cannot be taken back.
+//
+// NAMING — the letters are a FINITE, ONE-WAY resource. The core domains already compete
+// for nearly all of them (Env/Exception want e, Themes wants t, Util wants u, Hooks/HTML
+// want h, Cache/Cli/Config want c), and a meaning FREEZES the moment it ships, because
+// every call site on every site has it hardcoded from then on. So pick deliberately, and
+// prefer a clear two-letter name over a cryptic one-letter one.
 class Dj {
     /**
      * Escape for HTML content and PRINT it.
