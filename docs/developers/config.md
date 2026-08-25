@@ -188,7 +188,61 @@ Dj_App_Assets::register([
 | `app.error_logging` | `true` | Write PHP errors to a log. |
 | `app.error_log_file` | *(derived)* | Where those errors go. |
 | `app.request.finish_request_time_limit` | `45` | Seconds allowed for post-response work after the client is released. |
-| `env` | *(unset)* | Environment name (`dev`, `staging`, `live`). |
+| `env` | *(unset)* | Environment name (`dev`, `staging`, `live`). See below. |
+
+### The environment name
+
+`env` is resolved by `Dj_App_Env::getAppEnv()` — once per request, normalized. Ask the
+predicates rather than comparing the string yourself: `live`, `prod` and `production` all
+mean the same thing, and only `isLive()` knows that.
+
+```php
+Dj_App_Env::isDev();       // dev, development
+Dj_App_Env::isStaging();   // any name containing "staging"
+Dj_App_Env::isLive();      // live / prod / production — AND anything undeclared
+Dj_App_Env::isWorkEnv();   // dev or staging
+```
+
+**An undeclared environment answers LIVE on purpose.** An install that never said what it
+is gets the careful treatment, not the permissive one. Note this also makes `isLive()` true
+on staging — `isWorkEnv()` is the one that separates a work box from production.
+
+A filter gets the last word, so a fleet can answer for every install at once — by host, by
+install dir, by whatever it decides — instead of every install repeating itself in its own
+`.env`:
+
+```php
+Dj_App_Hooks::addFilter('app.core.env.filter.name', ['My_Plugin', 'filterEnvName']);
+```
+
+The resolved name is remembered for the request, so a listener has to be registered before
+anything asks — plugins load early enough for that. `Dj_App_Env::set()` drops what was
+remembered, which is how a test moves between environments.
+
+### The run id
+
+Every log line carries a `req:` id so the lines of one run can be read together, and
+`Dj_App_Util::reqId()` is where it comes from.
+
+```php
+$req_id = Dj_App_Util::reqId();     // read — generated on the first ask, then remembered
+Dj_App_Util::reqId('abc123');       // set, e.g. from an upstream X-Request-Id
+```
+
+**It is never empty.** A CLI tool, a cron run and anything loading the framework as a
+library all get one, because it does not depend on a request object being constructed.
+
+It resolves in order: a value a caller set, then the filter, then a generated one.
+
+```php
+Dj_App_Hooks::addFilter('app.core.log.req_id', ['My_Plugin', 'filterReqId']);
+```
+
+Resolved once per run — an id that changed halfway through would correlate nothing.
+
+`Dj_App_Log::logAppError()` returns that id, so whatever reports a failure to a visitor can
+show the reference its log entry is findable by, and an empty answer means nothing was
+written.
 
 ## `[site]` — site identity
 
