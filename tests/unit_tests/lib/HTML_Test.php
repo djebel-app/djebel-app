@@ -663,8 +663,8 @@ class Dj_App_HTML_Test extends TestCase {
 
     public function testOldClassNameStillAliased()
     {
-        // BC contract: existing site plugins/themes call Djebel_App_HTML — the
-        // class_alias in html.php must keep the old name working until they migrate.
+        // BC contract: existing site plugins/themes call Djebel_App_HTML, so the old
+        // name has to keep resolving until they migrate.
         $alias_exists = class_exists('Djebel_App_HTML');
 
         $this->assertTrue($alias_exists);

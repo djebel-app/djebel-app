@@ -47,7 +47,6 @@ class Dj_App_Util {
     // opens, so a level named anything ELSE carries a handler that can rewrite what it passes.
     const PHP_DEFAULT_OUTPUT_HANDLER = 'default output handler';
 
-    // Add this near other static properties
     protected static $registry = [];
 
     /**

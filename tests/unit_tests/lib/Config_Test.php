@@ -3,9 +3,9 @@
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests for the Dj_App_Config class (defined in index.php — it has no own lib file).
- * Per-source-file home: EVERY Dj_App_Config method's tests belong here, not in new
- * per-feature files. Fixtures live in unit_tests/data/.
+ * Tests for the Dj_App_Config class, which is declared in the bootstrap rather than a
+ * lib of its own. Per-source-file home: EVERY Dj_App_Config method's tests belong here,
+ * not in new per-feature files. Fixtures live in unit_tests/data/.
  */
 class Dj_App_Config_Test extends TestCase
 {
