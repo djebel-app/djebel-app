@@ -40,6 +40,13 @@ class Dj_App_Util {
     const INJECT_BEFORE = 1;
     const INJECT_AFTER = 2;
 
+    // How deep each() will follow nested arrays before refusing. A PHP array can hold a
+    // REFERENCE to itself, and walking one of those never ends — the stack blows and the
+    // process dies without an error page or a log line. Records decoded from JSON cannot
+    // contain a cycle at all and real data is two or three levels deep, so this is far above
+    // anything legitimate and only ever meets a structure that was never going to terminate.
+    const EACH_MAX_DEPTH = 16;
+
     // PHP's OWN name for a buffer opened with no callback — the literal string it puts in
     // ob_get_status()['name'], spaces and all. Not a name this chose and not something to
     // prefix: it is matched against what the engine reports, so it has to stay byte-identical
@@ -177,11 +184,12 @@ class Dj_App_Util {
      *
      * @param mixed $value A scalar, an array of them, or null for nothing to process
      * @param callable $callback Any named callable form
+     * @param int $depth Recursion bookkeeping — callers leave this alone
      * @return mixed The callback's answer shaped like what came in; null stays null
-     * @throws Dj_App_Validation_Exception When the callback is not callable, or the value is an
-     *   object or a resource
+     * @throws Dj_App_Validation_Exception When the callback is not callable, the value is an
+     *   object or a resource, or the nesting runs past EACH_MAX_DEPTH
      */
-    public static function each($value, $callback)
+    public static function each($value, $callback, $depth = 0)
     {
         // Ordered by cost AND by how often each is the answer, cheapest first: is_scalar is the
         // cheapest of the type checks and also the overwhelmingly common input, so the usual
@@ -218,10 +226,19 @@ class Dj_App_Util {
         // exists to avoid, and a nested list would arrive at a callback that expects a string.
         // Keys are written back as they came, string keys included.
         if (is_array($value)) {
+            // Checked HERE rather than at the top so the scalar path — every leaf — never pays
+            // for it. An array is the only thing that can go deeper.
+            if ($depth >= Dj_App_Util::EACH_MAX_DEPTH) {
+                $err_data = [ 'code' => 'app.core.util.each.max_depth_reached', ];
+
+                throw new Dj_App_Validation_Exception('Nesting is too deep', $err_data);
+            }
+
+            $next_depth = $depth + 1;
             $mapped_values = [];
 
             foreach ($value as $key => $item) {
-                $mapped_values[$key] = Dj_App_Util::each($item, $callback);
+                $mapped_values[$key] = Dj_App_Util::each($item, $callback, $next_depth);
             }
 
             return $mapped_values;

@@ -2385,6 +2385,40 @@ META;
     }
 
     /**
+     * A PHP array can hold a REFERENCE to itself, and walking one never ends. Without a depth
+     * guard the stack blows and the process dies with no error page and nothing in the log —
+     * on a host with Xdebug it aborts at 512 frames, and on one without it segfaults.
+     */
+    public function testEachRefusesAnArrayThatContainsItself()
+    {
+        $cyclic_values = [ 'x' => 'v', ];
+        $cyclic_values['self'] = &$cyclic_values;
+
+        $error_code = '';
+
+        try {
+            $mapped_values = Dj_App_Util::each($cyclic_values, 'trim');
+        } catch (Dj_App_Validation_Exception $e) {
+            $error_code = $e->getErrorCode();
+        }
+
+        $this->assertSame('app.core.util.each.max_depth_reached', $error_code);
+    }
+
+    /**
+     * The guard must sit far above anything real. Records decoded from JSON cannot contain a
+     * cycle at all, and genuine data is two or three levels deep.
+     */
+    public function testEachStillWalksRealisticNesting()
+    {
+        $deep_values = [ 'a' => [ 'b' => [ 'c' => [ 'd' => '  x  ', ], ], ], ];
+
+        $mapped_values = Dj_App_Util::each($deep_values, 'trim');
+
+        $this->assertSame('x', $mapped_values['a']['b']['c']['d']);
+    }
+
+    /**
      * Booleans ARE scalars, and a callback may legitimately want one — so they go through
      * rather than being refused alongside objects.
      */
