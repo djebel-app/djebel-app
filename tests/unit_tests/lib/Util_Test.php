@@ -2325,6 +2325,51 @@ META;
     }
 
     /**
+     * The security case for refusing instead of guessing: the likeliest caller is an escaper,
+     * and a mapper that hands input BACK when it cannot map it returns raw values to code that
+     * asked for them to be made safe. A mistyped callback name would then read as working while
+     * putting unescaped text on the page.
+     */
+    public function testEachRefusesACallbackThatIsNotCallable()
+    {
+        $this->expectException(Dj_App_Validation_Exception::class);
+
+        $mapped_value = Dj_App_Util::each('<b>', 'dj_no_such_escaper_fn');
+
+        $this->assertEmpty($mapped_value);
+    }
+
+    /**
+     * An object can carry a __toString that returns markup, so passing one through untouched
+     * would put attacker-shaped text on the page.
+     */
+    public function testEachRefusesAValueItCannotMap()
+    {
+        $this->expectException(Dj_App_Validation_Exception::class);
+
+        $mapped_value = Dj_App_Util::each(new stdClass(), 'trim');
+
+        $this->assertEmpty($mapped_value);
+    }
+
+    /**
+     * The refusal must carry a checkable code — branching on the MESSAGE is what this codebase
+     * bans, so the code is the part a caller is allowed to read.
+     */
+    public function testEachRefusalCarriesACheckableCode()
+    {
+        $error_code = '';
+
+        try {
+            $mapped_value = Dj_App_Util::each('<b>', 'dj_no_such_escaper_fn');
+        } catch (Dj_App_Validation_Exception $e) {
+            $error_code = $e->getErrorCode();
+        }
+
+        $this->assertSame('app.core.util.each.callback_not_callable', $error_code);
+    }
+
+    /**
      * Plain buffers hand bytes along untouched — including the one php.ini's output_buffering
      * opens — so what is measured across the stack is what the client receives, and a response
      * can safely be framed with a length.

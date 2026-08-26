@@ -169,16 +169,39 @@ class Dj_App_Util {
      * static string form ('Dj_App_HTML::escHtml'), [Class::class, 'method'], ['Class', 'method']
      * and [$obj, 'method']. Named callables only — this codebase does not use closures.
      *
-     * @param mixed $value A single value, or an array of them
+     * REFUSES rather than guesses, because the likeliest caller is an escaper. A mapper that
+     * hands its input back when it cannot map it returns RAW values to code that asked for them
+     * to be made safe, and those go straight to the page — so a typo'd callback name would
+     * become an XSS hole that logs nothing and looks like it worked. Both refusals below are
+     * caller BUGS, which is what this codebase throws for; neither can happen on live input.
+     *
+     * @param mixed $value A scalar, or an array of them
      * @param callable $callback Any named callable form
      * @return mixed The callback's answer, shaped like what came in
+     * @throws Dj_App_Validation_Exception When the callback is not callable, or the value is
+     *   neither a scalar nor an array
      */
     public static function each($value, $callback)
     {
+        if (!is_callable($callback)) {
+            $err_data = [ 'code' => 'app.core.util.each.callback_not_callable', ];
+
+            throw new Dj_App_Validation_Exception('A callable is required', $err_data);
+        }
+
         if (is_array($value)) {
             $mapped_values = array_map($callback, $value);
 
             return $mapped_values;
+        }
+
+        // Scalars only. An object can carry a __toString that returns markup, so letting one
+        // past untouched would put attacker-shaped text on the page; null and resources are no
+        // more mappable. None of them is guessed at.
+        if (!is_scalar($value)) {
+            $err_data = [ 'code' => 'app.core.util.each.value_not_mappable', ];
+
+            throw new Dj_App_Validation_Exception('A scalar or an array is required', $err_data);
         }
 
         $mapped_value = $callback($value);
