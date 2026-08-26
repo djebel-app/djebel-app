@@ -534,8 +534,8 @@ class Dj_App_HTML {
      *
      * Converts HTML entities like &lt; &gt; &amp; back to < > &
      *
-     * @param string $str The string with HTML entities
-     * @return string The decoded string
+     * @param string|array $str Entities to decode, or an array whose VALUES are each decoded
+     * @return string|array Decoded, matching the shape that came in
      *
      * @example
      * $encoded = '&lt;div&gt;Content&lt;/div&gt;';
@@ -543,6 +543,15 @@ class Dj_App_HTML {
      * // Returns: <div>Content</div>
      */
     static public function decHtml($str) {
+        // Decoding takes a list for the same reason escaping does — they are a pair, and one
+        // of them refusing what the other accepts is a trap. Left of html_entity_decode(),
+        // which throws on an array outright in PHP 8.
+        if (is_array($str)) {
+            $decoded_values = Dj_App_Util::each($str, [ Dj_App_HTML::class, 'decHtml', ]);
+
+            return $decoded_values;
+        }
+
         $str = html_entity_decode($str, ENT_COMPAT, 'UTF-8');
         return $str;
     }
@@ -791,8 +800,8 @@ class Dj_App_HTML {
      * Converts special characters to HTML entities to prevent XSS attacks in attributes.
      * Use this for any user-supplied data inserted into HTML attributes.
      *
-     * @param mixed $value The value to escape
-     * @return string The escaped string safe for use in HTML attributes
+     * @param mixed $value A scalar, or an array whose VALUES are each escaped, keys untouched
+     * @return string|array Escaped, matching the shape that came in
      *
      * @example
      * $name = dj_esc_attr($_GET['name']);
@@ -803,6 +812,20 @@ class Dj_App_HTML {
      * echo "<div class='$class'>Content</div>";
      */
     public static function escAttr($value) {
+        // BEFORE the empty() test on purpose: an empty array must come back as an array, or a
+        // caller that escapes a list and then implodes it is handed a string and fatals on the
+        // one input — no rows — that is hardest to notice in testing.
+        //
+        // array_map over ONE array keeps the keys, string keys included, so a record comes back
+        // with the fields it went in with — escaping the keys would change what $record['name']
+        // looks up and silently lose every field read back out. Nesting needs no depth logic:
+        // each value re-enters this method and an array there is handled the same way.
+        if (is_array($value)) {
+            $escaped_values = Dj_App_Util::each($value, [ Dj_App_HTML::class, 'escAttr', ]);
+
+            return $escaped_values;
+        }
+
         if (empty($value) && !is_numeric($value)) {
             return '';
         }
@@ -824,8 +847,8 @@ class Dj_App_HTML {
      * Converts special characters to HTML entities to prevent XSS attacks.
      * Use this for any user-supplied data inserted into HTML content.
      *
-     * @param mixed $value The value to escape
-     * @return string The escaped string safe for use in HTML content
+     * @param mixed $value A scalar, or an array whose VALUES are each escaped, keys untouched
+     * @return string|array Escaped, matching the shape that came in
      *
      * @example
      * $title = dj_esc_html($_GET['title']);
@@ -836,6 +859,13 @@ class Dj_App_HTML {
      * echo "<p>$comment</p>";
      */
     public static function escHtml($value) {
+        // See escAttr() — before empty() so an empty list stays a list, values only, keys as-is.
+        if (is_array($value)) {
+            $escaped_values = Dj_App_Util::each($value, [ Dj_App_HTML::class, 'escHtml', ]);
+
+            return $escaped_values;
+        }
+
         if (empty($value) && !is_numeric($value)) {
             return '';
         }
@@ -857,8 +887,8 @@ class Dj_App_HTML {
      * Validates and sanitizes URLs to prevent XSS attacks.
      * Allows http://, https://, protocol-relative //host, and root-relative URLs.
      *
-     * @param string $url The URL to escape
-     * @return string The sanitized URL safe for use in href/src attributes
+     * @param string|array $url A URL, or an array whose VALUES are each sanitized, keys untouched
+     * @return string|array Sanitized, matching the shape that came in
      *
      * @example
      * $redirect = dj_esc_url($_GET['next']);
@@ -869,6 +899,13 @@ class Dj_App_HTML {
      * echo "<img src='$image' />";
      */
     public static function escUrl($url) {
+        // See escAttr() — before empty() so an empty list stays a list, values only, keys as-is.
+        if (is_array($url)) {
+            $escaped_urls = Dj_App_Util::each($url, [ Dj_App_HTML::class, 'escUrl', ]);
+
+            return $escaped_urls;
+        }
+
         if (empty($url)) {
             return '';
         }
@@ -1078,6 +1115,14 @@ class Dj {
         // someone else's function — our own output always escapes with our escaper.
         $escaped = Dj_App_HTML::escHtml($value);
 
+        // Printing is a SCALAR act. The escapers now hand an array straight back, and echoing
+        // one emits the word "Array" plus a warning — so a mistaken call would put noise on the
+        // page where it used to put nothing. Silence is the safer half of that trade; a caller
+        // with a list joins it and prints the result.
+        if (is_array($escaped)) {
+            return;
+        }
+
         echo $escaped;
     }
 
@@ -1092,6 +1137,14 @@ class Dj {
      */
     public static function ea($value) {
         $escaped = Dj_App_HTML::escAttr($value);
+
+        // Printing is a SCALAR act. The escapers now hand an array straight back, and echoing
+        // one emits the word "Array" plus a warning — so a mistaken call would put noise on the
+        // page where it used to put nothing. Silence is the safer half of that trade; a caller
+        // with a list joins it and prints the result.
+        if (is_array($escaped)) {
+            return;
+        }
 
         echo $escaped;
     }
@@ -1110,6 +1163,14 @@ class Dj {
      */
     public static function eu($url) {
         $escaped = Dj_App_HTML::escUrl($url);
+
+        // Printing is a SCALAR act. The escapers now hand an array straight back, and echoing
+        // one emits the word "Array" plus a warning — so a mistaken call would put noise on the
+        // page where it used to put nothing. Silence is the safer half of that trade; a caller
+        // with a list joins it and prints the result.
+        if (is_array($escaped)) {
+            return;
+        }
 
         echo $escaped;
     }

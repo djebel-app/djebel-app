@@ -264,12 +264,19 @@ class Dj_App_HTML_Test extends TestCase {
         $this->assertEquals('0', $result);
     }
 
-    public function testEscAttrNonScalar()
+    /**
+     * An array is no longer refused — it is escaped value by value and handed back as an
+     * array. An OBJECT still is: there is no sane per-value reading of one.
+     */
+    public function testEscAttrEscapesAnArrayAndStillRefusesAnObject()
     {
-        $array = [ 'test', ];
-        $result = Dj_App_HTML::escAttr($array);
+        $escaped_values = Dj_App_HTML::escAttr([ '<test>', ]);
 
-        $this->assertEmpty($result);
+        $this->assertSame('&lt;test&gt;', $escaped_values[0]);
+
+        $object_result = Dj_App_HTML::escAttr(new stdClass());
+
+        $this->assertEmpty($object_result);
     }
 
     // Tests for escHtml() - HTML content escaping
@@ -386,8 +393,12 @@ class Dj_App_HTML_Test extends TestCase {
         $result = Dj_App_HTML::escUrl(123);
         $this->assertEmpty($result);
 
-        $result = Dj_App_HTML::escUrl([ 'url', ]);
-        $this->assertEmpty($result);
+        // An array of urls is now judged url by url rather than refused whole, so the array
+        // comes back — with the refusal still applied inside it.
+        $escaped_urls = Dj_App_HTML::escUrl([ 'url', ]);
+
+        $this->assertIsArray($escaped_urls);
+        $this->assertEmpty($escaped_urls[0]);
     }
 
     public function testEscUrlCaseInsensitive()
@@ -999,5 +1010,86 @@ class Dj_App_HTML_Test extends TestCase {
         $html = Dj_App_HTML::textarea('notes');
 
         $this->assertStringContainsString('></textarea>', $html);
+    }
+
+    /**
+     * The case this exists for: escape the parts of a title in one call, then join them —
+     * instead of escaping each one as it is pushed and hoping none was missed.
+     */
+    public function testEscHtmlEscapesEveryValueInAList()
+    {
+        $title_parts = [ 'Иван <b>', '#2261', 'a&b' ];
+
+        $escaped_parts = Dj_App_HTML::escHtml($title_parts);
+        $title_str = implode(' | ', $escaped_parts);
+
+        $this->assertSame('Иван &lt;b&gt; | #2261 | a&amp;b', $title_str);
+    }
+
+    /**
+     * Keys are NOT escaped, deliberately — escaping them would change what $record['name']
+     * looks up, so every field would be lost on the way back out.
+     */
+    public function testEscHtmlKeepsKeysAndEscapesNestedValues()
+    {
+        $record = [
+            'name' => '<x>',
+            'nested' => [ 'k' => 'a&b', ],
+        ];
+
+        $escaped_record = Dj_App_HTML::escHtml($record);
+
+        $this->assertArrayHasKey('name', $escaped_record);
+        $this->assertSame('&lt;x&gt;', $escaped_record['name']);
+        $this->assertSame('a&amp;b', $escaped_record['nested']['k']);
+    }
+
+    /**
+     * An empty list must come back a LIST. Returning '' here would fatal the join in the
+     * caller above on the one input hardest to notice while testing — no rows.
+     */
+    public function testEscHtmlReturnsAnArrayForAnEmptyArray()
+    {
+        $escaped_parts = Dj_App_HTML::escHtml([]);
+
+        $this->assertIsArray($escaped_parts);
+        $this->assertEmpty($escaped_parts);
+    }
+
+    public function testEscAttrEscapesEveryValueInAList()
+    {
+        $attr_values = [ 'a"b', "c'd", ];
+
+        $escaped_values = Dj_App_HTML::escAttr($attr_values);
+
+        $this->assertSame('a&quot;b', $escaped_values[0]);
+        $this->assertSame('c&#039;d', $escaped_values[1]);
+    }
+
+    /**
+     * A list of urls is still judged url by url — a refused one comes back empty in its own
+     * slot rather than taking the rest of the list with it.
+     */
+    public function testEscUrlJudgesEachUrlInAListSeparately()
+    {
+        $urls = [
+            'good' => 'https://example.com/a',
+            'bad' => 'javascript:alert(1)',
+        ];
+
+        $escaped_urls = Dj_App_HTML::escUrl($urls);
+
+        $this->assertSame('https://example.com/a', $escaped_urls['good']);
+        $this->assertEmpty($escaped_urls['bad']);
+    }
+
+    /**
+     * Scalars are the overwhelmingly common call and must be untouched by any of this.
+     */
+    public function testEscHtmlStillEscapesAPlainString()
+    {
+        $escaped = Dj_App_HTML::escHtml('<b>');
+
+        $this->assertSame('&lt;b&gt;', $escaped);
     }
 }
