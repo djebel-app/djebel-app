@@ -153,6 +153,40 @@ class Dj_App_Util {
     }
 
     /**
+     * Run a callback over a value whatever SHAPE it arrives in — one value, or a list of them.
+     *
+     * A caller holding something that may be either has to branch on it before doing anything,
+     * and that branch gets written at every such call site. This is that branch, once.
+     *
+     *   $trimmed = Dj_App_Util::each($val, 'trim');   // $val scalar OR array, either way
+     *
+     * Keys survive: array_map over ONE array keeps them, string keys included, so a record
+     * comes back with the fields it went in with. Nesting is the CALLBACK's business — an
+     * inner array is passed to it as-is, which is what lets a callback that handles arrays
+     * (the escapers do) recurse all the way down while a plain one like trim() does not.
+     *
+     * Every PHP callable form works, verified on both branches: a function name ('trim'), the
+     * static string form ('Dj_App_HTML::escHtml'), [Class::class, 'method'], ['Class', 'method']
+     * and [$obj, 'method']. Named callables only — this codebase does not use closures.
+     *
+     * @param mixed $value A single value, or an array of them
+     * @param callable $callback Any named callable form
+     * @return mixed The callback's answer, shaped like what came in
+     */
+    public static function each($value, $callback)
+    {
+        if (is_array($value)) {
+            $mapped_values = array_map($callback, $value);
+
+            return $mapped_values;
+        }
+
+        $mapped_value = $callback($value);
+
+        return $mapped_value;
+    }
+
+    /**
      * Release the session lock, if one is held.
      *
      * PHP keeps the session file locked until the script ends, and a held lock serialises every

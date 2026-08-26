@@ -2293,6 +2293,38 @@ META;
     }
 
     /**
+     * The point of each(): the caller does not have to know which shape it is holding.
+     */
+    public function testEachRunsTheCallbackOnAScalar()
+    {
+        $trimmed = Dj_App_Util::each('  x  ', 'trim');
+
+        $this->assertSame('x', $trimmed);
+    }
+
+    public function testEachRunsTheCallbackOnEveryValueAndKeepsKeys()
+    {
+        $values = [ 'first' => '  a  ', 'second' => "\tb\n", ];
+
+        $trimmed_values = Dj_App_Util::each($values, 'trim');
+
+        $this->assertSame('a', $trimmed_values['first']);
+        $this->assertSame('b', $trimmed_values['second']);
+    }
+
+    /**
+     * An empty list comes back a LIST. Returning a scalar here would fatal any caller that
+     * goes on to join the result — on the one input hardest to notice while testing.
+     */
+    public function testEachReturnsAnArrayForAnEmptyArray()
+    {
+        $mapped_values = Dj_App_Util::each([], 'trim');
+
+        $this->assertIsArray($mapped_values);
+        $this->assertEmpty($mapped_values);
+    }
+
+    /**
      * Plain buffers hand bytes along untouched — including the one php.ini's output_buffering
      * opens — so what is measured across the stack is what the client receives, and a response
      * can safely be framed with a length.
