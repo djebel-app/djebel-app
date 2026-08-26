@@ -175,38 +175,64 @@ class Dj_App_Util {
      * become an XSS hole that logs nothing and looks like it worked. Both refusals below are
      * caller BUGS, which is what this codebase throws for; neither can happen on live input.
      *
-     * @param mixed $value A scalar, or an array of them
+     * @param mixed $value A scalar, an array of them, or null for nothing to process
      * @param callable $callback Any named callable form
-     * @return mixed The callback's answer, shaped like what came in
-     * @throws Dj_App_Validation_Exception When the callback is not callable, or the value is
-     *   neither a scalar nor an array
+     * @return mixed The callback's answer shaped like what came in; null stays null
+     * @throws Dj_App_Validation_Exception When the callback is not callable, or the value is an
+     *   object or a resource
      */
     public static function each($value, $callback)
     {
-        if (!is_callable($callback)) {
-            $err_data = [ 'code' => 'app.core.util.each.callback_not_callable', ];
+        // Ordered by cost AND by how often each is the answer, cheapest first: is_scalar is the
+        // cheapest of the type checks and also the overwhelmingly common input, so the usual
+        // call settles on ONE test. is_callable is the dear one — measured at roughly four
+        // times a type check — so it is asked only here, where the callback is about to be
+        // used. A run that maps nothing never pays for it, and recursion below only reaches it
+        // once per leaf rather than once per level.
+        //
+        // Booleans belong here: a callback may legitimately want one, and is_scalar says yes.
+        if (is_scalar($value)) {
+            if (!is_callable($callback)) {
+                $err_data = [ 'code' => 'app.core.util.each.callback_not_callable', ];
 
-            throw new Dj_App_Validation_Exception('A callable is required', $err_data);
+                throw new Dj_App_Validation_Exception('A callable is required', $err_data);
+            }
+
+            $mapped_value = $callback($value);
+
+            return $mapped_value;
         }
 
+        // Nothing to process, so nothing is processed — and the callback is NOT run, because a
+        // string function handed a null is a deprecation on PHP 8.1+. Null goes back out as
+        // null: it carries no text, prints as nothing, and the caller's own empty() still reads
+        // it the way it did going in. Unlike the refusal below there is no value here to leak,
+        // only the absence of one.
+        if (is_null($value)) {
+            return null;
+        }
+
+        // Each element goes back through THIS method rather than straight to the callback, so
+        // every rule here applies at every depth. array_map() would hand the callback each
+        // element raw: a null inside the list would hit the same deprecation the check above
+        // exists to avoid, and a nested list would arrive at a callback that expects a string.
+        // Keys are written back as they came, string keys included.
         if (is_array($value)) {
-            $mapped_values = array_map($callback, $value);
+            $mapped_values = [];
+
+            foreach ($value as $key => $item) {
+                $mapped_values[$key] = Dj_App_Util::each($item, $callback);
+            }
 
             return $mapped_values;
         }
 
-        // Scalars only. An object can carry a __toString that returns markup, so letting one
-        // past untouched would put attacker-shaped text on the page; null and resources are no
-        // more mappable. None of them is guessed at.
-        if (!is_scalar($value)) {
-            $err_data = [ 'code' => 'app.core.util.each.value_not_mappable', ];
+        // Whatever is left is an object or a resource. An object can carry a __toString that
+        // returns markup, so letting one past untouched would put attacker-shaped text on the
+        // page — it is refused rather than guessed at.
+        $err_data = [ 'code' => 'app.core.util.each.value_not_mappable', ];
 
-            throw new Dj_App_Validation_Exception('A scalar or an array is required', $err_data);
-        }
-
-        $mapped_value = $callback($value);
-
-        return $mapped_value;
+        throw new Dj_App_Validation_Exception('A scalar or an array is required', $err_data);
     }
 
     /**

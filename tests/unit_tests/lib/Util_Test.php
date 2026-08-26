@@ -2353,6 +2353,53 @@ META;
     }
 
     /**
+     * Null is NOTHING TO PROCESS, not a caller mistake — so it is not refused the way an object
+     * is. There is no value here to leak, only the absence of one. The callback is skipped as
+     * well: a string function handed a null is a deprecation on PHP 8.1+.
+     */
+    public function testEachPassesNullStraightBack()
+    {
+        $mapped_value = Dj_App_Util::each(null, 'trim');
+
+        $this->assertNull($mapped_value);
+    }
+
+    /**
+     * The rules hold at EVERY depth, not just the top. Handing each element straight to the
+     * callback would put a null in front of a string function — the same deprecation the
+     * top-level check avoids — and a nested list in front of one that expects a string.
+     */
+    public function testEachAppliesTheSameRulesInsideAnArray()
+    {
+        $values = [
+            'text' => '  a  ',
+            'nothing' => null,
+            'nested' => [ '  b  ', ],
+        ];
+
+        $mapped_values = Dj_App_Util::each($values, 'trim');
+
+        $this->assertSame('a', $mapped_values['text']);
+        $this->assertNull($mapped_values['nothing']);
+        $this->assertSame('b', $mapped_values['nested'][0]);
+    }
+
+    /**
+     * Booleans ARE scalars, and a callback may legitimately want one — so they go through
+     * rather than being refused alongside objects.
+     */
+    public function testEachRunsTheCallbackOnBooleans()
+    {
+        $true_result = Dj_App_Util::each(true, 'intval');
+
+        $this->assertSame(1, $true_result);
+
+        $false_result = Dj_App_Util::each(false, 'intval');
+
+        $this->assertSame(0, $false_result);
+    }
+
+    /**
      * The refusal must carry a checkable code — branching on the MESSAGE is what this codebase
      * bans, so the code is the part a caller is allowed to read.
      */
