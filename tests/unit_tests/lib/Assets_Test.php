@@ -1901,6 +1901,49 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertEquals($first_buff, $second_buff);
     }
 
+    /**
+     * A theme is allowed to fire the page seams itself, and it fires them WHILE IT RENDERS —
+     * before the page shortcode expands and before the screen that registers most assets has
+     * run. Registering has to keep working in that window, or a plugin's script vanishes on
+     * exactly the themes that place their own tags, with nothing failing to say so.
+     */
+    public function testAssetRegisteredAfterTheSeamStillReachesThePage()
+    {
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        // The theme's seam fires here and sends what exists so far, which is nothing.
+        $seam_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertEmpty($seam_html, 'nothing was registered by the time the seam fired');
+
+        // Content renders later and registers, long after that seam has gone.
+        $this->registerAsset([ 'js' => 'var late_asset = 1;', 'id' => 'late-asset', ]);
+
+        $page_buff = '<html><head><title>x</title></head><body><p>x</p></body></html>';
+        $swept_buff = $assets_obj->injectRemainingAssets($page_buff);
+
+        $this->assertStringContainsString('var late_asset = 1;', $swept_buff, 'a late registration still reaches the page');
+    }
+
+    /**
+     * The other half of that: the sweep must never repeat what a seam already sent, or every
+     * theme placing its own tags would ship two of each.
+     */
+    public function testTheSweepDoesNotRepeatWhatTheSeamAlreadySent()
+    {
+        $this->registerAsset([ 'js' => 'var sent_once = 1;', 'id' => 'sent-once', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $seam_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var sent_once = 1;', $seam_html, 'the seam sent it');
+
+        $page_buff = '<html><head><title>x</title></head><body><p>x</p></body></html>';
+        $swept_buff = $assets_obj->injectRemainingAssets($page_buff);
+
+        $this->assertStringNotContainsString('var sent_once = 1;', $swept_buff, 'the sweep left it alone');
+    }
+
     // ---------------------------------------------------------------- filter callbacks
 
     public static $added_asset_ids = [];

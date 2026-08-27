@@ -66,6 +66,20 @@ class Dj_App_Assets {
     const HOOK_PAGE_BODY_START = 'app.page.html.body.start';
     const HOOK_PAGE_BODY_END = 'app.page.html.body.end';
 
+    // The whole rendered document, filtered. The sweep rides it at a priority BELOW core's own
+    // injection so that pass — which fires the seams for a theme that did not — goes first and
+    // the sweep only ever handles what it left behind.
+    const HOOK_PAGE_FULL_CONTENT = 'app.page.full_content';
+    const SWEEP_PRIORITY = 130;
+
+    // Where each placement lands when the sweep injects it. The tag decides the side by itself:
+    // a closing tag takes the content before it, an opening one after.
+    const PLACEMENT_TAGS = [
+        self::PLACEMENT_HEAD => '</head>',
+        self::PLACEMENT_BODY_START => '<body',
+        self::PLACEMENT_FOOTER => '</body>',
+    ];
+
     // The site-config section a site declares its own assets in. See loadConfiguredAssets().
     const CONFIG_SECTION = 'assets';
 
@@ -113,6 +127,12 @@ class Dj_App_Assets {
     // the reordering pass is never entered.
     private $has_prereq = false;
 
+    // id => 1 for everything already written into the page. A registration can arrive at any
+    // moment — a theme fires the page seams itself and they run BEFORE the content that
+    // registers, so the seam alone cannot be the only chance an asset gets. The late sweep
+    // sends whatever is still here, and this is what stops it sending anything twice.
+    private $emitted_ids = [];
+
     // What the environment and the site config say about minified builds — the value the filter
     // is then handed. Null until asked, a bool after; null rather than false, because a site
     // that answered NO must not read as "not asked yet" and send the env scan around again.
@@ -147,6 +167,16 @@ class Dj_App_Assets {
         ];
 
         Dj_App_Hooks::addAction($page_hooks, [$this, 'renderAssets']);
+
+        // The seams above are the preferred route — they put a tag exactly where the theme
+        // wanted it. They are not the ONLY route, because a theme that fires them itself fires
+        // them while it renders, which is BEFORE the content that registers most assets. This
+        // catches whatever was registered after its seam had already gone.
+        Dj_App_Hooks::addFilter(
+            Dj_App_Assets::HOOK_PAGE_FULL_CONTENT,
+            [$this, 'injectRemainingAssets'],
+            Dj_App_Assets::SWEEP_PRIORITY
+        );
 
         $this->loadConfiguredAssets();
     }
@@ -594,6 +624,11 @@ class Dj_App_Assets {
         $this->queue = [];
         $this->has_priority = false;
         $this->has_prereq = false;
+
+        // The record of what already went out belongs to the page that sent it. Left standing,
+        // an id registered again after a reset would be treated as already delivered and never
+        // render — which is a suite whose tests quietly depend on the order they ran in.
+        $this->emitted_ids = [];
 
         // The memoized env/config answer goes too. A suite drives that half through real env
         // vars, so one carried over from an earlier test would decide the next one instead.
@@ -1324,6 +1359,10 @@ class Dj_App_Assets {
                     continue;
                 }
 
+                if (isset($this->emitted_ids[$item['id']])) {
+                    continue;
+                }
+
                 $queue_items[] = $item;
             }
         } else {
@@ -1336,6 +1375,10 @@ class Dj_App_Assets {
 
             foreach ($this->queue as $item) {
                 if ($item['placement'] != $placement) {
+                    continue;
+                }
+
+                if (isset($this->emitted_ids[$item['id']])) {
                     continue;
                 }
 
@@ -1386,6 +1429,9 @@ class Dj_App_Assets {
                 continue;
             }
 
+            // Marked HERE, not when the item was picked: a listener that vetoed the tag above
+            // emitted nothing, so the asset has to stay eligible for the sweep that follows.
+            $this->emitted_ids[$item['id']] = 1;
             $tags[] = $tag_html;
         }
 
@@ -1654,6 +1700,42 @@ class Dj_App_Assets {
         }
 
         echo $html;
+    }
+
+    /**
+     * Filter listener on the whole rendered document — the last chance for anything registered
+     * too late for its seam.
+     *
+     * Registering an asset must work from ANYWHERE: a plugin does it while its screen renders,
+     * and a screen renders from a shortcode, which expands after the theme file has already run
+     * and already fired its page seams. Everything registered in that window would otherwise be
+     * silently dropped — the page still renders, nothing errors, and the script is just absent.
+     *
+     * Only what is still unsent is written, because buildHtml() hands back the unemitted items
+     * and nothing else, so a theme that fired its seams properly reaches this with nothing left
+     * to do and pays one array check per placement.
+     *
+     * @param string $buff the full page
+     * @param array $ctx
+     * @return string
+     */
+    public function injectRemainingAssets($buff, $ctx = [])
+    {
+        if (empty($this->queue) || empty($buff)) {
+            return $buff;
+        }
+
+        foreach (Dj_App_Assets::PLACEMENT_TAGS as $placement => $tag) {
+            $html = $this->buildHtml($placement);
+
+            if (empty($html)) {
+                continue;
+            }
+
+            $buff = Dj_App_Util::injectContent($html, $buff, $tag);
+        }
+
+        return $buff;
     }
 
 }
