@@ -896,24 +896,63 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
-     * Quick method for checking if we're on a given page.
-     * Supports regex pipe to check multiple pages.
-     * @param string $page
-     * @param string $req_url
-     * @return string
+     * Is the request on a given page? A case-insensitive substring test of the url, so
+     * '/login' answers yes on '/login', '/login/' and '/user/login'. Several pages separated
+     * with '|' — any one of them answers yes; the parts are trimmed, since a hand-written list
+     * carries spaces around the bars. Regex characters mean nothing here.
+     *
+     * @param string $page One page, or several separated with '|'
+     * @param string $req_url Defaults to the current request url
+     * @return bool
+     * @throws Dj_App_Validation_Exception when $page is not scalar
      */
     public function requestUrlMatches($page, $req_url = '') {
+        if (!is_scalar($page)) {
+            $page_type = gettype($page);
+
+            throw new Dj_App_Validation_Exception('requestUrlMatches page must be scalar', [
+                'code' => 'app.core.request.request_url_matches.not_scalar',
+                'type' => $page_type,
+            ]);
+        }
+
+        // strlen, not empty(): '0' is a substring like any other. Nothing to look for is not a
+        // match — an empty needle would answer yes to every url.
+        if (strlen($page) == 0) {
+            return false;
+        }
+
         $req_url = empty($req_url) ? $this->getRequestUrl() : $req_url;
 
+        // The whole thing first, because that is the common answer: a single page is found or
+        // not right here, and only a list has anything left to split.
         if (stripos($req_url, $page) !== false) {
             return true;
         }
 
-        $page = str_replace('|', '__PIPE_ESC__', $page);
-        $regex = '#' . preg_quote($page, '#') . '#si';
-        $regex = str_replace('__PIPE_ESC__', '|', $regex);
-        $match = preg_match($regex, $req_url);
-        return $match;
+        if (strpos($page, '|') === false) {
+            return false;
+        }
+
+        $pages = explode('|', $page);
+
+        // Trimmed only when there is something to trim: a list typed by hand carries spaces
+        // around the bars, one built by code does not, and the scan for them is a byte walk.
+        if (strpbrk($page, " \t\n\r\0\x0B") !== false) {
+            $pages = Dj_App_String_Util::trim($pages);
+        }
+
+        foreach ($pages as $one_page) {
+            if (strlen($one_page) == 0) {
+                continue;
+            }
+
+            if (stripos($req_url, $one_page) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

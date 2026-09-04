@@ -824,7 +824,7 @@ class Dj_App_Request_Test extends TestCase
     }
 
     /**
-     * isHttps() treats HTTPS='off' (the IIS convention) as NOT secure.
+     * HTTPS='off', the IIS spelling, must read as not secure.
      */
     public function testIsHttpsFalseWhenHttpsServerVarOff()
     {
@@ -940,5 +940,94 @@ class Dj_App_Request_Test extends TestCase
         $no_value_res = $req_obj->getAndCompare('missing_key', 'live');
 
         $this->assertFalse($no_value_res);
+    }
+
+    /**
+     * Pins the contract every caller branches on: a case-insensitive substring test with
+     * regex characters taken literally. assertFalse, not assertEmpty, so a 0 slipping out in
+     * place of false fails here.
+     */
+    public function testRequestUrlMatchesIsACaseInsensitiveSubstringTest()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        $mixed_case_res = $req_obj->requestUrlMatches('/Login', '/user/login/');
+
+        $this->assertTrue($mixed_case_res);
+
+        $other_page_res = $req_obj->requestUrlMatches('/login', '/blog');
+
+        $this->assertFalse($other_page_res);
+
+        // The dot must not stand for any character.
+        $literal_miss_res = $req_obj->requestUrlMatches('/a.b', '/axb');
+
+        $this->assertFalse($literal_miss_res);
+
+        $literal_hit_res = $req_obj->requestUrlMatches('/a.b', '/a.b/c');
+
+        $this->assertTrue($literal_hit_res);
+    }
+
+    public function testRequestUrlMatchesAnyOfThePipedAlternatives()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        $second_res = $req_obj->requestUrlMatches('/shop|/cart', '/cart/');
+
+        $this->assertTrue($second_res);
+
+        $neither_res = $req_obj->requestUrlMatches('/shop|/cart', '/blog');
+
+        $this->assertFalse($neither_res);
+
+        // A hand-written list carries spaces around the bars.
+        $padded_res = $req_obj->requestUrlMatches('/shop | /cart', '/cart');
+
+        $this->assertTrue($padded_res);
+    }
+
+    /**
+     * Nothing to look for is not a match — a trailing bar must not read as "everywhere".
+     */
+    public function testRequestUrlMatchesRefusesAnEmptyPage()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        $empty_res = $req_obj->requestUrlMatches('', '/blog');
+
+        $this->assertFalse($empty_res);
+
+        $trailing_bar_miss_res = $req_obj->requestUrlMatches('/a|', '/blog');
+
+        $this->assertFalse($trailing_bar_miss_res);
+
+        $trailing_bar_hit_res = $req_obj->requestUrlMatches('/a|', '/a');
+
+        $this->assertTrue($trailing_bar_hit_res);
+    }
+
+    public function testRequestUrlMatchesDefaultsToTheCurrentRequest()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        // Under the suite the request is the site root.
+        $root_res = $req_obj->requestUrlMatches('/');
+
+        $this->assertTrue($root_res);
+    }
+
+    public function testRequestUrlMatchesThrowsOnANonScalarPage()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $code = '';
+
+        try {
+            $req_obj->requestUrlMatches([ '/login', ], '/login');
+        } catch (Dj_App_Validation_Exception $e) {
+            $code = $e->getErrorCode();
+        }
+
+        $this->assertEquals('app.core.request.request_url_matches.not_scalar', $code);
     }
 }
