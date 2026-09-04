@@ -290,6 +290,23 @@ them; see [plugin-guide.md](plugin-guide.md). One core-level key applies to any 
 |---|---|
 | `plugins.<id>.load_if_url` | Load the plugin only when the request URL matches — the cheapest way to keep a plugin off every other page. Also readable via `cfg()`. |
 
+## `[assets]` — site-declared assets
+
+Each entry is one asset: the entry key is its id, and every key under it is a parameter
+`Dj_App_Assets::add()` accepts. They are registered before the first plugin runs, on every
+page, so a shared library needs no plugin to ask for it.
+
+```ini
+[assets]
+jquery.file = /site/shared/jquery/jquery.min.js
+login_css.file = /plugins/djebel-login/assets/login.css
+login_css.load_if_url = /login|/register
+```
+
+| Key | What it does |
+|---|---|
+| `<id>.load_if_url` | Render the asset only on a request whose site-relative path contains one of the listed paths, `\|`-separated, case-insensitive. Decided when the page renders, so it follows whatever the request looks like by then. Absent means every page. Same word and the same substring test as `plugins.<id>.load_if_url`; that one is case-sensitive and matches the full request path, web path included. |
+
 ## `[page_nav]` — navigation
 
 Read as one block by the page layer. Entries are `<id>.title`, `<id>.url`, and

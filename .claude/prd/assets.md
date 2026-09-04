@@ -294,11 +294,68 @@ Three consequences worth stating, because each is a decision rather than a side 
   A scalar `key = value` in the section names no asset at all and is skipped silently, which
   leaves the section usable for a plain setting later.
 
-**The cost:** anything declared here is on EVERY page, including ones that never use it — a
-login screen now carries jQuery. That is the trade for never having to ask. If it needs to
-become opt-in, the shape is one optional key whose absence means today's behavior
-(`auto_load = 0` plus an `enqueue()` by id) — `auto_load` is already this framework's word for
-exactly that, so nothing declared today would have to change.
+**The cost:** anything declared here REGISTERS on every page, including ones that never use
+it. Registering is the cheap half; rendering is what a page pays for, and that is where
+`load_if_url` (next section) keeps a site-wide library off the login screen.
+
+### Per-page assets — `load_if_url` (added 2026-09-04)
+
+```php
+Dj_App_Assets::register([ 'plugin' => 'djebel-login', 'file' => '/assets/login.css', 'load_if_url' => '/login', ]);
+```
+
+```ini
+[assets]
+login_css.file = /plugins/djebel-login/assets/login.css
+login_css.load_if_url = /login|/register
+```
+
+One path or a list — a `|`-separated string or an array. Substring, case-insensitive, against
+the site-relative request path: `/login` matches `/login`, `/login/` and `/user/login`, and the
+same spelling works on a subdir install. The word and the substring test are the ones
+`[plugins] <id>.load_if_url` already uses. Two deltas, both verified in `index.php`'s
+`filterConditionalPlugins()`: the plugin gate is case-sensitive, and it matches the full request
+path with the web path still on it. Every `load_if_url` line in the 12 sites is a bare path, so
+nothing written today reads differently under either. Aligning the plugin gate onto the same
+relative path is its own change, and it is also what would make that gate testable, since the
+raw request url cannot be driven from the CLI suite.
+
+**Decided at RENDER time, never in `add()`. Owner decision, 2026-09-04.** `add()` only
+normalizes the condition onto the item. The decision is `filterByConditions()`, a step of
+`buildHtml()` — so it runs at each page seam and again in the late sweep, and reads the request
+fresh each time. Lots of things happen between registering and rendering: a plugin rewrites the
+relative path, content renders, a screen decides what it is. The gate sees the request as it
+stands when the page is actually sent. **It is a step of the render, not a listener** — a first
+cut hooked the class's own `queue` filter to do the class's own job, and the owner rejected it:
+the filters are for OTHER code, and this app has plenty already. The accepted cost: a gated
+asset is still resolved at add time, and a private-tree file is still read, on pages that will
+skip it.
+
+**Order inside the render.** Placement and already-sent items are dropped first, then the url
+gate, then the prerequisite sort, then the `queue` filter, then the tags. So a gated-out
+prerequisite is simply absent when its dependent is sorted — the same as one nobody registered —
+and a `queue` listener sees the set that will actually render.
+
+**No new hook.** The seams already exist:
+
+| Want | Seam |
+|---|---|
+| gate somebody else's asset, or lift a condition | rewrite `load_if_url` on `app.core.assets.filter.add_params` or `.item` |
+| drop more, or veto one tag | `filter.queue`, or `filter.tag_html` |
+| your own url logic instead | strip the key on `.add_params`, decide on `filter.queue` |
+
+**A config entry still registers on every page** — `loadConfiguredAssets()` counts it — and the
+gate keeps it off the pages it did not name. That retires the `auto_load` idea: nothing declared
+today changes, and no `enqueue()` by id is needed.
+
+**What it costs, measured in the `php:8.3-cli` container, minimum of 7 reps.** A page that gates
+nothing pays one property read per placement render and never enters the gate. Under a gated
+queue, a placement with no gated item of its own pays 424 ns for ten items and never reads the
+request — the lookup is deferred to the first item that needs it. A gated item that does NOT
+match costs about 160 ns for one page and 680 ns for a `|` list, now that `requestUrlMatches()`
+no longer runs a regex behind a `stripos()` that already missed; the list pays for `explode()`,
+as it always did. On the add() side the key costs the same `getField()` miss every other
+optional key pays, about 1.5 µs.
 
 ### Failure split
 

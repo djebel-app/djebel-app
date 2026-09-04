@@ -127,6 +127,9 @@ class Dj_App_Assets {
     // the reordering pass is never entered.
     private $has_prereq = false;
 
+    // And for conditions: while no item carries one the render never enters the gate.
+    private $has_conditions = false;
+
     // id => 1 for everything already written into the page. A registration can arrive at any
     // moment — a theme fires the page seams itself and they run BEFORE the content that
     // registers, so the seam alone cannot be the only chance an asset gets. The late sweep
@@ -295,6 +298,10 @@ class Dj_App_Assets {
      *     for a filemtime. Applies to 'file' only — an explicit url carries its own query.
      *   - skip_min: serve the named file even where a .min sibling exists. For the one asset
      *     that must not be swapped; the site keeps using builds for everything else.
+     *   - load_if_url: render only on a request whose path contains it — one path, or several
+     *     as a '|'-separated string or an array. Judged when the page RENDERS, never here, so
+     *     whatever changes between registering and rendering is what it sees. Absent means
+     *     every page.
      *   - attrs / attribs: extra tag attributes; a true value renders the attribute bare
      *   - id: an explicit handle. Registering it again REPLACES the entry in place.
      * @return Dj_App_Result status + id, or an error carrying a checkable code
@@ -371,6 +378,13 @@ class Dj_App_Assets {
         if (!empty($prereq_ids)) {
             $item['prereq'] = $prereq_ids;
             $this->has_prereq = true;
+        }
+
+        $load_if_url = $this->resolveLoadIfUrl($params);
+
+        if (!empty($load_if_url)) {
+            $item['load_if_url'] = $load_if_url;
+            $this->has_conditions = true;
         }
 
         $item = Dj_App_Hooks::applyFilter(Dj_App_Assets::FILTER_ITEM, $item, $params);
@@ -530,6 +544,28 @@ class Dj_App_Assets {
     }
 
     /**
+     * The url condition an asset declared, as ONE '|'-separated string so the gate matches it
+     * in a single call — whatever the caller wrote: one path, a separated string or a list.
+     * Empty when it declared none.
+     *
+     * @param array $params See add()
+     * @return string
+     */
+    public function resolveLoadIfUrl($params = [])
+    {
+        $inp_load_if_url = Dj_App_Util::getField('load_if_url', $params);
+
+        if (empty($inp_load_if_url)) {
+            return '';
+        }
+
+        $url_patterns = Dj_App_String_Util::splitOnSeparators($inp_load_if_url);
+        $load_if_url = implode('|', $url_patterns);
+
+        return $load_if_url;
+    }
+
+    /**
      * Drops an asset from the queue. Not-queued is a no-op SUCCESS, so removing a maybe-present
      * asset never needs a check first.
      *
@@ -624,6 +660,7 @@ class Dj_App_Assets {
         $this->queue = [];
         $this->has_priority = false;
         $this->has_prereq = false;
+        $this->has_conditions = false;
 
         // The record of what already went out belongs to the page that sent it. Left standing,
         // an id registered again after a reset would be treated as already delivered and never
@@ -1399,6 +1436,16 @@ class Dj_App_Assets {
             return $html;
         }
 
+        // Before the prerequisite sort, so a prerequisite the request keeps off this page is
+        // simply absent for its dependent — the same as one nobody registered.
+        if (!empty($this->has_conditions)) {
+            $queue_items = $this->filterByConditions($queue_items);
+
+            if (empty($queue_items)) {
+                return $html;
+            }
+        }
+
         // Last, and only when something asked: a prerequisite is a hard constraint while a
         // priority is a preference, so it gets to move what priority already arranged.
         if (!empty($this->has_prereq)) {
@@ -1536,6 +1583,60 @@ class Dj_App_Assets {
         }
 
         return $ordered_items;
+    }
+
+    /**
+     * Drops every item of a placement that carries a condition the request being served does
+     * not satisfy. A step of the render, so it runs at each page seam and again in the late
+     * sweep, and it reads the request fresh each time — whatever changed between registering
+     * and rendering is what decides, never the request as it looked at add().
+     *
+     * One pass for every kind of condition an item can carry, each judged by its own guard.
+     * load_if_url: substring, case-insensitive, '|' between alternatives, against the request
+     * path relative to the site — '/login' matches '/login', '/login/' and '/user/login', and
+     * needs no web-path prefix on a subdir install.
+     *
+     * @param array $queue_items The items of one placement, in the order priority left them
+     * @return array
+     */
+    public function filterByConditions($queue_items = [])
+    {
+        if (empty($queue_items) || !is_array($queue_items)) {
+            return [];
+        }
+
+        $req_obj = Dj_App_Request::getInstance();
+        $rel_url = '';
+        $kept_items = [];
+
+        foreach ($queue_items as $item) {
+            if (empty($item['load_if_url'])) {
+                $kept_items[] = $item;
+                continue;
+            }
+
+            $load_if_url = $item['load_if_url'];
+
+            // add() stores one string, but the item filter runs after it and may hand back a
+            // list. Same resolver, so a list still means the same alternatives.
+            if (!is_string($load_if_url)) {
+                $load_if_url = $this->resolveLoadIfUrl($item);
+            }
+
+            // The flag is queue-wide: a placement holding no gated item of its own must not
+            // pay for the request lookup, so it is read on the first item that needs it.
+            if (empty($rel_url)) {
+                $rel_url = $req_obj->getRelWebPath();
+            }
+
+            if (!$req_obj->requestUrlMatches($load_if_url, $rel_url)) {
+                continue;
+            }
+
+            $kept_items[] = $item;
+        }
+
+        return $kept_items;
     }
 
     /**

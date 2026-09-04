@@ -7,7 +7,8 @@ class Dj_App_Assets_Test extends TestCase {
     // The fixture tree stands in for a site's content dir: a PUBLIC plugin + theme under
     // dj-content (URL-reachable) and a PRIVATE plugin outside it (auto-inlined). Both
     // locations are pointed at through the filters core already exposes, so nothing here
-    // touches the real site layout.
+    // touches the real site layout. The page a request is on is driven the same way: a test
+    // names its path in self::$rel_url instead of faking a web request the CLI cannot see.
     private $fixture_root_dir = '';
     private $content_dir = '';
     private $non_public_plugins_dir = '';
@@ -62,6 +63,7 @@ class Dj_App_Assets_Test extends TestCase {
 
         Dj_App_Hooks::addFilter('app.config.content_dir', ['Dj_App_Assets_Test', 'filterContentDir']);
         Dj_App_Hooks::addFilter('app.core.plugins.non_public_plugins_dir', ['Dj_App_Assets_Test', 'filterNonPublicPluginsDir']);
+        Dj_App_Hooks::addFilter('app.core.request.relative_web_path', ['Dj_App_Assets_Test', 'filterRelWebPath']);
 
         // installHooks() is idempotent — a registration is keyed by its callback, so re-running
         // it re-seats the page seams rather than duplicating them. Done here so the seam tests
@@ -80,17 +82,19 @@ class Dj_App_Assets_Test extends TestCase {
         $removed = Dj_App_Hooks::removeFilter('app.core.plugins.non_public_plugins_dir', ['Dj_App_Assets_Test', 'filterNonPublicPluginsDir']);
         $this->assertTrue($removed, 'The non-public plugins dir filter leaked out of the test');
 
+        $removed = Dj_App_Hooks::removeFilter('app.core.request.relative_web_path', ['Dj_App_Assets_Test', 'filterRelWebPath']);
+        $this->assertTrue($removed, 'The relative web path filter leaked out of the test');
+
+        self::$rel_url = '';
+
         // The singleton is process-wide; without this the suite becomes order-dependent.
         $assets_obj = Dj_App_Assets::getInstance();
         $remove_res = $assets_obj->removeAll();
         $this->assertTrue($remove_res->isSuccess());
 
-        // Config is a process-wide singleton too, and setUp's installHooks() reads it — so a
-        // declaration left behind here would silently register itself into the NEXT test, one
-        // that asked for no assets at all. Dropped through ArrayAccess: it reaches the one
-        // section directly, where reading the config out and writing it back would copy every
-        // OTHER section to remove this one, and would clear the extra-options data as a
-        // side effect of the write.
+        // Config is a process-wide singleton too, so a declaration left behind here would be
+        // registered again by the NEXT test's setUp, one that asked for no assets at all.
+        // Dropped through ArrayAccess so only this one section goes.
         $opt_obj = Dj_App_Options::getInstance();
         unset($opt_obj[Dj_App_Assets::CONFIG_SECTION]);
     }
@@ -1944,10 +1948,246 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertStringNotContainsString('var sent_once = 1;', $swept_buff, 'the sweep left it alone');
     }
 
+    // ---------------------------------------------------------------- url gate
+
+    /**
+     * Pins that the condition is judged when the page RENDERS, and judged again on every
+     * render: one queue, rendered twice under two different paths, answers differently both
+     * times. That is the whole reason nothing is decided in add().
+     */
+    public function testGatedAssetRendersOnlyWhereThePathMatchesAtRenderTime()
+    {
+        $this->registerAsset([ 'js' => 'var login_only = 1;', 'load_if_url' => '/login', ]);
+        $this->registerAsset([ 'js' => 'var everywhere = 1;', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        self::$rel_url = '/blog';
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringNotContainsString('var login_only = 1;', $footer_html);
+        $this->assertStringContainsString('var everywhere = 1;', $footer_html);
+
+        // Skipped is not sent: the next render, on the page it wanted, still gets it.
+        self::$rel_url = '/login';
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var login_only = 1;', $footer_html);
+    }
+
+    /**
+     * A nested path and a trailing slash must not defeat the gate — pinned on a path carrying
+     * both, so one spelling of the condition serves every site layout.
+     */
+    public function testGateMatchesInsideTheRelativePath()
+    {
+        $this->registerAsset([ 'js' => 'var login_only = 1;', 'load_if_url' => '/login', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        self::$rel_url = '/user/login/';
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var login_only = 1;', $footer_html);
+    }
+
+    public function testGateAcceptsAListOfPathsAsAStringOrAnArray()
+    {
+        $this->registerAsset([ 'js' => 'var shop_or_cart = 1;', 'load_if_url' => '/shop|/cart', ]);
+        $listed_id = $this->registerAsset([ 'js' => 'var docs_or_faq = 1;', 'load_if_url' => [ '/docs', '/faq', ], ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+
+        // Whatever shape the caller wrote, the queue holds one.
+        $queue = $assets_obj->getQueue();
+        $this->assertEquals('/docs|/faq', $queue[$listed_id]['load_if_url']);
+
+        self::$rel_url = '/cart';
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var shop_or_cart = 1;', $footer_html);
+        $this->assertStringNotContainsString('var docs_or_faq = 1;', $footer_html);
+
+        self::$rel_url = '/faq';
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var docs_or_faq = 1;', $footer_html);
+    }
+
+    public function testAssetWithoutAConditionCarriesNone()
+    {
+        $asset_id = $this->registerAsset([ 'js' => 'var plain = 1;', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $queue = $assets_obj->getQueue();
+
+        $this->assertArrayNotHasKey('load_if_url', $queue[$asset_id]);
+    }
+
+    /**
+     * Pinned separately for the sweep: a gated-out asset must not reach the page through the
+     * door meant for late registrations.
+     */
+    public function testGatedOutAssetIsSkippedByTheSweepToo()
+    {
+        $this->registerAsset([ 'js' => 'var gated = 1;', 'load_if_url' => '/login', ]);
+
+        self::$rel_url = '/blog';
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $page_buff = '<html><head><title>x</title></head><body><p>x</p></body></html>';
+        $swept_buff = $assets_obj->injectRemainingAssets($page_buff);
+
+        $this->assertStringNotContainsString('var gated = 1;', $swept_buff);
+    }
+
+    /**
+     * A config-declared asset registers regardless of the page and still renders only where
+     * its condition says — the case that lets a site-wide library be declared in the site
+     * config without landing on the login screen.
+     */
+    public function testConfigDeclaredAssetCanBeGated()
+    {
+        $config_entries = [
+            'login-css' => [ 'style' => '.login-form {}', 'load_if_url' => '/login', ],
+        ];
+
+        $this->declareConfigAssets($config_entries);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $loaded_cnt = $assets_obj->loadConfiguredAssets();
+
+        $this->assertSame(1, $loaded_cnt);
+
+        self::$rel_url = '/blog';
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringNotContainsString('.login-form {}', $head_html);
+
+        self::$rel_url = '/login';
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringContainsString('.login-form {}', $head_html);
+    }
+
+    /**
+     * A prerequisite kept off this page counts as not here, the same as one nobody registered:
+     * the dependent asset renders rather than waiting for a script that will not arrive.
+     */
+    public function testGatedOutAssetDoesNotBlockAPrereq()
+    {
+        $this->registerAsset([ 'js' => 'var app = 1;', 'id' => 'app', 'prereq' => 'jquery', ]);
+        $this->registerAsset([ 'js' => 'var jq = 1;', 'id' => 'jquery', 'load_if_url' => '/admin', ]);
+
+        self::$rel_url = '/blog';
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+        $this->assertStringContainsString('var app = 1;', $footer_html);
+        $this->assertStringNotContainsString('var jq = 1;', $footer_html);
+    }
+
+    /**
+     * The gate runs before the queue filter, so a listener there sees the set that will
+     * actually render — never an item the request has already kept off the page.
+     */
+    public function testQueueFilterSeesOnlyWhatTheRequestAllows()
+    {
+        Dj_App_Hooks::addFilter(Dj_App_Assets::FILTER_QUEUE, ['Dj_App_Assets_Test', 'recordQueueIds']);
+        self::$queue_filter_ids = [];
+
+        try {
+            $gated_id = $this->registerAsset([ 'js' => 'var gated = 1;', 'load_if_url' => '/login', ]);
+            $open_id = $this->registerAsset([ 'js' => 'var open = 1;', ]);
+
+            self::$rel_url = '/blog';
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+            $this->assertStringNotContainsString('var gated = 1;', $footer_html);
+            $this->assertContains($open_id, self::$queue_filter_ids);
+            $this->assertNotContains($gated_id, self::$queue_filter_ids);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_QUEUE, ['Dj_App_Assets_Test', 'recordQueueIds']);
+            $this->assertTrue($removed, 'The recording queue filter leaked out of the test');
+            self::$queue_filter_ids = [];
+        }
+    }
+
+    /**
+     * A site overrides a condition where the asset registers, through a seam that already
+     * exists: a listener that lifts it frees the asset onto any page.
+     */
+    public function testAddParamsListenerCanLiftTheCondition()
+    {
+        Dj_App_Hooks::addFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsLiftCondition']);
+
+        try {
+            $this->registerAsset([ 'js' => 'var freed = 1;', 'load_if_url' => '/login', ]);
+
+            self::$rel_url = '/blog';
+
+            $assets_obj = Dj_App_Assets::getInstance();
+            $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
+
+            $this->assertStringContainsString('var freed = 1;', $footer_html);
+        } finally {
+            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsLiftCondition']);
+            $this->assertTrue($removed, 'The condition-lifting add_params filter leaked out of the test');
+        }
+    }
+
     // ---------------------------------------------------------------- filter callbacks
 
     public static $added_asset_ids = [];
     public static $use_min_calls = 0;
+    public static $rel_url = '';
+    public static $queue_filter_ids = [];
+
+    /**
+     * The page a test says the request is on. Empty leaves the real answer alone, so the
+     * tests that never name a page are untouched.
+     *
+     * @param string $cur_val
+     * @param array $ctx
+     * @return string
+     */
+    public static function filterRelWebPath($cur_val, $ctx = [])
+    {
+        if (empty(self::$rel_url)) {
+            return $cur_val;
+        }
+
+        return self::$rel_url;
+    }
+
+    /**
+     * @param array $cur_val
+     * @param array $ctx
+     * @return array
+     */
+    public static function recordQueueIds($cur_val, $ctx = [])
+    {
+        foreach ($cur_val as $item) {
+            self::$queue_filter_ids[] = $item['id'];
+        }
+
+        return $cur_val;
+    }
+
+    /**
+     * @param array $cur_val
+     * @param array $ctx
+     * @return array
+     */
+    public static function filterAddParamsLiftCondition($cur_val, $ctx = [])
+    {
+        unset($cur_val['load_if_url']);
+
+        return $cur_val;
+    }
 
     /**
      * @param array $cur_val
