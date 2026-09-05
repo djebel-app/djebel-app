@@ -276,13 +276,16 @@ class Dj_App_Assets {
      * remove() and replace() take, so a caller never has to invent one.
      *
      * @param array $params Exactly ONE source key:
-     *   - file: relative to the 'plugin' / 'theme' context (absolute with neither)
+     *   - file: relative to the 'plugin' / 'theme' context, or to the content dir with
+     *     neither — never an absolute path, which would resolve any readable file
      *   - url: an explicit external URL, left untouched and never versioned
      *   - style: inline CSS
      *   - js / script: inline JS
      *   - content / buffer / data: inline, kind sniffed from a leading <script / <style
      *   Plus, all optional:
-     *   - plugin / theme: the slug 'file' is relative to
+     *   - plugin / theme: the slug 'file' is relative to. Pass __FILE__ from the addon's
+     *     main file instead and the slug is taken from it, so nothing retypes a directory
+     *     name that a later rename would leave pointing nowhere
      *   - kind: KIND_CSS / KIND_JS / KIND_ICON, overriding what the key implied. A .ico is
      *     recognised on its own; name the kind for an icon shipped as .png or .svg
      *   - placement: PLACEMENT_HEAD / PLACEMENT_BODY_START / PLACEMENT_FOOTER
@@ -1034,7 +1037,27 @@ class Dj_App_Assets {
         $rel_file = Dj_App_Util::addSlash($rel_file, Dj_App_Util::FLAG_LEADING);
 
         $plugin = Dj_App_Util::getField('plugin', $params);
+
+        // An addon may name itself with __FILE__ rather than retype its own directory
+        // name — a slug that goes stale the day the directory is renamed, and silently,
+        // because a file that fails to resolve here is not an error.
+        //
+        // A path separator is the whole test: a slug never carries one. The directory
+        // holding the file IS the addon's directory, so the name is one dirname away and
+        // nothing needs scanning or matching. Pass __FILE__ from the addon's MAIN file;
+        // from a file in a subdirectory the name would be that subdirectory.
+        if (!empty($plugin) && (strpbrk($plugin, '/\\') !== false)) {
+            $plugin_dir = dirname($plugin);
+            $plugin = basename($plugin_dir);
+        }
+
         $theme = Dj_App_Util::getField('theme', $params);
+
+        if (!empty($theme) && (strpbrk($theme, '/\\') !== false)) {
+            $theme_dir = dirname($theme);
+            $theme = basename($theme_dir);
+        }
+
         $candidate_files = [];
         $allowed_dirs = [];
 

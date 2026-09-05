@@ -188,6 +188,38 @@ class Dj_App_Assets_Test extends TestCase {
         $this->assertStringContainsString('main.js', $footer_html);
     }
 
+    /**
+     * Pins that an addon may name itself with __FILE__ instead of retyping its own
+     * directory name. The failure this guards is silent: a hand-typed slug left behind
+     * by a rename resolves nothing, and a file that does not resolve is not an error.
+     */
+    public function testPluginNamedByItsOwnFileResolvesLikeTheSlug()
+    {
+        $plugin_file = $this->content_dir . '/plugins/djebel-test-plugin/plugin.php';
+
+        $this->registerAsset([ 'plugin' => $plugin_file, 'file' => '/assets/main.css', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringContainsString('main.css', $head_html);
+    }
+
+    /**
+     * The theme half of the same contract — a theme names itself the same way.
+     */
+    public function testThemeNamedByItsOwnFileResolvesLikeTheSlug()
+    {
+        $theme_file = $this->content_dir . '/themes/djebel-test-theme/index.php';
+
+        $this->registerAsset([ 'theme' => $theme_file, 'file' => '/style.css', ]);
+
+        $assets_obj = Dj_App_Assets::getInstance();
+        $head_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_HEAD);
+
+        $this->assertStringContainsString('style.css', $head_html);
+    }
+
     public function testKindSniffedFromContent()
     {
         $this->registerAsset([ 'content' => '<style>.sniffed-css { color: red; }</style>', ]);
