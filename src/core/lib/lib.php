@@ -16,6 +16,8 @@ class Dj_App_Lib {
      * enable flag ("1"/"true"/"on") is shorthand for "*". A bad id is a caller bug and throws; a
      * valid-but-absent lib is soft-skipped (the "load it if it's there" case).
      * Dj_App_Lib::loadLib('djebel-core-lib-http');
+     * The Result carries `loaded` (bool: every exactly-requested lib loaded) and `loaded_libs`
+     * (the ids that actually loaded); a missing exact id is logged as a warning.
      * @param string|array $lib
      * @param array $extra_opts
      * @return Dj_App_Result
@@ -119,9 +121,6 @@ class Dj_App_Lib {
             }
         }
 
-        $res_obj->loaded = $loaded_ids;
-        $res_obj->status = true;
-
         // An exact id the caller named but that never loaded is a likely typo or missing install:
         // warn so it surfaces in the logs, without failing — the load stays soft (a caller that can
         // carry on without it does). A glob matching nothing is not a miss; it asked for what's there.
@@ -130,6 +129,12 @@ class Dj_App_Lib {
         if (!empty($missing_ids)) {
             Dj_App_Log::warn(['missing' => $missing_ids, 'dir' => $lib_dir], __METHOD__);
         }
+
+        // loaded is TRUE when every exactly-requested lib loaded — so a caller loading one specific
+        // lib gets loaded === true when it is there; globs are best-effort and never make it false.
+        $res_obj->loaded = empty($missing_ids);
+        $res_obj->loaded_libs = $loaded_ids;
+        $res_obj->status = true;
 
         return $res_obj;
     }
