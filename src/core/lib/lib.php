@@ -67,6 +67,10 @@ class Dj_App_Lib {
             $ids[] = $token;
         }
 
+        // The exact ids the caller named — snapshot before globs join $ids. A glob is best-effort
+        // (matching nothing is fine), but an exact id that never loads below is a real miss to warn on.
+        $exact_ids = $ids;
+
         if (!empty($globs)) {
             $dir_ids = [];
 
@@ -102,6 +106,7 @@ class Dj_App_Lib {
 
         $ids = array_unique($ids);
         $entry_file = self::ENTRY_FILE;
+        $loaded_ids = [];
 
         foreach ($ids as $id) {
             $lib_file = $lib_dir . '/' . $id . '/' . $entry_file;
@@ -110,10 +115,21 @@ class Dj_App_Lib {
             // already validated: exact ids at the split above, glob matches come from the dir itself.
             if (is_file($lib_file)) {
                 require_once $lib_file;
+                $loaded_ids[] = $id;
             }
         }
 
+        $res_obj->loaded = $loaded_ids;
         $res_obj->status = true;
+
+        // An exact id the caller named but that never loaded is a likely typo or missing install:
+        // warn so it surfaces in the logs, without failing — the load stays soft (a caller that can
+        // carry on without it does). A glob matching nothing is not a miss; it asked for what's there.
+        $missing_ids = array_diff($exact_ids, $loaded_ids);
+
+        if (!empty($missing_ids)) {
+            Dj_App_Log::warn(['missing' => $missing_ids, 'dir' => $lib_dir], __METHOD__);
+        }
 
         return $res_obj;
     }
