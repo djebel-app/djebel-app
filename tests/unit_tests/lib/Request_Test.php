@@ -1030,4 +1030,53 @@ class Dj_App_Request_Test extends TestCase
 
         $this->assertEquals('app.core.request.request_url_matches.not_scalar', $code);
     }
+
+    public static function interceptAppExit($ctx)
+    {
+        throw new Exception('dj_app_exit_intercepted');
+    }
+
+    /**
+     * A callback param must never turn the answer into JavaScript that a page on another
+     * site could load with a <script> tag.
+     */
+    public function testJsonIgnoresACallbackParam()
+    {
+        Dj_App_Hooks::addAction('app.exit', ['Dj_App_Request_Test', 'interceptAppExit']);
+        ob_start();
+
+        $buff = '';
+        $exit_msg = '';
+
+        try {
+            $saved_request = $_REQUEST;
+            $_REQUEST['callback'] = 'stealData';
+
+            $answer = [
+                'status' => true,
+                'data' => [ 'secret' => 'value', ],
+            ];
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->json($answer);
+        } catch (Exception $e) {
+            $exit_msg = $e->getMessage();
+        } finally {
+            $buff = ob_get_clean();
+            $_REQUEST = $saved_request;
+            $exit_listener_removed = Dj_App_Hooks::removeAction('app.exit', ['Dj_App_Request_Test', 'interceptAppExit']);
+        }
+
+        $this->assertEquals('dj_app_exit_intercepted', $exit_msg);
+        $this->assertNotEmpty($exit_listener_removed);
+
+        $buff = Dj_App_String_Util::trim($buff);
+
+        $this->assertStringNotContainsString('stealData', $buff);
+        $this->assertStringStartsWith('{', $buff);
+
+        $decoded = json_decode($buff, true);
+
+        $this->assertEquals('value', $decoded['data']['secret']);
+    }
 }

@@ -1102,8 +1102,14 @@ CLEAR_AND_REDIRECT_HTML;
      * the response needs — Cache-Control, ETag, Last-Modified — without this method
      * growing a named parameter per header. An empty value is SKIPPED, so a caller can
      * build the map unconditionally and let the blanks fall out. Content-Type is not
-     * among them: json() owns that, and a caller overriding it would break the JSONP
-     * branch below.
+     * among them: json() owns that.
+     *
+     * json() sends plain JSON and never reads a callback param: a JSONP answer can be read
+     * by a page on any other site through a <script> tag, together with the visitor's
+     * cookies. The encoded buffer passes through the app.core.request.json_output filter
+     * (ctx: struct, params) before anything is echoed. A plugin that must answer JSONP
+     * wraps it there, for a public route whose answer carries nothing per-visitor, and
+     * sends its own Content-Type.
      *
      * Both are applied ONLY while the headers can still change. Once output has begun
      * the status is fixed at 200, so a failure reported after that point reaches the
@@ -1130,10 +1136,6 @@ CLEAR_AND_REDIRECT_HTML;
 
         $struct = array_replace_recursive($default_struct, $struct);
         $struct['status'] = (bool) $struct['status'];
-
-        // Different header is required for ajax and jsonp
-        // see https://gist.github.com/cowboy/1200708
-        $callback = empty($_REQUEST['callback']) ? false : preg_replace('/[^\w\$]/si', '', $_REQUEST['callback']);
 
         $headers = empty($params['headers']) ? [] : $params['headers'];
         $http_code = empty($params['http_code']) ? 0 : (int) $params['http_code'];
@@ -1167,11 +1169,10 @@ CLEAR_AND_REDIRECT_HTML;
                 header($header_name . ': ' . $header_value);
             }
 
-            $app_env = Dj_App_Config::cfg('env'); // env specific conf?
-
-            // starts with prod
-            if (empty($app_env) || strcasecmp($app_env, 'live') == 0 || (strpos($app_env, 'prod') == 0)) { // debugger doesn't start when it's app/js content type
-                header( 'Content-Type: ' . ( $callback ? 'application/javascript' : 'application/json' ) . ';charset=UTF-8' );
+            // Only live gets the JSON Content-Type: with it, the debugger does not start a
+            // session on a dev box.
+            if (Dj_App_Env::isLive()) {
+                header('Content-Type: application/json;charset=UTF-8');
             }
         }
 
@@ -1181,7 +1182,14 @@ CLEAR_AND_REDIRECT_HTML;
             unset($struct['code']);
         }
 
-        echo ($callback ? $callback . '(' : '') . Dj_App_String_Util::jsonEncode($struct) . ($callback ? ')' : '');
+        $json_buff = Dj_App_String_Util::jsonEncode($struct);
+
+        $ctx = [];
+        $ctx['struct'] = $struct;
+        $ctx['params'] = $params;
+
+        $json_buff = Dj_App_Hooks::applyFilter('app.core.request.json_output', $json_buff, $ctx);
+        echo $json_buff;
 
         Dj_App::exit();
     }
