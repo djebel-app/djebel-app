@@ -69,7 +69,8 @@ class Dj_App_Options implements ArrayAccess, Countable {
                     continue;
                 }
 
-                $data[$section_key][$key] = $this->evaluateCondition($value);
+                $config_val = $this->evaluateCondition($value);
+                $data[$section_key][$key] = $config_val;
             }
         }
 
@@ -124,7 +125,9 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
         // Dispatch based on namespace
         if ($ns == 'env') {
-            return $this->evaluateEnvCondition($condition, $result);
+            $config_val = $this->evaluateEnvCondition($condition, $result);
+
+            return $config_val;
         }
 
         return '';
@@ -150,8 +153,9 @@ class Dj_App_Options implements ArrayAccess, Countable {
         // No =, check if env var has an enabled value (1, true, yes, on)
         if ($eq_pos === false) {
             $env_val = Dj_App_Env::getEnv($condition);
+            $config_val = Dj_App_Util::isEnabled($env_val) ? $result : '';
 
-            return Dj_App_Util::isEnabled($env_val) ? $result : '';
+            return $config_val;
         }
 
         // Check prev char for negation
@@ -165,16 +169,20 @@ class Dj_App_Options implements ArrayAccess, Countable {
 
         // Unset env var: != matches (not equal to anything), = doesn't
         if (empty($env_val)) {
-            return $negate ? $result : '';
+            $config_val = $negate ? $result : '';
+
+            return $config_val;
         }
 
         $matched = Dj_App_String_Util::matchesPattern($env_val, $expected);
 
         if ($negate) {
-            return $matched ? '' : $result;
+            $matched = !$matched;
         }
 
-        return $matched ? $result : '';
+        $config_val = $matched ? $result : '';
+
+        return $config_val;
     }
 
     /**
@@ -414,9 +422,7 @@ class Dj_App_Options implements ArrayAccess, Countable {
             $key = str_replace([';', '|'], ',', $key);
 
             // Now check if we have multiple keys (contains comma)
-            $has_comma = strpos($key, ',');
-
-            if ($has_comma !== false) {
+            if (strpos($key, ',') !== false) {
                 // Multiple keys - split them
                 $keys = explode(',', $key);
                 $keys_cnt = count($keys);
@@ -726,7 +732,9 @@ class Dj_App_Options implements ArrayAccess, Countable {
         }
 
         if (is_scalar($data)) {
-            return (string) $data;
+            $data_str = (string) $data;
+
+            return $data_str;
         }
 
         return '';
