@@ -828,7 +828,13 @@ public function loadFile($filename, $base_dir) {
         throw new Dj_App_Exception('Invalid file path');
     }
 
-    return file_get_contents($real_path);
+    $file_content = file_get_contents($real_path);
+
+    if ($file_content === false) {
+        throw new Dj_App_Exception('Failed to read file');
+    }
+
+    return $file_content;
 }
 
 // WRONG - Directory traversal vulnerability!
@@ -1340,7 +1346,9 @@ public function generatePostUrl($params) {
     }
 
     // Delegate to new method
-    return $this->generateContentUrl($params);
+    $content_url = $this->generateContentUrl($params);
+
+    return $content_url;
 }
 
 // Step 2: Update documentation
@@ -1377,7 +1385,10 @@ if (version_compare(PHP_VERSION, '7.4.0', '>=')) {
 // In core (temporary compatibility):
 public static function legacyMethod() {
     if (class_exists('Djebel_Plugin_NewLocation')) {
-        return Djebel_Plugin_NewLocation::getInstance()->newMethod();
+        $plugin_obj = Djebel_Plugin_NewLocation::getInstance();
+        $new_method_res = $plugin_obj->newMethod();
+
+        return $new_method_res;
     }
 
     trigger_error('Legacy method requires plugin djebel-new-location', E_USER_WARNING);
