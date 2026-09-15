@@ -1137,6 +1137,11 @@ CLEAR_AND_REDIRECT_HTML;
         $struct = array_replace_recursive($default_struct, $struct);
         $struct['status'] = (bool) $struct['status'];
 
+        // An empty PHP array encodes as [], so a client reading data as a map would get a list.
+        if (empty($struct['data'])) {
+            $struct['data'] = new stdClass();
+        }
+
         $headers = empty($params['headers']) ? [] : $params['headers'];
         $http_code = empty($params['http_code']) ? 0 : (int) $params['http_code'];
 

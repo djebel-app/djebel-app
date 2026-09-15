@@ -1080,6 +1080,38 @@ class Dj_App_Request_Test extends TestCase
         $this->assertEquals('value', $decoded['data']['secret']);
     }
 
+    /**
+     * data is always an object on the wire: a client that reads it as a map must not get []
+     * just because there was nothing to put in it.
+     */
+    public function testJsonSendsEmptyDataAsAnObject()
+    {
+        Dj_App_Hooks::addAction('app.exit', ['Dj_App_Request_Test', 'interceptAppExit']);
+        ob_start();
+
+        $buff = '';
+        $exit_msg = '';
+
+        try {
+            $res_obj = new Dj_App_Result();
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->json($res_obj);
+        } catch (Exception $e) {
+            $exit_msg = $e->getMessage();
+        } finally {
+            $buff = ob_get_clean();
+            $exit_listener_removed = Dj_App_Hooks::removeAction('app.exit', ['Dj_App_Request_Test', 'interceptAppExit']);
+        }
+
+        $this->assertEquals('dj_app_exit_intercepted', $exit_msg);
+        $this->assertNotEmpty($exit_listener_removed);
+
+        $decoded = json_decode($buff);
+
+        $this->assertInstanceOf(stdClass::class, $decoded->data);
+    }
+
     public function testIsOriginAllowedAcceptsTheSiteHostAndItsSubdomains()
     {
         $_SERVER['HTTPS'] = 'on';
