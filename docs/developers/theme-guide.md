@@ -44,11 +44,13 @@ Name the element by its role, never by an abbreviation:
 - ✅ `djebel-theme-clear-site-header`, `djebel-theme-clear-sidebar`, `djebel-theme-clear-nav`
 - ❌ `djebel-theme-clear-h`, `djebel-theme-clear-s1`
 
-## Private (`site`) themes
+## Official themes and everyone else's
 
-A site-specific, non-distributable theme inserts `site` the same way a private plugin does:
-dir `djebel-site-<name>`, `text_domain` / CSS `djebel-site-theme-<name>`. (See the public vs
-private section in [plugin-guide.md](plugin-guide.md).)
+The `djebel-` prefix is reserved for **official** themes, approved by the author of the
+framework; they live at https://github.com/djebel-app-themes/. Any other theme never takes a `djebel-` name — it carries its owner's prefix the
+same way a non-official plugin does: dir, `text_domain` and CSS prefix `<owner>-<name>`,
+with no `theme` in the name. (See the official plugins section in
+[plugin-guide.md](plugin-guide.md).)
 
 ## Theme Header
 

@@ -1107,8 +1107,8 @@ Tier 2  Global ns      djebel-plugin-<name>    text_domain, CSS/JS classes+ids, 
 Tier 3  Hooks          app.plugin.<name>.*     already under app.plugin. -> bare <name>
                                                 e.g. app.plugin.contact.*
 
-Private/site plugins insert `site-`:  djebel-site-<name>  /  djebel-site-plugin-<name>
-                                       e.g. djebel-site-dl / djebel-site-plugin-dl
+djebel- is ONLY for official plugins/themes approved by the framework's author. Every other
+one uses its OWNER's prefix, never the word plugin/theme:  <owner>-<name> at every tier, e.g. orbisius-dl
 Themes (same 2 tiers):                 djebel-<name>        dir, theme_uri, theme_id, data subdir
                                        djebel-theme-<name>  text_domain, CSS/JS, ids
 ```

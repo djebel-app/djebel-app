@@ -68,27 +68,33 @@ The `<descriptor>` names the element by its **role**, never by an abbreviation o
   `djebel-plugin-contact-message-textarea`
 - ❌ `djebel-plugin-contact-e1`, `djebel-plugin-contact-f2`, `djebel-plugin-contact-x`
 
-## Public vs Private (`site`) plugins
+## Official plugins and everyone else's
 
-Some plugins are **distributable** (public, shipped to other sites). Others are
-**site-specific / private** — built for one site, never distributed (e.g. an internal
-download counter). Mark a private plugin with a `site` segment; everything else is the same
-rule. The `site-` in the name **is** the declaration — no separate header field needed.
+The `djebel-` prefix is reserved for **official** plugins — the ones approved by the author
+of the framework. Every other plugin, whether it stays private to its owner's sites or is
+shared with other people, never takes a `djebel-` name: it carries its **owner's prefix**
+in the same place, through the same tiers. A `djebel-` name then always means "official".
 
-| Tier | Public | Private (`site`) |
-|------|--------|------------------|
-| repo-context | `djebel-<name>` | `djebel-site-<name>` |
-| global namespace | `djebel-plugin-<name>` | `djebel-site-plugin-<name>` |
+The official ones each live in their own GitHub organization:
+
+- Plugins — https://github.com/djebel-app-plugins/
+- Themes — https://github.com/djebel-app-themes/
+- Libs — https://github.com/djebel-app-libs/
+
+| Tier | Official | Everyone else |
+|------|----------|---------------|
+| repo-context | `djebel-<name>` | `<owner>-<name>` |
+| global namespace | `djebel-plugin-<name>` | `<owner>-<name>` |
 | hooks | `app.plugin.<name>.*` | `app.plugin.<name>.*` (same) |
 
-Example — a private download counter named `dl`: dir `djebel-site-dl`, `text_domain`
-`djebel-site-plugin-dl`, CSS `djebel-site-plugin-dl-*`, class `Djebel_Site_Plugin_Dl`. The
-`site-` makes it obvious in the dir listing, the markup, and the CSS that this one isn't a
-distributable.
+An owner-prefixed name never includes the word `plugin` or `theme`.
+
+Example — a download plugin named `dl`, owned by Orbisius: dir, `text_domain` and CSS
+prefix `orbisius-dl`, class `Orbisius_Dl`.
 
 ## Distribution — one plugin, one repo, many sites
 
-A **distributable** plugin (public, above) lives in its **own git repo** — never inside a
+A **distributable** plugin lives in its **own git repo** — never inside a
 site's repo, and never inside djebel-app itself. **djebel-app stays pristine: the core never
 gains feature code.** Each site that uses the plugin pulls it in as a **git submodule** under
 that site's plugin dir (`dj-content/system_plugins/<plugin>` for a system plugin,
@@ -104,8 +110,8 @@ plugin code is ever committed into the site's own repo.
   committing, or the commit is orphaned; and each change is **two commits** — one in the
   plugin repo (the fix), one in the site repo (the moved pointer). A site only sees the fix
   once its pointer is bumped — that's the feature: each site pins a known-good version.
-- A genuinely **site-specific** plugin (`djebel-site-<name>`) is the exception — nothing to
-  distribute, so it stays in that one site's repo.
+- A **private** plugin (`<owner>-<name>`) is the exception — nothing to distribute, so it
+  can stay in its site's repo.
 
 ## Plugin Header
 
@@ -215,6 +221,4 @@ The sibling plugins' **dirs** already conform to Tier 1 (`djebel-utm`, `djebel-s
 CSS, and option keys still use the short `djebel-<name>` instead of `djebel-plugin-<name>`.
 Migrate those later — do **not** rename them as a side effect of other work.
 
-`djebel-contact` is the reference implementation of the current convention. The private
-`djebel-site-dl` has the dir right (Tier 1); its `text_domain` (`djebel-download-counter`)
-and internal ids are the legacy bit — they would become `djebel-site-plugin-dl`.
+`djebel-contact` is the reference implementation of the current convention.
