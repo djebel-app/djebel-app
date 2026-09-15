@@ -1254,13 +1254,17 @@ CLEAR_AND_REDIRECT_HTML;
             return false;
         }
 
-        $is_subdomain = substr_compare($origin_host, $host, -$host_len, $host_len, true) === 0;
+        $is_subdomain = substr_compare($origin_host, $host, -$host_len, $host_len, true) == 0;
 
         return $is_subdomain;
     }
 
     /**
      * Sends secure CORS headers for cross-origin requests
+     *
+     * Vary: Origin goes out for a refused origin too: the answer depends on the Origin either
+     * way, and without it a cache hands one origin's answer to another. Anything else the
+     * response varies on joins that same Vary value through app.request.cors.headers.
      *
      * @see https://developer.mozilla.org/en/HTTP_access_control
      * @see https://fetch.spec.whatwg.org/#http-cors-protocol
@@ -1276,8 +1280,6 @@ CLEAR_AND_REDIRECT_HTML;
 
         // Allow from specific origin
         if (isset($_SERVER['HTTP_ORIGIN'])) {
-            // Vary goes out for a refused origin too: the answer depends on the Origin either
-            // way, and without it a cache hands one origin's answer to another.
             $headers = [
                 'Vary' => 'Origin',
                 'Access-Control-Allow-Headers' => 'X-Requested-With, Content-Type, Authorization',
@@ -1286,7 +1288,7 @@ CLEAR_AND_REDIRECT_HTML;
 
             $http_origin = $_SERVER['HTTP_ORIGIN'];
             $http_origin = strip_tags($http_origin);
-            $http_origin = trim($http_origin);
+            $http_origin = Dj_App_String_Util::trim($http_origin);
             $http_origin = Dj_App_Hooks::applyFilter('app.request.cors.origin', $http_origin);
             $host = $this->getSiteHost();
 
@@ -1327,11 +1329,9 @@ CLEAR_AND_REDIRECT_HTML;
         // Allow plugins to modify headers
         $headers = Dj_App_Hooks::applyFilter('app.request.cors.headers', $headers);
 
-        // Send headers. Vary is added to rather than replaced: the response may already vary
-        // on something else, and dropping that would let caches mix answers.
+        // Send headers
         foreach ($headers as $name => $value) {
-            $replace_header = strcasecmp($name, 'Vary') != 0;
-            header("$name: $value", $replace_header);
+            header("$name: $value");
         }
 
         // Exit for OPTIONS requests, no need to render the whole page. the browser just tests things.
