@@ -92,13 +92,13 @@ $enabled = Dj_App_Util::isEnabled($param);
 $disabled = Dj_App_Util::isDisabled($param);
 
 // Slash removal
-$clean = Dj_App_Util::removeSlash($path, Dj_App_Util::FLAG_BOTH);
+$rel_url = Dj_App_Util::removeSlash($rel_url, Dj_App_Util::FLAG_BOTH);
 
 // String trimming
-$trimmed = Dj_App_String_Util::trim($str);
+$title = Dj_App_String_Util::trim($title);
 
-// Path normalization
-$normalized = Dj_App_File_Util::normalizePath($path);
+// Slash normalization
+$scan_dir = Dj_App_File_Util::normalizePath($scan_dir);
 
 // HTML escaping (NEW - use these!)
 echo dj_esc($user_input);                    // Quick HTML escape
@@ -145,7 +145,8 @@ Every decision must be evaluated against these three pillars. **You MUST push ba
 
 ```php
 // CORRECT - Sanitized and escaped
-$title = Dj_App_String_Util::trim($_REQUEST['title']);
+$title = empty($_REQUEST['title']) ? '' : $_REQUEST['title'];
+$title = Dj_App_String_Util::trim($title);
 $title = Dj_App_String_Util::formatSlug($title);
 echo Dj_App_HTML::encodeEntities($title);
 
@@ -196,13 +197,14 @@ $content = file_get_contents($file); // Could be MBs!
 
 ```php
 // CORRECT - Clear, documented with intent and examples
-// Calculate relative directory path for URL structure preservation
-// Example: /path/to/scan/api/v2/file.md -> api/v2
+// Calculate the file's directory relative to the scan dir, to preserve the URL structure
+// Example: /var/www/scan/api/v2/file.md -> api/v2
 $file_dir = dirname($file);
 $file_dir_normalized = Dj_App_File_Util::normalizePath($file_dir);
 
 if (strpos($file_dir_normalized, $scan_dir_normalized) === 0) {
-    $rel_dir = substr($file_dir_normalized, strlen($scan_dir_normalized));
+    $scan_dir_len = strlen($scan_dir_normalized);
+    $rel_dir = substr($file_dir_normalized, $scan_dir_len);
     $rel_dir = Dj_App_Util::removeSlash($rel_dir, Dj_App_Util::FLAG_BOTH);
 }
 
@@ -385,12 +387,12 @@ This is a **production framework** running on live sites. Breaking changes break
 - **Type casting**: Always include space after cast operators
   ```php
   // CORRECT
-  $path = (string) $path;
+  $file = (string) $file;
   $count = (int) $count;
   $items = (array) $items;
 
   // WRONG
-  $path = (string)$path;
+  $file = (string)$file;
   $count = (int)$count;
   $items = (array)$items;
   ```
@@ -481,12 +483,13 @@ This is a **production framework** running on live sites. Breaking changes break
 - **NEVER stack functions**: Never nest multiple function calls on a single line - it makes debugging impossible
   ```php
   // CORRECT - Each step can be inspected during debugging
-  $title_text = substr($title_line, 1);
-  $title = ltrim($title_text);
-  $meta['title'] = Dj_App_String_Util::trim($title);
+  $title = substr($title_line, 1);
+  $title = Dj_App_String_Util::trim($title);
+  $meta['title'] = $title;
 
   // BETTER - Use framework method's second parameter
-  $meta['title'] = Dj_App_String_Util::trim($title_line, '#');
+  $title = Dj_App_String_Util::trim($title_line, '#');
+  $meta['title'] = $title;
 
   // WRONG - Impossible to debug, which function failed?
   $meta['title'] = Dj_App_String_Util::trim(ltrim(substr($title_line, 1)));
@@ -537,9 +540,11 @@ This is a **production framework** running on live sites. Breaking changes break
 
   // CORRECT - Inline the logic where it's used
   $nested_array = $value;
-  for ($i = count($parts) - 1; $i >= 0; $i--) {
-      $part_fmt = formatKey($parts[$i]);
-      $nested_array = [$part_fmt => $nested_array];
+  $parts_count = count($parts);
+
+  for ($i = $parts_count - 1; $i >= 0; $i--) {
+      $part_fmt = Dj_App_String_Util::formatKey($parts[$i]);
+      $nested_array = [ $part_fmt => $nested_array, ];
   }
   ```
   **Why**: Reduces function call overhead, makes code easier to follow, no jumping around
@@ -594,7 +599,8 @@ This is a **production framework** running on live sites. Breaking changes break
   `%%TAG%%` templates. Pass **bare** tag names as keys — both delimiter forms are matched,
   case-insensitively:
   ```php
-  $file = Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%.csv', ['YYYY' => '2026', 'MM' => '07']);
+  $tags = [ 'YYYY' => '2026', 'MM' => '07', ];
+  $csv_file = Dj_App_Util::replaceTags('data_{YYYY}-%%MM%%.csv', $tags);
   ```
 - **Boolean checks**: Use `Dj_App_Util::isDisabled()` and `Dj_App_Util::isEnabled()` for parameter validation
 - **Slash removal**: Use `Dj_App_Util::removeSlash()` with flags:
@@ -613,9 +619,12 @@ This is a **production framework** running on live sites. Breaking changes break
   function processData(&$data) { }
 
   // CORRECT - Explicit code without references
-  $result = $value;
+  $nested_array = $value;
+
   function processData($data) {
-      // ... process and return
+      $processed_data = $data;
+      // ... process $processed_data
+
       return $processed_data;
   }
   ```
@@ -624,9 +633,10 @@ This is a **production framework** running on live sites. Breaking changes break
 - **Use local variables for performance**: Store computed values in local variables to avoid repeated function calls
   ```php
   // CORRECT - Compute once, use many times
-  $count = count($parts);
-  for ($i = $count - 1; $i >= 0; $i--) {
-      // use $count
+  $parts_count = count($parts);
+
+  for ($i = $parts_count - 1; $i >= 0; $i--) {
+      // use $parts_count
   }
 
   // WRONG - Repeated computation
@@ -638,8 +648,9 @@ This is a **production framework** running on live sites. Breaking changes break
 - **Choose loops based on performance**: For loops with reverse iteration beat foreach with array_reverse()
   ```php
   // CORRECT - No memory allocation, direct index access
-  $count = count($parts);
-  for ($i = $count - 1; $i >= 0; $i--) {
+  $parts_count = count($parts);
+
+  for ($i = $parts_count - 1; $i >= 0; $i--) {
       $part = $parts[$i];
       // process
   }
@@ -682,17 +693,13 @@ This is a **production framework** running on live sites. Breaking changes break
 - **Inside-out array building**: Build nested arrays from the deepest level outward (no references needed)
   ```php
   // CORRECT - Inside-out building (no references)
-  private function buildNestedArray($parts, $value) {
-      $result = $value;
-      $count = count($parts);
+  $nested_array = $value;
+  $parts_count = count($parts);
 
-      // Build from inside out: wrap value in progressively deeper arrays
-      for ($i = $count - 1; $i >= 0; $i--) {
-          $key = $parts[$i];
-          $result = [$key => $result];
-      }
-
-      return $result;
+  // Build from inside out: wrap value in progressively deeper arrays
+  for ($i = $parts_count - 1; $i >= 0; $i--) {
+      $part = $parts[$i];
+      $nested_array = [ $part => $nested_array, ];
   }
 
   // WRONG - Using references to build nested structure
@@ -810,28 +817,30 @@ Never trust external data. Every input must be validated and sanitized before us
 ### File Path Validation (Prevent Directory Traversal)
 
 ```php
-// CORRECT - Validate and sanitize file paths
-public function loadFile($filename, $base_dir) {
-    // Sanitize filename - remove dangerous characters
-    $filename = basename($filename); // Removes any directory traversal attempts
-    $filename = str_replace(['..', '//', '\\'], '', $filename);
+// CORRECT - Keep only the file name, then prove the resolved file is inside the base dir
+public function loadFile($params = []) {
+    $filename = Dj_App_Util::getField('filename', $params);
+    $base_dir = Dj_App_Util::getField('base_dir', $params);
 
-    // Build full path
-    $full_path = $base_dir . '/' . $filename;
-    $full_path = Dj_App_File_Util::normalizePath($full_path);
+    // basename() drops any directory part: ../../etc/passwd becomes passwd
+    $filename = basename($filename);
+    $full_file = $base_dir . '/' . $filename;
 
-    // Verify the resolved path is still within base directory
-    $real_base = realpath($base_dir);
-    $real_path = realpath($full_path);
+    $real_base_dir = realpath($base_dir);
+    $real_file = realpath($full_file);
 
-    if ($real_path === false || strpos($real_path, $real_base) !== 0) {
-        throw new Dj_App_Exception('Invalid file path');
+    // The trailing slash stops /var/www/uploads-evil/x passing as inside /var/www/uploads
+    $base_dir_prefix = $real_base_dir . '/';
+
+    if (empty($real_file) || (strpos($real_file, $base_dir_prefix) !== 0)) {
+        throw new Dj_App_Exception('Invalid file', [ 'file' => $full_file, ]);
     }
 
-    $file_content = file_get_contents($real_path);
+    $file_content = file_get_contents($real_file);
 
+    // An empty file reads as '' - only false means the read failed
     if ($file_content === false) {
-        throw new Dj_App_Exception('Failed to read file');
+        throw new Dj_App_Exception('Failed to read file', [ 'file' => $real_file, ]);
     }
 
     return $file_content;
@@ -850,9 +859,12 @@ $req_obj = Dj_App_Request::getInstance();
 $title = $req_obj->get('title');  // No need to pass ''
 $title = Dj_App_String_Util::trim($title);
 
-// Validate length
-if (strlen($title) > 200) {
-    $title = substr($title, 0, 200);
+// Cap the length in CHARACTERS: a byte cut splits a multi-byte character and leaves invalid UTF-8
+$title_max_len = 200;
+$title_len = mb_strlen($title, 'UTF-8');
+
+if ($title_len > $title_max_len) {
+    $title = mb_substr($title, 0, $title_max_len, 'UTF-8');
 }
 
 // For slugs, use formatSlug which removes dangerous characters
@@ -863,7 +875,8 @@ $slug = Dj_App_String_Util::formatSlug($slug);
 echo Dj_App_HTML::encodeEntities($title);
 
 // ACCEPTABLE - Direct $_REQUEST with sanitization
-$title = Dj_App_String_Util::trim($_REQUEST['title']);
+$title = empty($_REQUEST['title']) ? '' : $_REQUEST['title'];
+$title = Dj_App_String_Util::trim($title);
 
 // WRONG - Direct use of user input
 echo $_REQUEST['title']; // XSS vulnerability!
@@ -873,14 +886,20 @@ echo $_REQUEST['title']; // XSS vulnerability!
 
 ```php
 // CORRECT - Validate numeric input with ranges
-$page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
-$page = max(1, min($page, 999999)); // Clamp to reasonable range
+// An int default makes getField() return an int
+$page_max = 999999;
+$page = Dj_App_Util::getField('page', $_REQUEST, 1);
+$page = min($page, $page_max); // Clamp to a reasonable range
+$page = max($page, 1);
 
-$per_page = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 10;
-$per_page = max(1, min($per_page, 100)); // Prevent excessive queries
+$per_page_max = 100;
+$per_page = Dj_App_Util::getField('per_page', $_REQUEST, 10);
+$per_page = min($per_page, $per_page_max); // Prevent excessive queries
+$per_page = max($per_page, 1);
 
 // For IDs, ensure positive integer
-$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+$id = Dj_App_Util::getField('id', $_REQUEST, 0);
+
 if ($id <= 0) {
     throw new Dj_App_Exception('Invalid ID');
 }
@@ -900,15 +919,17 @@ if ((strpos($url, 'http://') !== 0) && (strpos($url, 'https://') !== 0)) {
 }
 
 // Use filter_var for comprehensive validation
-if (!filter_var($url, FILTER_VALIDATE_URL)) {
+$valid_url = filter_var($url, FILTER_VALIDATE_URL);
+
+if ($valid_url === false) {
     throw new Dj_App_Exception('Invalid URL format');
 }
 
 // For redirects, validate domain to prevent open redirect vulnerabilities
-$parsed = parse_url($url);
-$allowed_domains = ['example.com', 'www.example.com'];
+$url_host = parse_url($url, PHP_URL_HOST);
+$allowed_domains = [ 'example.com', 'www.example.com', ];
 
-if (!in_array($parsed['host'], $allowed_domains)) {
+if (!in_array($url_host, $allowed_domains)) {
     throw new Dj_App_Exception('Redirect to external domain not allowed');
 }
 ```
@@ -925,17 +946,26 @@ if (!is_array($tags)) {
     $tags = [];
 }
 
-// Validate and sanitize each element
-$tags = array_map(function($tag) {
+// Limit array size to prevent DoS - BEFORE any per-element work
+$tags_max_count = 50;
+$tags = array_slice($tags, 0, $tags_max_count);
+$clean_tags = [];
+
+// Validate and sanitize each element; empty and nested values are dropped
+foreach ($tags as $tag) {
+    if (empty($tag) || !is_scalar($tag)) {
+        continue;
+    }
+
     $tag = Dj_App_String_Util::trim($tag);
-    return Dj_App_String_Util::formatSlug($tag);
-}, $tags);
+    $tag = Dj_App_String_Util::formatSlug($tag);
 
-// Remove empty values
-$tags = array_filter($tags);
+    if (empty($tag)) {
+        continue;
+    }
 
-// Limit array size to prevent DoS
-$tags = array_slice($tags, 0, 50);
+    $clean_tags[] = $tag;
+}
 ```
 
 ### Boolean Input Validation
@@ -943,11 +973,11 @@ $tags = array_slice($tags, 0, 50);
 ```php
 // CORRECT - Use framework methods
 $req_obj = Dj_App_Request::getInstance();
-$enabled = $req_obj->get('enabled', 0);
-$enabled = Dj_App_Util::isEnabled($enabled);
+$inp_enabled = $req_obj->get('enabled');
+$is_enabled = Dj_App_Util::isEnabled($inp_enabled);
 
 // Or for disabled check
-$disabled = Dj_App_Util::isDisabled($enabled_param);
+$is_disabled = Dj_App_Util::isDisabled($inp_enabled);
 ```
 
 ---
@@ -1005,13 +1035,13 @@ $content_prefix = 'blog';  // GOOD
 $cp = 'blog';              // BAD
 
 // Use snake_case for local variables (PHP convention)
-$file_path = '/path/to/file.md';
+$md_file = '/var/www/data/file.md';
 $scan_dir_normalized = Dj_App_File_Util::normalizePath($scan_dir);
 
 // Arrays should indicate plurality
 $files = glob($pattern);
-$tags = ['php', 'framework'];
-$options = ['cache' => true];
+$tags = [ 'php', 'framework', ];
+$options = [ 'cache' => true, ];
 
 // Boolean variables should be prefixed with is/has/can
 $is_enabled = true;
@@ -1097,17 +1127,17 @@ Full reference: `docs/developers/plugin-guide.md` and `docs/developers/theme-gui
 // CORRECT - Specific exception handling
 public function loadMarkdownFile($file) {
     if (!file_exists($file)) {
-        throw new Dj_App_Exception('File not found', ['file' => $file]);
+        throw new Dj_App_Exception('File not found', [ 'file' => $file, ]);
     }
 
     if (!is_readable($file)) {
-        throw new Dj_App_Exception('File not readable', ['file' => $file]);
+        throw new Dj_App_Exception('File not readable', [ 'file' => $file, ]);
     }
 
     $content = file_get_contents($file);
 
     if ($content === false) {
-        throw new Dj_App_Exception('Failed to read file', ['file' => $file]);
+        throw new Dj_App_Exception('Failed to read file', [ 'file' => $file, ]);
     }
 
     return $content;
@@ -1118,7 +1148,8 @@ try {
     $content = $this->loadMarkdownFile($file);
 } catch (Dj_App_Exception $e) {
     // Handle gracefully - don't expose file paths to user
-    error_log($e->getMessage());
+    $error_msg = $e->getMessage();
+    error_log($error_msg);
     return "<!--\nFailed to load content\n-->";
 }
 ```
@@ -1128,41 +1159,42 @@ try {
 ```php
 // CORRECT - Use Result objects for complex returns
 public function parseFrontMatter($file) {
+    // meta is always an array, so a failed parse needs no fixing up afterwards
     $res_obj = new Dj_App_Result();
+    $res_obj->meta = [];
 
     try {
-        // Attempt processing
         $content = file_get_contents($file);
-        $meta = $this->extractMetadata($content);
 
-        // Success
+        if ($content === false) {
+            throw new Dj_App_Exception('Failed to read file', [ 'file' => $file, ]);
+        }
+
+        $meta = $this->extractMetaData($content);
+
         $res_obj->meta = $meta;
         $res_obj->content = $content;
         $res_obj->status(true);
-
     } catch (Exception $e) {
         // Controlled failure
-        $res_obj->msg = $e->getMessage();
+        $error_msg = $e->getMessage();
+        $res_obj->msg = $error_msg;
         $res_obj->status(false);
-    }
-
-    // Ensure meta is always an array
-    if (!isset($res_obj->meta) || !is_array($res_obj->meta)) {
-        $res_obj->meta = [];
     }
 
     return $res_obj;
 }
 
 // Usage
-$result = $this->parseFrontMatter($file);
+$res_obj = $this->parseFrontMatter($file);
 
-if ($result->isError()) {
-    error_log($result->msg);
+if ($res_obj->isError()) {
+    error_log($res_obj->msg);
+
     return [];
 }
 
-$metadata = $result->meta;
+$meta_data = $res_obj->meta;
 ```
 
 ### Error Messages - User vs Developer
@@ -1172,14 +1204,15 @@ $metadata = $result->meta;
 throw new Exception("Database query failed: SELECT * FROM users WHERE id = 123");
 
 // CORRECT - Generic message for user, detailed log for developer
-error_log("Database error: " . $db->getError() . " Query: " . $query);
+$db_error = $db->getError();
+error_log("Database error: $db_error Query: $query");
 throw new Dj_App_Exception('Failed to retrieve data');
 
 // CORRECT - Provide context without sensitive data
 throw new Dj_App_Exception('Configuration error', [
     'plugin' => 'djebel-static-content',
     'setting' => 'cache_dir',
-    'issue' => 'directory not writable'
+    'issue' => 'directory not writable',
 ]);
 ```
 
@@ -1220,7 +1253,8 @@ $file = $_GET['file'];
 include('/uploads/' . $file); // ../../../etc/passwd
 
 // CORRECT
-$file = basename($_GET['file']);
+$file = Dj_App_Util::getField('file', $_REQUEST);
+$file = basename($file);
 // + validate it's in allowed directory
 ```
 
@@ -1249,8 +1283,10 @@ foreach ($files as $file) {
 
 // CORRECT
 $config = null;
+
 if (file_exists($config_file)) {
-    $config = json_decode(file_get_contents($config_file));
+    $config_json = file_get_contents($config_file);
+    $config = json_decode($config_json);
 }
 
 foreach ($files as $file) {
@@ -1341,7 +1377,9 @@ When removing or changing functionality (AFTER user explicitly approves):
  */
 public function generatePostUrl($params) {
     // Log deprecation warning in debug mode
-    if (defined('DJ_DEBUG') && DJ_DEBUG) {
+    $app_debug = Dj_App_Config::cfg('app.debug', false);
+
+    if (Dj_App_Util::isEnabled($app_debug)) {
         trigger_error('generatePostUrl() is deprecated, use generateContentUrl()', E_USER_DEPRECATED);
     }
 
@@ -1359,12 +1397,12 @@ public function generatePostUrl($params) {
 
 ```php
 // Check framework version before using new features
-if (version_compare(DJ_APP_VERSION, '2.0.0', '>=')) {
+if (version_compare(Dj_App_Util::VERSION, '2.0.0', '>=')) {
     // Use new API
-    $result = Dj_App_Util::newMethod();
+    $res_obj = Dj_App_Util::newMethod();
 } else {
     // Fallback for older versions
-    $result = Dj_App_Util::oldMethod();
+    $res_obj = Dj_App_Util::oldMethod();
 }
 
 // Check PHP version
@@ -1386,12 +1424,13 @@ if (version_compare(PHP_VERSION, '7.4.0', '>=')) {
 public static function legacyMethod() {
     if (class_exists('Djebel_Plugin_NewLocation')) {
         $plugin_obj = Djebel_Plugin_NewLocation::getInstance();
-        $new_method_res = $plugin_obj->newMethod();
+        $res_obj = $plugin_obj->newMethod();
 
-        return $new_method_res;
+        return $res_obj;
     }
 
     trigger_error('Legacy method requires plugin djebel-new-location', E_USER_WARNING);
+
     return false;
 }
 ```
@@ -1423,8 +1462,11 @@ error_log('[Djebel Static Content] Failed to read file: ' . $file . ' - ' . $err
 error_log('[Djebel Markdown] Parse error in file: ' . $file . ' at line: ' . $line);
 
 // For debug mode, provide more detail
-if (defined('DJ_DEBUG') && DJ_DEBUG) {
-    error_log('[DEBUG] Cache miss for key: ' . $cache_key . ' params: ' . print_r($params, true));
+$app_debug = Dj_App_Config::cfg('app.debug', false);
+
+if (Dj_App_Util::isEnabled($app_debug)) {
+    $params_dump = print_r($params, true);
+    error_log('[DEBUG] Cache miss for key: ' . $cache_key . ' params: ' . $params_dump);
 }
 ```
 
@@ -1433,13 +1475,13 @@ if (defined('DJ_DEBUG') && DJ_DEBUG) {
 ```php
 // CORRECT - Break complex operations into steps
 $content = Dj_App_String_Util::trim($raw_content);
-$meta = $this->extractMetadata($content);
+$meta = $this->extractMetaData($content);
 $html = $this->convertMarkdown($content);
 
 // Each step can be inspected during debugging
 
 // WRONG - Hard to debug single complex line
-$html = $this->convertMarkdown($this->extractMetadata(Dj_App_String_Util::trim($raw_content)));
+$html = $this->convertMarkdown($this->extractMetaData(Dj_App_String_Util::trim($raw_content)));
 ```
 
 ---
@@ -1490,7 +1532,7 @@ Dj_App_Hooks::addFilter('some.filter', [$obj, 'filterMethod']);
 // 4. Class definition
 class Djebel_Plugin_Name {
     // Constants first
-    public const STATUS_ACTIVE = 'active';
+    const STATUS_ACTIVE = 'active';
 
     // Private properties
     private $property = '';
@@ -1504,9 +1546,11 @@ class Djebel_Plugin_Name {
     // Singleton at end
     public static function getInstance() {
         static $instance = null;
+
         if (is_null($instance)) {
             $instance = new static();
         }
+
         return $instance;
     }
 }
@@ -1532,7 +1576,11 @@ $url_params['hash_id'] = $hash_id;
 $url_params['content_id'] = $content_id;
 
 // Filter URL params before generation
-$ctx = ['content_rec' => $content_rec, 'scan_dir' => $scan_dir];
+$ctx = [
+    'content_rec' => $content_rec,
+    'scan_dir' => $scan_dir,
+];
+
 $url_params = Dj_App_Hooks::applyFilter('app.plugin.static_content.url_params', $url_params, $ctx);
 ```
 
@@ -1542,8 +1590,9 @@ Build complex outputs (like URLs) using arrays and filter hooks:
 
 ```php
 // Build URL parts array
+$base_url = $req_obj->getWebPath();
 $url_parts = [];
-$url_parts[] = $req_obj->getWebPath();
+$url_parts[] = $base_url;
 
 if (!empty($content_prefix)) {
     $url_parts[] = $content_prefix;
@@ -1552,7 +1601,7 @@ if (!empty($content_prefix)) {
 $url_parts[] = $full_slug;
 
 // Filter hook for customization
-$ctx = ['data' => $data];
+$ctx = [ 'data' => $data, ];
 $url_parts = Dj_App_Hooks::applyFilter('app.plugin.static_content.url_parts', $url_parts, $ctx);
 
 // Join and normalize
@@ -1651,19 +1700,17 @@ When a single callback is registered for multiple hooks and needs to behave diff
 ```php
 class Djebel_Plugin_Example {
     public function init() {
-        $obj = $this;
-
-        // Register the same callback for multiple hooks
-        Dj_App_Hooks::addAction('app.plugin.static_content.post_loaded', [ $obj, 'processContent', ]);
-        Dj_App_Hooks::addAction('app.plugin.static_content.page_loaded', [ $obj, 'processContent', ]);
-        Dj_App_Hooks::addFilter('app.plugins.markdown.convert_markdown', [ $obj, 'processContent', ]);
+        // Register the same callback for multiple filters - a filter listener takes ($cur_val, $ctx)
+        Dj_App_Hooks::addFilter('app.plugin.example.post_content', [$this, 'processContent']);
+        Dj_App_Hooks::addFilter('app.plugin.example.page_content', [$this, 'processContent']);
+        Dj_App_Hooks::addFilter('app.plugins.markdown.convert_markdown', [$this, 'processContent']);
     }
 
-    public function processContent($content, $params = [], $event = '') {
+    public function processContent($content, $ctx = []) {
         // Check which hook triggered this callback
-        if (Dj_App_Hooks::currentAction('app.plugin.static_content.post_loaded')) {
+        if (Dj_App_Hooks::currentFilter('app.plugin.example.post_content')) {
             // Special processing for posts
-            $content = $this->addPostMetadata($content);
+            $content = $this->addPostMetaData($content);
         } elseif (Dj_App_Hooks::currentFilter('app.plugins.markdown.convert_markdown')) {
             // Special processing for markdown filter
             $content = $this->enhanceMarkdown($content);
@@ -1679,7 +1726,7 @@ class Djebel_Plugin_Example {
 Track which hooks are being executed:
 
 ```php
-public function logHookExecution($data, $params = [], $event = '') {
+public function logHookExecution($data, $ctx = []) {
     // Get the current filter name
     $current_filter = Dj_App_Hooks::currentFilter();
 
@@ -1696,7 +1743,7 @@ public function logHookExecution($data, $params = [], $event = '') {
 Prevent recursive hook execution:
 
 ```php
-public function processData($data, $params = [], $event = '') {
+public function processData($data, $ctx = []) {
     // Prevent infinite recursion
     if (Dj_App_Hooks::currentFilter('app.plugin.example.process_data')) {
         // Already processing this hook - return immediately
@@ -1704,7 +1751,7 @@ public function processData($data, $params = [], $event = '') {
     }
 
     // Safe to apply the filter
-    $data = Dj_App_Hooks::applyFilter('app.plugin.example.process_data', $data, $params);
+    $data = Dj_App_Hooks::applyFilter('app.plugin.example.process_data', $data, $ctx);
 
     return $data;
 }
@@ -1760,7 +1807,7 @@ The call stack supplies the stack a single string cannot.
 ```php
 // Optional: Append file's relative directory to content_prefix in URL (content_prefix_dir=1)
 // This allows preserving directory structure from markdown files in the final URLs
-$content_prefix_dir_param = isset($params['content_prefix_dir']) ? $params['content_prefix_dir'] : '';
+$content_prefix_dir_param = Dj_App_Util::getField('content_prefix_dir', $params);
 $content_prefix_dir = Dj_App_Util::isEnabled($content_prefix_dir_param);
 
 if ($content_prefix_dir) {
@@ -1774,7 +1821,7 @@ Implement cascading defaults: shortcode params → settings → hardcoded defaul
 
 ```php
 // Get content_prefix (shortcode > settings > content_id default)
-$content_prefix = !empty($data['content_prefix']) ? $data['content_prefix'] : '';
+$content_prefix = Dj_App_Util::getField('content_prefix', $data);
 
 if (empty($content_prefix)) {
     if (!empty($data['content_id'])) {
@@ -1804,6 +1851,8 @@ When creating new methods OR updating existing methods, always add tests that co
 ```php
 // Example: Testing a new URL generation method
 public function testGenerateContentUrl() {
+    $plugin_obj = Djebel_Plugin_Static_Content::getInstance();
+
     // Test most common case: basic URL with content_prefix
     $params = [
         'slug' => 'my-post',
@@ -1812,28 +1861,29 @@ public function testGenerateContentUrl() {
         'content_prefix' => 'blog',
         'include_content_prefix' => true,
     ];
-    $url = $this->generateContentUrl($params);
+
+    $url = $plugin_obj->generateContentUrl($params);
     $this->assertEquals('/blog/my-post-abc123', $url);
 
     // Test without content_prefix
     $params['include_content_prefix'] = false;
-    $url = $this->generateContentUrl($params);
+    $url = $plugin_obj->generateContentUrl($params);
     $this->assertEquals('/my-post-abc123', $url);
 
     // Test with relative directory (optional feature)
     $params['include_content_prefix'] = true;
     $params['rel_dir'] = 'api/v2';
-    $url = $this->generateContentUrl($params);
+    $url = $plugin_obj->generateContentUrl($params);
     $this->assertEquals('/blog/api/v2/my-post-abc123', $url);
 
     // Test edge case: empty slug
     $params['slug'] = '';
-    $url = $this->generateContentUrl($params);
+    $url = $plugin_obj->generateContentUrl($params);
     $this->assertEquals('/blog/api/v2/-abc123', $url);
 
     // Test edge case: slug already contains hash_id
     $params['slug'] = 'my-post-abc123';
-    $url = $this->generateContentUrl($params);
+    $url = $plugin_obj->generateContentUrl($params);
     $this->assertEquals('/blog/api/v2/my-post-abc123', $url); // should not duplicate
 }
 ```
@@ -2007,7 +2057,7 @@ Use `Dj_App_Request` singleton for request data:
 
 ```php
 $req_obj = Dj_App_Request::getInstance();
-$web_path = $req_obj->getWebPath();
+$base_url = $req_obj->getWebPath();
 $clean_url = $req_obj->getCleanRequestUrl();
 $param_value = $req_obj->get('param_key', 'default');
 ```
