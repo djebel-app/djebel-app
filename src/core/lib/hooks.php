@@ -339,6 +339,7 @@ class Dj_App_Hooks {
      *   - 'type' => Dj_App_Hooks::ACTION_TYPE_NORMAL (default) | Dj_App_Hooks::ACTION_TYPE_DEFERRED
      *     DEFERRED also records the callback in $deferred_actions so doAction()
      *     skips it during normal execution and replays it on app/shutdown.
+     * @return void Registering cannot fail once the input passes; invalid input throws.
      * @throws Exception For invalid hook names or callbacks
      */
     public static function addAction($hook_name, $callback, $priority = Dj_App_Hooks::DEFAULT_PRIORITY, $opts = []) {
@@ -774,6 +775,7 @@ class Dj_App_Hooks {
      * @param string|array $hook_name Single hook name or array of hook names
      * @param callable|string $callback Function to execute or predefined return value
      * @param int $priority Execution priority (default: 20)
+     * @return void Registering cannot fail once the input passes; invalid input throws.
      * @throws Dj_App_Exception For invalid hook names or callbacks
      */
     public static function addFilter($hook_name, $callback, $priority = Dj_App_Hooks::DEFAULT_PRIORITY) {
