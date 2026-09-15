@@ -1079,4 +1079,149 @@ class Dj_App_Request_Test extends TestCase
 
         $this->assertEquals('value', $decoded['data']['secret']);
     }
+
+    public function testIsOriginAllowedAcceptsTheSiteHostAndItsSubdomains()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $req_obj = Dj_App_Request::getInstance();
+
+        $allowed_origins = [
+            'https://example.com',
+            'https://www.example.com',
+            'https://api.shop.example.com',
+            'https://example.com:8443',
+            'https://sub.example.com:8443',
+            'https://EXAMPLE.com',
+        ];
+
+        foreach ($allowed_origins as $origin) {
+            $origin_params = [ 'origin' => $origin, 'host' => 'example.com', ];
+            $is_allowed = $req_obj->isOriginAllowed($origin_params);
+
+            $this->assertTrue($is_allowed, "Origin should be allowed: $origin");
+        }
+    }
+
+    /**
+     * Each origin carries the site host somewhere in the string without BEING the site or one
+     * of its subdomains, so only a check on the real host part can refuse all of them.
+     */
+    public function testIsOriginAllowedRefusesLookalikeOrigins()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $req_obj = Dj_App_Request::getInstance();
+
+        $refused_origins = [
+            'https://evilexample.com',
+            'https://example.com.evil.net',
+            'https://example.com@evil.com',
+            'https://evil.com/.example.com',
+            'https://evil.com?.example.com',
+            'https://xample.com',
+            'https://example.co',
+            'null',
+            '',
+        ];
+
+        foreach ($refused_origins as $origin) {
+            $origin_params = [ 'origin' => $origin, 'host' => 'example.com', ];
+            $is_allowed = $req_obj->isOriginAllowed($origin_params);
+
+            $this->assertFalse($is_allowed, "Origin should be refused: $origin");
+        }
+    }
+
+    /**
+     * A page served over plain http can be rewritten in transit, so it must never read what an
+     * https site answers.
+     */
+    public function testIsOriginAllowedRequiresTheSchemeOfTheRequest()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        $_SERVER['HTTPS'] = 'on';
+
+        $http_origin_params = [ 'origin' => 'http://example.com', 'host' => 'example.com', ];
+        $http_on_https = $req_obj->isOriginAllowed($http_origin_params);
+
+        $this->assertFalse($http_on_https, 'an http origin is refused by an https site');
+
+        $_SERVER['HTTPS'] = '';
+
+        $https_origin_params = [ 'origin' => 'https://example.com', 'host' => 'example.com', ];
+        $https_on_http = $req_obj->isOriginAllowed($https_origin_params);
+
+        $this->assertFalse($https_on_http, 'an https origin is refused by an http site');
+
+        $http_on_http = $req_obj->isOriginAllowed($http_origin_params);
+
+        $this->assertTrue($http_on_http, 'an http origin is allowed by an http site');
+    }
+
+    public function testIsOriginAllowedRefusesWhenThereIsNoHost()
+    {
+        $_SERVER['HTTPS'] = 'on';
+        $req_obj = Dj_App_Request::getInstance();
+
+        $origin_params = [ 'origin' => 'https://example.com', 'host' => '', ];
+        $is_allowed = $req_obj->isOriginAllowed($origin_params);
+
+        $this->assertFalse($is_allowed);
+    }
+
+    /**
+     * Headers sendCORS() handed to its filter during the current test.
+     * @var array
+     */
+    private static $captured_cors_headers = [];
+
+    public static function captureCorsHeaders($headers)
+    {
+        Dj_App_Request_Test::$captured_cors_headers = $headers;
+
+        return $headers;
+    }
+
+    /**
+     * A refused origin must not be told anything a browser would act on, and every answer that
+     * depends on the Origin says so, or a cache serves one origin's answer to another.
+     */
+    public function testSendCorsAnswersOnlyAnAllowedOrigin()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+        $site_host = $req_obj->getSiteHost();
+
+        $this->assertNotEmpty($site_host, 'the suite request must have a site host');
+
+        Dj_App_Hooks::addFilter('app.request.cors.headers', ['Dj_App_Request_Test', 'captureCorsHeaders']);
+
+        try {
+            $_SERVER['HTTPS'] = '';
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+
+            $allowed_origin = 'http://' . $site_host;
+            $_SERVER['HTTP_ORIGIN'] = $allowed_origin;
+            Dj_App_Request_Test::$captured_cors_headers = [];
+            $req_obj->sendCORS();
+            $allowed_headers = Dj_App_Request_Test::$captured_cors_headers;
+
+            $this->assertEquals($allowed_origin, $allowed_headers['Access-Control-Allow-Origin']);
+            $this->assertEquals('true', $allowed_headers['Access-Control-Allow-Credentials']);
+            $this->assertEquals('Origin', $allowed_headers['Vary']);
+
+            $refused_origin = 'http://evil' . $site_host;
+            $_SERVER['HTTP_ORIGIN'] = $refused_origin;
+            Dj_App_Request_Test::$captured_cors_headers = [];
+            $req_obj->sendCORS();
+            $refused_headers = Dj_App_Request_Test::$captured_cors_headers;
+
+            $this->assertArrayNotHasKey('Access-Control-Allow-Origin', $refused_headers);
+            $this->assertArrayNotHasKey('Access-Control-Allow-Credentials', $refused_headers);
+            $this->assertEquals('Origin', $refused_headers['Vary']);
+        } finally {
+            $filter_removed = Dj_App_Hooks::removeFilter('app.request.cors.headers', ['Dj_App_Request_Test', 'captureCorsHeaders']);
+        }
+
+        $this->assertTrue($filter_removed);
+    }
 }

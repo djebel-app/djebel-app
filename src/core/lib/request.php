@@ -1195,12 +1195,77 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
+     * Whether a page at the given origin may read this site's answers: the origin must use the
+     * scheme of the current request, and its host must be the site host or a subdomain of it.
+     *
+     * The host is compared on the origin's parsed host, never on the raw string, so an origin
+     * that only contains the site host — evilexample.com, example.com.evil.net,
+     * example.com@evil.com — is refused. A plain http page can be rewritten in transit, so it
+     * never reads what an https site answers.
+     *
+     * $req_obj->isOriginAllowed([ 'origin' => 'https://www.example.com', 'host' => 'example.com', ]);
+     * @param array $params origin (default: the request's Origin header), host (default: the site host)
+     * @return bool
+     */
+    public function isOriginAllowed($params = [])
+    {
+        if (isset($params['origin'])) {
+            $origin = $params['origin'];
+        } else {
+            $origin = empty($_SERVER['HTTP_ORIGIN']) ? '' : $_SERVER['HTTP_ORIGIN'];
+        }
+
+        if (empty($origin)) {
+            return false;
+        }
+
+        // A wrong scheme is settled on a few bytes, before the site host is resolved or the
+        // origin is parsed.
+        $scheme_prefix = $this->isHttps() ? 'https://' : 'http://';
+        $scheme_prefix_len = strlen($scheme_prefix);
+
+        if (strncasecmp($origin, $scheme_prefix, $scheme_prefix_len) != 0) {
+            return false;
+        }
+
+        $host = isset($params['host']) ? $params['host'] : $this->getSiteHost();
+
+        if (empty($host)) {
+            return false;
+        }
+
+        $origin_host = parse_url($origin, PHP_URL_HOST);
+
+        if (empty($origin_host)) {
+            return false;
+        }
+
+        if (strcasecmp($origin_host, $host) == 0) {
+            return true;
+        }
+
+        // A subdomain ends with the site host AND has a dot right before it — without the dot,
+        // evilexample.com would pass as a subdomain of example.com. The byte check runs first
+        // because it rejects most lookalikes without comparing the whole host.
+        $host_len = strlen($host);
+        $dot_pos = strlen($origin_host) - $host_len - 1;
+
+        if ($dot_pos < 1 || $origin_host[$dot_pos] != '.') {
+            return false;
+        }
+
+        $is_subdomain = substr_compare($origin_host, $host, -$host_len, $host_len, true) === 0;
+
+        return $is_subdomain;
+    }
+
+    /**
      * Sends secure CORS headers for cross-origin requests
-     * 
+     *
      * @see https://developer.mozilla.org/en/HTTP_access_control
      * @see https://fetch.spec.whatwg.org/#http-cors-protocol
      */
-    public function sendCORS() 
+    public function sendCORS()
     {
         if (headers_sent()) {
             return;
@@ -1211,8 +1276,10 @@ CLEAR_AND_REDIRECT_HTML;
 
         // Allow from specific origin
         if (isset($_SERVER['HTTP_ORIGIN'])) {
+            // Vary goes out for a refused origin too: the answer depends on the Origin either
+            // way, and without it a cache hands one origin's answer to another.
             $headers = [
-                'Access-Control-Allow-Credentials' => 'true',
+                'Vary' => 'Origin',
                 'Access-Control-Allow-Headers' => 'X-Requested-With, Content-Type, Authorization',
                 'Access-Control-Max-Age' => '86400', // cache for 1 day
             ];
@@ -1226,12 +1293,16 @@ CLEAR_AND_REDIRECT_HTML;
             $ctx['host'] = $host;
             $ctx['http_origin'] = $http_origin;
 
-            $allow_origin = !empty($http_origin) && substr($http_origin, -strlen($host)) == $host;
+            $origin_params = [];
+            $origin_params['origin'] = $http_origin;
+            $origin_params['host'] = $host;
+
+            $allow_origin = $this->isOriginAllowed($origin_params);
             $allow_origin = Dj_App_Hooks::applyFilter('app.request.cors.allow_origin', $allow_origin, $ctx);
 
-            // check if the origin ends with the host, then allow it
             if ($allow_origin) {
                 $headers['Access-Control-Allow-Origin'] = $http_origin;
+                $headers['Access-Control-Allow-Credentials'] = 'true';
             }
         }
 
@@ -1256,9 +1327,11 @@ CLEAR_AND_REDIRECT_HTML;
         // Allow plugins to modify headers
         $headers = Dj_App_Hooks::applyFilter('app.request.cors.headers', $headers);
 
-        // Send headers
+        // Send headers. Vary is added to rather than replaced: the response may already vary
+        // on something else, and dropping that would let caches mix answers.
         foreach ($headers as $name => $value) {
-            header("$name: $value");
+            $replace_header = strcasecmp($name, 'Vary') != 0;
+            header("$name: $value", $replace_header);
         }
 
         // Exit for OPTIONS requests, no need to render the whole page. the browser just tests things.
