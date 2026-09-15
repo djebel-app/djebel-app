@@ -525,7 +525,9 @@ public function __toString() {
     }
 
     if (is_scalar($this->data)) {
-        return (string) $this->data;
+        $data_str = (string) $this->data;
+
+        return $data_str;
     }
 
     return '';
