@@ -177,7 +177,13 @@ echo $_REQUEST['title']; // XSS vulnerability!
 ```php
 // CORRECT - Small buffer, only read what's needed
 $buffer_size = 512; // Frontmatter is typically < 512 bytes
-$content = Dj_App_File_Util::readPartially($file, $buffer_size);
+$read_res_obj = Dj_App_File_Util::readPartially($file, $buffer_size);
+
+if ($read_res_obj->isError()) {
+    return $read_res_obj;
+}
+
+$content = $read_res_obj->output;
 
 // WRONG - Reading entire file when only header is needed
 $content = file_get_contents($file); // Could be MBs!
@@ -800,7 +806,13 @@ This is a **production framework** running on live sites. Breaking changes break
   ```php
   // CORRECT - Read only what we need (frontmatter is typically in first 512 bytes)
   $buffer_size = 512;
-  $content = Dj_App_File_Util::readPartially($file, $buffer_size);
+  $read_res_obj = Dj_App_File_Util::readPartially($file, $buffer_size);
+
+  if ($read_res_obj->isError()) {
+      return $read_res_obj;
+  }
+
+  $content = $read_res_obj->output;
 
   // WRONG - Reading entire file when we only need the header
   $content = file_get_contents($file); // Could be MBs of data
@@ -836,12 +848,13 @@ public function loadFile($params = []) {
         throw new Dj_App_Exception('Invalid file', [ 'file' => $full_file, ]);
     }
 
-    $file_content = file_get_contents($real_file);
+    $read_res_obj = Dj_App_File_Util::read($real_file);
 
-    // An empty file reads as '' - only false means the read failed
-    if ($file_content === false) {
+    if ($read_res_obj->isError()) {
         throw new Dj_App_Exception('Failed to read file', [ 'file' => $real_file, ]);
     }
+
+    $file_content = $read_res_obj->output;
 
     return $file_content;
 }
@@ -1126,19 +1139,13 @@ Full reference: `docs/developers/plugin-guide.md` and `docs/developers/theme-gui
 ```php
 // CORRECT - Specific exception handling
 public function loadMarkdownFile($file) {
-    if (!file_exists($file)) {
-        throw new Dj_App_Exception('File not found', [ 'file' => $file, ]);
+    $read_res_obj = Dj_App_File_Util::read($file);
+
+    if ($read_res_obj->isError()) {
+        throw new Dj_App_Exception('Failed to read file', [ 'file' => $file, 'res_obj' => $read_res_obj, ]);
     }
 
-    if (!is_readable($file)) {
-        throw new Dj_App_Exception('File not readable', [ 'file' => $file, ]);
-    }
-
-    $content = file_get_contents($file);
-
-    if ($content === false) {
-        throw new Dj_App_Exception('Failed to read file', [ 'file' => $file, ]);
-    }
+    $content = $read_res_obj->output;
 
     return $content;
 }
@@ -1164,12 +1171,13 @@ public function parseFrontMatter($file) {
     $res_obj->meta = [];
 
     try {
-        $content = file_get_contents($file);
+        $read_res_obj = Dj_App_File_Util::read($file);
 
-        if ($content === false) {
+        if ($read_res_obj->isError()) {
             throw new Dj_App_Exception('Failed to read file', [ 'file' => $file, ]);
         }
 
+        $content = $read_res_obj->output;
         $meta = $this->extractMetaData($content);
 
         $res_obj->meta = $meta;
@@ -1281,12 +1289,12 @@ foreach ($files as $file) {
     }
 }
 
-// CORRECT
-$config = null;
+// CORRECT - read once, outside the loop; jsonDecode() returns [] for a bad or empty file
+$config = [];
+$read_res_obj = Dj_App_File_Util::read($config_file);
 
-if (file_exists($config_file)) {
-    $config_json = file_get_contents($config_file);
-    $config = json_decode($config_json);
+if ($read_res_obj->isSuccess()) {
+    $config = Dj_App_String_Util::jsonDecode($read_res_obj->output);
 }
 
 foreach ($files as $file) {
