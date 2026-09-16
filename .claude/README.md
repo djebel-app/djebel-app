@@ -19,9 +19,6 @@ macOS syscall cost), the container command, standalone core-lib bootstrapping, r
 minimums instead of medians, and proving an optimization is behaviour-preserving.
 Read it before making or believing any perf claim.
 
-### `TODO.md`
-Outstanding work items and their priorities.
-
 ### `prompts/djebel-coding-guide.md`
 Comprehensive coding standards guide covering:
 - Code style rules (spacing, operators, variable evaluation)
