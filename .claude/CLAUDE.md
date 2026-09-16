@@ -102,6 +102,16 @@ CLI args always take priority over env vars. Internal PHP constants (embedded in
 - **NEVER** add `Co-Authored-By` or any attribution/signature line to commits
 - Use `git mv` (not plain `mv`) for tracked files
 
+### Planning docs never go into this repo
+
+djebel-app is open source. PRDs, build prompts and TODO notes are internal planning and are kept
+outside this repo — never here, `.claude/` included (owner, 2026-09-16).
+
+- Never create, stage or commit a PRD, a build prompt or a TODO note in this repo, and never list
+  one in a commit hand-off.
+- `.claude/` holds only the rules that ship with the public repo.
+- Nothing public — docs, comments, commit messages — says where planning docs are kept.
+
 ## Coding Standards (10x PHP Developer Rules)
 
 Djebel is developed with **hyper-efficient 10x PHP engineering standards**. Every line is optimized for performance, readability, and security.
