@@ -1331,4 +1331,145 @@ class Dj_App_File_Util_Test extends TestCase {
 
         $this->assertStringNotContainsString('//', $file);
     }
+
+    /**
+     * The lock is a file of its own beside the one it guards, and the guarded file is not
+     * created or touched by taking it.
+     */
+    public function testAcquireLockOpensASidecarBesideTheFile() {
+        $file = $this->test_dir . '/state.json';
+        $lock_params = [ 'file' => $file, ];
+
+        $lock_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+
+        $this->assertTrue($lock_res_obj->isSuccess());
+        $this->assertEquals($file . '.lock', $lock_res_obj->lock_file);
+        $this->assertFileExists($lock_res_obj->lock_file);
+        $this->assertFileDoesNotExist($file, 'taking a lock never creates the file it guards');
+
+        $release_res_obj = Dj_App_File_Util::releaseLock($lock_res_obj);
+
+        $this->assertTrue($release_res_obj->isSuccess());
+    }
+
+    /**
+     * The dir is made when it is missing, so a caller does not have to prepare one.
+     */
+    public function testAcquireLockCreatesTheDir() {
+        $file = $this->test_dir . '/aa/bb/state.json';
+        $lock_params = [ 'file' => $file, ];
+
+        $lock_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+
+        $this->assertTrue($lock_res_obj->isSuccess());
+        $this->assertDirectoryExists($this->test_dir . '/aa/bb');
+
+        $release_res_obj = Dj_App_File_Util::releaseLock($lock_res_obj);
+
+        $this->assertTrue($release_res_obj->isSuccess());
+    }
+
+    /**
+     * A second exclusive lock on the same file is refused rather than waited on, and says
+     * so with a code the caller can act on. Pins the retry too: with the wait dialled down
+     * the call still returns instead of parking the process.
+     */
+    public function testAcquireLockRefusesAFileAlreadyHeld() {
+        $file = $this->test_dir . '/busy.json';
+        $lock_params = [ 'file' => $file, ];
+
+        $first_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+
+        $this->assertTrue($first_res_obj->isSuccess());
+
+        $second_params = [
+            'file' => $file,
+            'retry_count' => 2,
+            'retry_wait_ms' => 1,
+        ];
+
+        $second_res_obj = Dj_App_File_Util::acquireLock($second_params);
+
+        $this->assertTrue($second_res_obj->isError());
+        $this->assertEquals(Dj_App_File_Util::CODE_LOCK_BUSY, $second_res_obj->code());
+        $this->assertEmpty($second_res_obj->lock_handle, 'a refused lock hands back no handle');
+
+        $release_res_obj = Dj_App_File_Util::releaseLock($first_res_obj);
+
+        $this->assertTrue($release_res_obj->isSuccess());
+
+        $third_res_obj = Dj_App_File_Util::acquireLock($second_params);
+
+        $this->assertTrue($third_res_obj->isSuccess(), 'the file is free once the first holder gives it back');
+
+        $third_release_res_obj = Dj_App_File_Util::releaseLock($third_res_obj);
+
+        $this->assertTrue($third_release_res_obj->isSuccess());
+    }
+
+    /**
+     * Two shared locks coexist, which is what lets several readers work at once.
+     */
+    public function testAcquireLockLetsSharedReadersCoexist() {
+        $file = $this->test_dir . '/shared.json';
+
+        $shared_params = [
+            'file' => $file,
+            'shared' => 1,
+            'retry_count' => 2,
+            'retry_wait_ms' => 1,
+        ];
+
+        $first_res_obj = Dj_App_File_Util::acquireLock($shared_params);
+
+        $this->assertTrue($first_res_obj->isSuccess());
+
+        $second_res_obj = Dj_App_File_Util::acquireLock($shared_params);
+
+        $this->assertTrue($second_res_obj->isSuccess());
+
+        $first_release_res_obj = Dj_App_File_Util::releaseLock($first_res_obj);
+
+        $this->assertTrue($first_release_res_obj->isSuccess());
+
+        $second_release_res_obj = Dj_App_File_Util::releaseLock($second_res_obj);
+
+        $this->assertTrue($second_release_res_obj->isSuccess());
+    }
+
+    /**
+     * Releasing twice, or releasing something that never held a lock, is quiet — a
+     * caller's finally can run whatever happened inside the try.
+     */
+    public function testReleaseLockIsSafeToCallTwice() {
+        $file = $this->test_dir . '/twice.json';
+        $lock_params = [ 'file' => $file, ];
+
+        $lock_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+        $first_release_res_obj = Dj_App_File_Util::releaseLock($lock_res_obj);
+
+        $this->assertTrue($first_release_res_obj->isSuccess());
+
+        $second_release_res_obj = Dj_App_File_Util::releaseLock($lock_res_obj);
+
+        $this->assertTrue($second_release_res_obj->isError(), 'nothing was held, so nothing was released');
+
+        $never_held_res_obj = new Dj_App_Result();
+        $empty_release_res_obj = Dj_App_File_Util::releaseLock($never_held_res_obj);
+
+        $this->assertTrue($empty_release_res_obj->isError());
+    }
+
+    /**
+     * Without a file there is nothing to guard, and the caller is told rather than handed
+     * a lock on a made-up name.
+     */
+    public function testAcquireLockRefusesAnEmptyFile() {
+        $lock_params = [ 'file' => '', ];
+        $lock_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+
+        $this->assertTrue($lock_res_obj->isError());
+        $this->assertEquals(Dj_App_File_Util::CODE_LOCK_FAILED, $lock_res_obj->code());
+        $this->assertEmpty($lock_res_obj->lock_handle);
+    }
 }

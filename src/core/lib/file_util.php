@@ -5,6 +5,18 @@ class Dj_App_File_Util {
     const DEFAULT_FILE_PERM = 0644;
     const SECURE_FILE_PERM  = 0600;
 
+    // A lock's own file sits beside the one it guards, so nothing has to be configured and
+    // two callers naming the same file always meet on the same lock.
+    const LOCK_FILE_EXT = 'lock';
+
+    // Taken without blocking and retried, so a stuck holder costs one caller a refusal it
+    // can act on instead of holding a request open until it times out.
+    const LOCK_RETRY_COUNT = 20;
+    const LOCK_RETRY_WAIT_MS = 100;
+
+    const CODE_LOCK_BUSY = 'app.file.lock_busy';
+    const CODE_LOCK_FAILED = 'app.file.lock_failed';
+
     // Dot entries are config or metadata, and a caller listing a data dir almost never
     // means to act on one. Read by [isSkippable] and by [listFiles], which needs the same
     // answer to decide whether to prune dot dirs before descending.
@@ -246,6 +258,129 @@ class Dj_App_File_Util {
         } finally {
 
         }
+
+        return $res_obj;
+    }
+
+    /**
+     * Holds a lock across a read, a decision and a write — which a single read or a single
+     * write cannot do, because each releases as soon as it returns and two callers then
+     * both act on what they read before either wrote.
+     *
+     * The lock is its own file beside the one being guarded, so the operating system
+     * releases it however the process ends, including a crash.
+     *
+     * Dj_App_File_Util::acquireLock([ 'file' => $file, ]);
+     *
+     * @param array $inp_params file, and optionally retry_count, retry_wait_ms, shared
+     * @return Dj_App_Result lock_handle, lock_file
+     */
+    public static function acquireLock($inp_params = []) {
+        $res_obj = new Dj_App_Result();
+        $res_obj->lock_handle = null;
+        $res_obj->lock_file = '';
+
+        $lock_handle = null;
+        $fail_code = self::CODE_LOCK_FAILED;
+
+        try {
+            $file = Dj_App_Util::getField('file', $inp_params);
+
+            if (empty($file)) {
+                throw new Dj_App_File_Util_Exception("No file to lock");
+            }
+
+            $lock_file = $file . '.' . self::LOCK_FILE_EXT;
+            $dir = dirname($lock_file);
+            $mkdir_res_obj = Dj_App_File_Util::mkdir($dir);
+
+            if ($mkdir_res_obj->isError()) {
+                throw new Dj_App_File_Util_Exception("Couldn't create dir", [ 'dir' => $dir, ]);
+            }
+
+            // 'c' creates the file when it is missing and, unlike 'w', never truncates.
+            // What the file holds is nobody's business; only the handle matters.
+            $lock_handle = fopen($lock_file, 'c');
+
+            if (empty($lock_handle)) {
+                throw new Dj_App_File_Util_Exception("Couldn't open the lock file", [ 'file' => $lock_file, ]);
+            }
+
+            $is_shared = Dj_App_Util::getField('shared', $inp_params, 0);
+            $lock_flags = empty($is_shared) ? LOCK_EX : LOCK_SH;
+
+            // Without LOCK_NB a busy file parks the request until the web server kills it,
+            // and the caller never learns why.
+            $lock_flags = $lock_flags | LOCK_NB;
+
+            $retry_count = Dj_App_Util::getField('retry_count', $inp_params, self::LOCK_RETRY_COUNT);
+            $retry_wait_ms = Dj_App_Util::getField('retry_wait_ms', $inp_params, self::LOCK_RETRY_WAIT_MS);
+            $retry_wait_us = $retry_wait_ms * 1000;
+            $has_lock = false;
+
+            for ($attempt = 0; $attempt < $retry_count; $attempt++) {
+                $has_lock = flock($lock_handle, $lock_flags);
+
+                if (!empty($has_lock)) {
+                    break;
+                }
+
+                usleep($retry_wait_us);
+            }
+
+            if (empty($has_lock)) {
+                $fail_code = self::CODE_LOCK_BUSY;
+
+                throw new Dj_App_File_Util_Exception("The file is in use", [ 'file' => $lock_file, ]);
+            }
+
+            $res_obj->lock_handle = $lock_handle;
+            $res_obj->lock_file = $lock_file;
+            $res_obj->status(true);
+        } catch (Exception $e) {
+            // Best effort, and deliberately unchecked: the lock was never handed out, so
+            // the caller has nothing to release and a failed close changes no outcome.
+            if (!empty($lock_handle)) {
+                fclose($lock_handle);
+            }
+
+            $res_obj->msg = $e->getMessage();
+            $res_obj->code($fail_code);
+        }
+
+        return $res_obj;
+    }
+
+    /**
+     * Gives a lock back. Does nothing when handed a Result that never took one, so a
+     * caller's finally needs no guard of its own.
+     *
+     * Dj_App_File_Util::releaseLock($lock_res_obj);
+     *
+     * @param Dj_App_Result $lock_res_obj the held lock, carrying its lock_handle
+     * @return Dj_App_Result
+     */
+    public static function releaseLock($lock_res_obj) {
+        $res_obj = new Dj_App_Result();
+
+        if (empty($lock_res_obj)) {
+            return $res_obj;
+        }
+
+        $lock_handle = $lock_res_obj->lock_handle;
+
+        if (empty($lock_handle)) {
+            return $res_obj;
+        }
+
+        $unlock_res = flock($lock_handle, LOCK_UN);
+        $close_res = fclose($lock_handle);
+
+        // Cleared so a second release is a no-op rather than an operation on a dead handle.
+        $lock_res_obj->lock_handle = null;
+
+        $is_released = !empty($unlock_res) && !empty($close_res);
+        $res_obj->status($is_released);
 
         return $res_obj;
     }
