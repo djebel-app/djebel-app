@@ -56,9 +56,7 @@ class Dj_App_File_Util {
             flock($fp, LOCK_SH);
 
             if ($seek_bytes > 0) {
-                $fsee_res = fseek($fp, $seek_bytes);
-
-                if ($fsee_res === -1) {
+                if (fseek($fp, $seek_bytes) === -1) {
                     throw new Dj_App_Exception("Couldn't seek to position", [ 'file' => $file, 'seek_bytes' => $seek_bytes ]);
                 }
             }
@@ -251,14 +249,20 @@ class Dj_App_File_Util {
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();
 
-            // Clean up temp file on error. is_file() is the right check for unlink:
-            // it returns true ONLY for regular files (not directories, not symlinks
-            // pointing to nothing), which matches what unlink() can actually delete.
-            // file_exists() would also return true for directories — unlink on a
-            // directory raises a warning. PHP's stat cache merges this single stat
-            // call with the unlink, so cost is one filesystem stat.
+            // Clean up temp file on error. is_file() is the right check here because it
+            // admits exactly what unlink() can delete — file_exists() also says yes to a
+            // directory, and unlink on one only raises a warning. The stat cache merges
+            // this call with the unlink, so the pair costs one filesystem stat.
             if (!empty($tmp_file) && is_file($tmp_file)) {
-                unlink($tmp_file);
+                $unlink_res = unlink($tmp_file);
+
+                // The return value can lie — a cached stat, a filesystem that reports
+                // success while the entry survives — so a failure is confirmed against
+                // the end state and reported instead of being swallowed.
+                if (empty($unlink_res)) {
+                    clearstatcache(true, $tmp_file);
+                    $res_obj->temp_file_left_behind = is_file($tmp_file);
+                }
             }
         } finally {
 
@@ -275,10 +279,15 @@ class Dj_App_File_Util {
      * The lock is its own file beside the one being guarded, so the operating system
      * releases it however the process ends, including a crash.
      *
+     * Who is holding it gets written into the lock file only when the caller passes
+     * 'data' — that write costs several times what taking the lock does, so it is opt-in
+     * and a caller that only needs mutual exclusion pays nothing for it. An empty array
+     * opts in and records the process alone.
+     *
      * Dj_App_File_Util::acquireLock([ 'file' => $file, ]);
      *
      * @param array $inp_params file, and optionally data, retry_count, retry_wait_ms, shared
-     * @return Dj_App_Result lock_handle, lock_file, lock_owner
+     * @return Dj_App_Result lock_handle, lock_file, and lock_owner when 'data' was passed
      */
     public static function acquireLock($inp_params = []) {
         $res_obj = new Dj_App_Result();
@@ -348,65 +357,71 @@ class Dj_App_File_Util {
                 throw new Dj_App_File_Util_Exception("The file is in use", [ 'file' => $lock_file, ]);
             }
 
-            // Neither can change while the process lives, and both are syscalls — read
-            // once and reuse. The time is NOT cached: every lock is taken at its own.
-            static $pid = null;
-            static $host = null;
-
-            if (is_null($pid)) {
-                $pid = getmypid();
-                $host = gethostname();
-                $host = empty($host) ? '' : $host;
-            }
-
-            $taken_at = gmdate('Y-m-d\TH:i:s\Z');
-
-            // The request that took it, so a stuck lock leads straight to that request's
-            // own log lines rather than to a pid and a guess.
-            $req_id = Dj_App_Util::reqId();
-
-            $owner_meta = [
-                'pid' => $pid,
-                'host' => $host,
-                'req_id' => $req_id,
-                'taken_at' => $taken_at,
-            ];
-
-            $lock_data = Dj_App_Util::getField('data', $inp_params, []);
-
-            $owner_rec = [
-                'meta' => $owner_meta,
-                'data' => $lock_data,
-            ];
-
-            $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
-            $owner_info_len = strlen($owner_info);
-
-            // The read side is bounded, so an oversized payload would come back truncated
-            // and decode to nothing — losing the system half with it. Dropping the
-            // caller's half keeps what says WHO, which is the part a stuck lock needs.
-            if ($owner_info_len > self::LOCK_OWNER_MAX_LEN) {
-                $owner_rec['data'] = [];
-                $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
-            }
-
-            // Truncate first: a shorter owner than the last one would otherwise leave that
-            // one's tail behind and read back as nonsense.
-            $truncate_res = ftruncate($lock_handle, 0);
-
-            if (!empty($truncate_res)) {
-                rewind($lock_handle);
-                $write_res = fwrite($lock_handle, $owner_info);
-
-                if (!empty($write_res)) {
-                    fflush($lock_handle);
-                }
-            }
-
             $res_obj->lock_handle = $lock_handle;
             $res_obj->lock_file = $lock_file;
-            $res_obj->lock_owner = $owner_info;
             $res_obj->status(true);
+
+            // Recording the holder costs several times what taking the lock does, and the
+            // write is what dominates — so it happens only for a caller that asked, by
+            // passing data. An empty array still asks, and gets the system half alone.
+            if (array_key_exists('data', $inp_params)) {
+                // Neither can change while the process lives, and both are syscalls — read
+                // once and reuse. The time is NOT cached: every lock is taken at its own.
+                static $pid = null;
+                static $host = null;
+
+                if (is_null($pid)) {
+                    $pid = getmypid();
+                    $host = gethostname();
+                    $host = empty($host) ? '' : $host;
+                }
+
+                $taken_at = gmdate('Y-m-d\TH:i:s\Z');
+
+                // The request that took it, so a stuck lock leads straight to that
+                // request's own log lines rather than to a pid and a guess.
+                $req_id = Dj_App_Util::reqId();
+
+                $owner_meta = [
+                    'pid' => $pid,
+                    'host' => $host,
+                    'req_id' => $req_id,
+                    'taken_at' => $taken_at,
+                ];
+
+                $lock_data = Dj_App_Util::getField('data', $inp_params, []);
+
+                $owner_rec = [
+                    'meta' => $owner_meta,
+                    'data' => $lock_data,
+                ];
+
+                $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
+                $owner_info_len = strlen($owner_info);
+
+                // The read side is bounded, so an oversized payload would come back
+                // truncated and decode to nothing — losing the system half with it.
+                // Dropping the caller's half keeps what says WHO.
+                if ($owner_info_len > self::LOCK_OWNER_MAX_LEN) {
+                    $owner_rec['data'] = [];
+                    $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
+                }
+
+                // Truncate first: a shorter owner than the last one would otherwise leave
+                // that one's tail behind and read back as nonsense.
+                $truncate_res = ftruncate($lock_handle, 0);
+
+                if (!empty($truncate_res)) {
+                    rewind($lock_handle);
+                    $write_res = fwrite($lock_handle, $owner_info);
+
+                    if (!empty($write_res)) {
+                        fflush($lock_handle);
+                    }
+                }
+
+                $res_obj->lock_owner = $owner_info;
+            }
         } catch (Exception $e) {
             // Best effort, and deliberately unchecked: the lock was never handed out, so
             // the caller has nothing to release and a failed close changes no outcome.
@@ -580,8 +595,8 @@ class Dj_App_File_Util {
     }
 
     /**
-     * The accept-callback RecursiveCallbackFilterIterator takes — it keeps what returns
-     * TRUE, which is why this exists rather than handing it [isSkippable] directly.
+     * Whether the recursive scan keeps an entry: TRUE admits it, FALSE drops it and
+     * everything below it.
      *
      * A named method because a closure is not allowed as a callback here.
      *

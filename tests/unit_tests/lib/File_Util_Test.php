@@ -1556,6 +1556,47 @@ class Dj_App_File_Util_Test extends TestCase {
     }
 
     /**
+     * Recording the holder is several times the cost of taking the lock, so a caller that
+     * wants nothing but mutual exclusion must not pay for it. Passing an empty array is
+     * still asking, and gets the system half.
+     */
+    public function testAcquireLockOnlyRecordsTheHolderWhenAsked() {
+        $file = $this->test_dir . '/quiet.json';
+        $quiet_params = [ 'file' => $file, ];
+
+        $quiet_res_obj = Dj_App_File_Util::acquireLock($quiet_params);
+
+        $this->assertTrue($quiet_res_obj->isSuccess());
+        $this->assertEmpty($quiet_res_obj->lock_owner, 'no data param means no owner was written');
+
+        clearstatcache(true, $quiet_res_obj->lock_file);
+
+        $this->assertEquals(0, filesize($quiet_res_obj->lock_file), 'the lock file was never written to');
+
+        $quiet_release_res_obj = Dj_App_File_Util::releaseLock($quiet_res_obj);
+
+        $this->assertTrue($quiet_release_res_obj->isSuccess());
+
+        $bare_params = [
+            'file' => $file,
+            'data' => [],
+        ];
+
+        $bare_res_obj = Dj_App_File_Util::acquireLock($bare_params);
+
+        $this->assertTrue($bare_res_obj->isSuccess());
+
+        $owner_rec = Dj_App_String_Util::jsonDecode($bare_res_obj->lock_owner);
+
+        $this->assertEquals(getmypid(), $owner_rec['meta']['pid'], 'an empty data array still asks for the system half');
+        $this->assertEmpty($owner_rec['data']);
+
+        $bare_release_res_obj = Dj_App_File_Util::releaseLock($bare_res_obj);
+
+        $this->assertTrue($bare_release_res_obj->isSuccess());
+    }
+
+    /**
      * Without a file there is nothing to guard, and the caller is told rather than handed
      * a lock on a made-up name.
      */
