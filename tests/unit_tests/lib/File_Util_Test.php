@@ -1484,7 +1484,7 @@ class Dj_App_File_Util_Test extends TestCase {
             'file' => $file,
             'retry_count' => 2,
             'retry_wait_ms' => 1,
-            'read_owner' => 1,
+            'read_lock' => 1,
         ];
 
         $second_res_obj = Dj_App_File_Util::acquireLock($second_params);
@@ -1542,7 +1542,7 @@ class Dj_App_File_Util_Test extends TestCase {
             'file' => $file,
             'retry_count' => 1,
             'retry_wait_ms' => 1,
-            'read_owner' => 1,
+            'read_lock' => 1,
         ];
 
         $reader_res_obj = Dj_App_File_Util::acquireLock($busy_params);

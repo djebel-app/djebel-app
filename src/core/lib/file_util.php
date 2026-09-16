@@ -284,12 +284,12 @@ class Dj_App_File_Util {
      * Who is holding it is BOTH halves opt-in, because a caller that only needs mutual
      * exclusion should pay for nothing else. 'data' writes the record on the way in — that
      * write costs several times what taking the lock does, and an empty array still opts
-     * in and records the process alone. 'read_owner' reads it back on a refusal, which is
+     * in and records the process alone. 'read_lock' reads it back on a refusal, which is
      * the only moment there is anyone to name.
      *
      * Dj_App_File_Util::acquireLock([ 'file' => $file, ]);
      *
-     * @param array $inp_params file, and optionally data, read_owner, retry_count,
+     * @param array $inp_params file, and optionally data, read_lock, retry_count,
      *                          retry_wait_ms, shared
      * @return Dj_App_Result lock_handle, lock_file, and lock_owner when it was asked for
      */
@@ -360,7 +360,7 @@ class Dj_App_File_Util {
                 // take a shared lock and block on the very lock it is asking about. A torn
                 // read is possible and harmless — this is for a person reading a log, and
                 // NEVER for deciding to take a lock somebody else holds.
-                if (!empty($inp_params['read_owner'])) {
+                if (!empty($inp_params['read_lock'])) {
                     rewind($lock_handle);
                     $owner_info = fread($lock_handle, self::LOCK_OWNER_MAX_LEN);
                     $res_obj->lock_owner = empty($owner_info) ? '' : $owner_info;
