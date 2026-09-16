@@ -1110,7 +1110,7 @@ class Dj_App_Hooks_Test extends TestCase {
 
     public function testFormatHookNameSpecialCharCombinations()
     {
-        // @ # $ % ^ & * all become _
+        // @ # $ % ^ & all become _ — '*' is kept, it is the wildcard token
         $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app@hook'));
         $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app#hook'));
         $this->assertEquals('app_hook', Dj_App_Hooks::formatHookName('app$hook'));
@@ -1164,6 +1164,7 @@ class Dj_App_Hooks_Test extends TestCase {
         self::$deferred_call_log = [];
         self::$order_call_log = [];
         self::$captured_warnings = [];
+        self::$pattern_call_log = [];
         Dj_App_Hooks::setDeferredActionsData();
         Dj_App_Hooks::setDeferredActions();
         Dj_App_Hooks::setActions();
@@ -2227,5 +2228,468 @@ class Dj_App_Hooks_Test extends TestCase {
         $has_work = Dj_App_Hooks::hasPostResponseWork();
 
         $this->assertTrue($has_work, 'a queued notice still has to be emitted after the response');
+    }
+
+    // ============================================================
+    // Wildcard Pattern Tests
+    // ============================================================
+
+    public static $pattern_call_log = [];
+
+    public static function recordPatternAction($params = []) {
+        self::$pattern_call_log[] = Dj_App_Hooks::currentAction();
+    }
+
+    /**
+     * Fires each name as an action and returns the names the pattern listener saw, in order.
+     * @param array $hook_names
+     * @return array
+     */
+    private function collectMatchedHooks($hook_names) {
+        self::$pattern_call_log = [];
+
+        foreach ($hook_names as $hook_name) {
+            Dj_App_Hooks::doAction($hook_name);
+        }
+
+        $matched_hooks = self::$pattern_call_log;
+
+        return $matched_hooks;
+    }
+
+    /**
+     * Registers an action and returns the error code and data it threw — both empty when the
+     * registration went through.
+     * @param array $params hook_name, opts
+     * @return array code, data
+     */
+    private function captureRegistrationError($params) {
+        $hook_name = $params['hook_name'];
+        $opts = empty($params['opts']) ? [] : $params['opts'];
+
+        $error = [
+            'code' => '',
+            'data' => [],
+        ];
+
+        try {
+            Dj_App_Hooks::addAction($hook_name, ['Dj_App_Hooks_Test', 'recordPatternAction'], Dj_App_Hooks::DEFAULT_PRIORITY, $opts);
+        } catch (Dj_App_Hooks_Exception $e) {
+            $error['code'] = $e->getErrorCode();
+            $error['data'] = $e->getData();
+        }
+
+        return $error;
+    }
+
+    public function testFormatHookNameKeepsWildcards() {
+        $this->assertEquals('qs_app/*/action/post_save', Dj_App_Hooks::formatHookName('qs_app/*/action/post_save'));
+        $this->assertEquals('qs_app/**/post_save', Dj_App_Hooks::formatHookName('qs_app.**.post_save'));
+        $this->assertEquals('app/plugin/*', Dj_App_Hooks::formatHookName('app.plugins.*'));
+        $this->assertEquals('app/foo*', Dj_App_Hooks::formatHookName('app/foo*'));
+    }
+
+    /**
+     * Pins the syntax: '*' stays inside one segment, '**' spans zero or more segments at the
+     * start, middle or end, and dots and plurals format the same on both sides.
+     */
+    public function testPatternMatching() {
+        $cases = [
+            'qs_app/*/action/post_save' => [
+                'qs_app/vehicles/action/post_save' => true,
+                'qs_app/vehicle_images/action/post_save' => true,
+                'qs_app/vehicles/images/action/post_save' => false,
+                'qs_app/vehicles/action/post_delete' => false,
+            ],
+            'qs_app/**/post_save' => [
+                'qs_app/post_save' => true,
+                'qs_app/a/b/post_save' => true,
+                'qs_app/a/post_saved' => false,
+            ],
+            '**/post_save' => [
+                'post_save' => true,
+                'a/b/post_save' => true,
+            ],
+            'qs_app/**' => [
+                'qs_app' => true,
+                'qs_app/a/b' => true,
+                'qs_apps/a' => false,
+            ],
+            'qs_app/vehicle*/action/post_save' => [
+                'qs_app/vehicle/action/post_save' => true,
+                'qs_app/vehicle_images/action/post_save' => true,
+                'qs_app/users/action/post_save' => false,
+            ],
+            'app.plugins.*.action.*' => [
+                'app/plugin/contact/action/saved' => true,
+                'app.plugins.contact.extra.action.saved' => false,
+            ],
+        ];
+
+        foreach ($cases as $pattern => $fired_hooks) {
+            Dj_App_Hooks::setActions();
+            Dj_App_Hooks::addAction($pattern, ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+            foreach ($fired_hooks as $fired_hook => $should_match) {
+                $single_hook = [ $fired_hook, ];
+                $matched_hooks = $this->collectMatchedHooks($single_hook);
+                $did_match = !empty($matched_hooks);
+
+                $this->assertSame($should_match, $did_match, "$pattern vs $fired_hook");
+            }
+        }
+    }
+
+    public function testPatternListenerReceivesParamsAndFiredName() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addAction('app/test/pattern/*/saved', ['Dj_App_Hooks_Test', 'deferredCallback']);
+
+        $save_ctx = [ 'table_name' => 'vendors', 'id' => 7, ];
+        Dj_App_Hooks::doAction('app/test/pattern/vendors/saved', $save_ctx);
+
+        $this->assertCount(1, self::$deferred_call_log);
+        $this->assertEquals($save_ctx, self::$deferred_call_log[0]['params']);
+        $this->assertEquals('app/test/pattern/vendors/saved', self::$deferred_call_log[0]['hook']);
+    }
+
+    public function testPatternFilterChainsWithExactFilterInPriorityOrder() {
+        $hook = 'app/test/pattern/filter/item';
+
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
+            Dj_App_Hooks::addFilter('app/test/pattern/**/item', ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+
+            $result = Dj_App_Hooks::applyFilter($hook, '');
+
+            $this->assertEquals('AB', $result, 'a lower-numbered pattern filter runs before the exact one');
+
+            Dj_App_Hooks::addFilter('app/test/pattern/*/item', ['Dj_App_Hooks_Test', 'orderFilterC'], 30);
+
+            $result = Dj_App_Hooks::applyFilter($hook, '');
+
+            $this->assertEquals('ABC', $result, 'a higher-numbered pattern filter runs after it');
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    public function testPatternFilterOnNameWithNoExactFilter() {
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter('app/test/pattern/only/*', ['Dj_App_Hooks_Test', 'orderFilterA']);
+
+            $matched_result = Dj_App_Hooks::applyFilter('app/test/pattern/only/item', '');
+
+            $this->assertEquals('A', $matched_result);
+
+            $unmatched_result = Dj_App_Hooks::applyFilter('app/test/pattern/other/item', 'untouched');
+
+            $this->assertEquals('untouched', $unmatched_result);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    public function testPatternActionOrderFollowsPriorityAgainstExactActions() {
+        self::$order_call_log = [];
+
+        Dj_App_Hooks::addAction('app/test/pattern/prio/lower', ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::addAction('app/test/pattern/prio/*', ['Dj_App_Hooks_Test', 'orderActionA'], 10);
+
+        Dj_App_Hooks::doAction('app/test/pattern/prio/lower');
+
+        $expected_calls = [ 'A', 'B', ];
+
+        $this->assertEquals($expected_calls, self::$order_call_log, 'pattern at 10 runs before exact at 20');
+
+        self::$order_call_log = [];
+
+        Dj_App_Hooks::addAction('app/test/pattern/prio_rev/name', ['Dj_App_Hooks_Test', 'orderActionA'], 5);
+        Dj_App_Hooks::addAction('app/test/pattern/prio_rev/*', ['Dj_App_Hooks_Test', 'orderActionB'], 30);
+
+        Dj_App_Hooks::doAction('app/test/pattern/prio_rev/name');
+
+        $this->assertEquals($expected_calls, self::$order_call_log, 'exact at 5 runs before pattern at 30');
+    }
+
+    /**
+     * At equal priority exact listeners run first, even when the pattern was registered earlier.
+     */
+    public function testEqualPriorityRunsExactBeforePattern() {
+        self::$order_call_log = [];
+
+        Dj_App_Hooks::addAction('app/test/pattern/tie/*', ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::addAction('app/test/pattern/tie/name', ['Dj_App_Hooks_Test', 'orderActionA'], 20);
+
+        Dj_App_Hooks::doAction('app/test/pattern/tie/name');
+
+        $expected_calls = [ 'A', 'B', ];
+
+        $this->assertEquals($expected_calls, self::$order_call_log);
+    }
+
+    public function testPatternsAtEqualPriorityRunInRegistrationOrder() {
+        self::$order_call_log = [];
+
+        Dj_App_Hooks::addAction('app/test/pattern/reg/*', ['Dj_App_Hooks_Test', 'orderActionA'], 20);
+        Dj_App_Hooks::addAction('app/test/pattern/**', ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+
+        Dj_App_Hooks::doAction('app/test/pattern/reg/name');
+
+        $expected_calls = [ 'A', 'B', ];
+
+        $this->assertEquals($expected_calls, self::$order_call_log);
+    }
+
+    public function testSameCallbackViaExactAndPatternRunsOncePerPriority() {
+        Dj_App_Hooks::addAction('app/test/pattern/dup/name', ['Dj_App_Hooks_Test', 'recordPatternAction'], 20);
+        Dj_App_Hooks::addAction('app/test/pattern/dup/*', ['Dj_App_Hooks_Test', 'recordPatternAction'], 20);
+
+        $fired_hooks = [ 'app/test/pattern/dup/name', ];
+        $matched_hooks = $this->collectMatchedHooks($fired_hooks);
+
+        $this->assertCount(1, $matched_hooks, 'same callback, same priority: runs once');
+
+        Dj_App_Hooks::addAction('app/test/pattern/dup/**', ['Dj_App_Hooks_Test', 'recordPatternAction'], 30);
+
+        $matched_hooks = $this->collectMatchedHooks($fired_hooks);
+
+        $this->assertCount(2, $matched_hooks, 'a second priority runs it a second time');
+    }
+
+    public function testInvalidPatternsThrowAtRegistration() {
+        $invalid_patterns = [ '**', '*/*', 'vehicle*/**', 'qs_app/vehicle**/post_save', 'qs_app/***/post_save', 'qs_app/**/**/post_save', ];
+
+        foreach ($invalid_patterns as $invalid_pattern) {
+            $registration_params = [ 'hook_name' => $invalid_pattern, ];
+            $error = $this->captureRegistrationError($registration_params);
+            $registered_actions = Dj_App_Hooks::getActions();
+
+            $this->assertEquals('app.core.hooks.pattern.invalid', $error['code'], "pattern: $invalid_pattern");
+            $this->assertEquals($invalid_pattern, $error['data']['pattern']);
+            $this->assertArrayNotHasKey($invalid_pattern, $registered_actions);
+        }
+
+        $filter_error_code = '';
+
+        try {
+            Dj_App_Hooks::addFilter('*/*', ['Dj_App_Hooks_Test', 'orderFilterA']);
+        } catch (Dj_App_Hooks_Exception $e) {
+            $filter_error_code = $e->getErrorCode();
+        }
+
+        $registered_filters = Dj_App_Hooks::getFilters();
+
+        $this->assertEquals('app.core.hooks.pattern.invalid', $filter_error_code);
+        $this->assertArrayNotHasKey('*/*', $registered_filters);
+    }
+
+    public function testDeferredPatternThrows() {
+        $registration_params = [
+            'hook_name' => 'app/test/pattern/deferred/*',
+            'opts' => [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ],
+        ];
+
+        $error = $this->captureRegistrationError($registration_params);
+
+        $this->assertEquals('app.core.hooks.pattern.deferred_not_supported', $error['code']);
+        $this->assertEmpty(Dj_App_Hooks::getDeferredActions());
+    }
+
+    /**
+     * Pins that listener changes between two fires, on the exact name or on a pattern, take effect
+     * on the next fire, and that parking a pattern name parks the pattern's own listeners.
+     */
+    public function testPatternFireFollowsRegistryChanges() {
+        self::$order_call_log = [];
+
+        $hook = 'app/test/pattern/change/name';
+        $pattern = 'app/test/pattern/change/*';
+
+        Dj_App_Hooks::addAction($pattern, ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::doAction($hook);
+
+        Dj_App_Hooks::addAction($hook, ['Dj_App_Hooks_Test', 'orderActionA'], 10);
+        Dj_App_Hooks::doAction($hook);
+
+        $disabled = Dj_App_Hooks::disableAction($pattern);
+        Dj_App_Hooks::doAction($hook);
+
+        $enabled = Dj_App_Hooks::enableAction($pattern);
+        $removed = Dj_App_Hooks::removeAction($pattern, ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::doAction($hook);
+
+        $expected_calls = [ 'B', 'A', 'B', 'A', 'A', ];
+
+        $this->assertTrue($disabled);
+        $this->assertTrue($enabled);
+        $this->assertTrue($removed);
+        $this->assertEquals($expected_calls, self::$order_call_log);
+    }
+
+    /**
+     * The shutdown replay re-fires a hook for its deferred listeners only. A pattern listener on
+     * that hook already ran on the normal fire, and running it again would repeat its work.
+     */
+    public function testDeferredReplayDoesNotRerunPatternListeners() {
+        self::$deferred_call_log = [];
+
+        $hook = 'app/test/pattern/replay/insert';
+
+        Dj_App_Hooks::addDeferredAction($hook, ['Dj_App_Hooks_Test', 'deferredCallback'], 50);
+        Dj_App_Hooks::addAction('app/test/pattern/replay/*', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+        Dj_App_Hooks::doAction($hook);
+
+        $this->assertCount(1, self::$pattern_call_log);
+        $this->assertEmpty(self::$deferred_call_log);
+
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log, 'the deferred listener ran in the replay');
+        $this->assertCount(1, self::$pattern_call_log, 'the pattern listener did not run again');
+    }
+
+    public function testHasActionDoesNotEvaluatePatterns() {
+        Dj_App_Hooks::addAction('app/test/pattern/has/*', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+        $this->assertFalse(Dj_App_Hooks::hasAction('app/test/pattern/has/name'));
+    }
+
+    /**
+     * Pins that a registry handed to setActions() runs its pattern keys even though they never
+     * went through addAction().
+     */
+    public function testSetActionsRebuildsThePatternIndex() {
+        $pattern_actions = [
+            'app/test/pattern/set/*' => [
+                20 => [ 'Dj_App_Hooks_Test::recordPatternAction' => ['Dj_App_Hooks_Test', 'recordPatternAction'], ],
+            ],
+        ];
+
+        $fired_hooks = [ 'app/test/pattern/set/name', ];
+
+        Dj_App_Hooks::setActions($pattern_actions);
+        $matched_hooks = $this->collectMatchedHooks($fired_hooks);
+
+        $this->assertEquals($fired_hooks, $matched_hooks);
+    }
+
+    public function testSetFiltersRebuildsThePatternIndex() {
+        $pattern_filters = [
+            'app/test/pattern/set_filter/*' => [
+                20 => [ 'Dj_App_Hooks_Test::orderFilterA' => ['Dj_App_Hooks_Test', 'orderFilterA'], ],
+            ],
+        ];
+
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::setFilters($pattern_filters);
+            $filtered = Dj_App_Hooks::applyFilter('app/test/pattern/set_filter/name', '');
+
+            $this->assertEquals('A', $filtered);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    public function testGetActionsWithHookNameReturnsTheRunOrder() {
+        $hook = 'app/test/pattern/introspect/name';
+
+        Dj_App_Hooks::addAction($hook, ['Dj_App_Hooks_Test', 'orderActionB'], 20);
+        Dj_App_Hooks::addAction('app/test/pattern/introspect/*', ['Dj_App_Hooks_Test', 'orderActionA'], 10);
+
+        $params = [ 'hook_name' => $hook, ];
+        $run_list = Dj_App_Hooks::getActions($params);
+        $run_priorities = array_keys($run_list);
+
+        $expected_priorities = [ 10, 20, ];
+
+        $this->assertEquals($expected_priorities, $run_priorities);
+        $this->assertContains(['Dj_App_Hooks_Test', 'orderActionA'], $run_list[10]);
+        $this->assertContains(['Dj_App_Hooks_Test', 'orderActionB'], $run_list[20]);
+
+        $unmatched_params = [ 'hook_name' => 'app/test/pattern/nothing/here', ];
+        $unmatched_list = Dj_App_Hooks::getActions($unmatched_params);
+
+        $this->assertEmpty($unmatched_list);
+    }
+
+    public function testGetFiltersWithHookNameReturnsTheRunOrder() {
+        $hook = 'app/test/pattern/introspect_filter/name';
+
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter($hook, ['Dj_App_Hooks_Test', 'orderFilterB'], 20);
+            Dj_App_Hooks::addFilter('app/test/pattern/introspect_filter/*', ['Dj_App_Hooks_Test', 'orderFilterA'], 10);
+
+            $params = [ 'hook_name' => $hook, ];
+            $run_list = Dj_App_Hooks::getFilters($params);
+            $run_priorities = array_keys($run_list);
+
+            $expected_priorities = [ 10, 20, ];
+
+            $this->assertEquals($expected_priorities, $run_priorities);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    /**
+     * Exact app/shutdown listeners stay one-shot across repeated shutdown runs, while a pattern
+     * listener is a registration and runs on every call.
+     */
+    public function testExactShutdownListenersStillDrainWhenAPatternMatchesShutdown() {
+        self::$deferred_call_log = [];
+
+        Dj_App_Hooks::addAction('app/shutdown', ['Dj_App_Hooks_Test', 'syncCallback']);
+        Dj_App_Hooks::addAction('**/shutdown', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+        $this->simulateShutdown();
+        $this->simulateShutdown();
+
+        $this->assertCount(1, self::$deferred_call_log, 'the exact listener ran once');
+        $this->assertCount(2, self::$pattern_call_log, 'the pattern listener ran on each call');
+    }
+
+    /**
+     * Lowering the PCRE match limits forces a runtime failure; a failed match must throw with the
+     * fired name instead of silently skipping the pattern listeners.
+     */
+    public function testPatternMatchRuntimeFailureThrows() {
+        Dj_App_Hooks::addAction('app/test/pattern/runtime/**/end', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+        $error = [
+            'code' => '',
+            'data' => [],
+        ];
+
+        try {
+            $saved_jit = ini_get('pcre.jit');
+            $saved_backtrack_limit = ini_get('pcre.backtrack_limit');
+
+            $jit_res = ini_set('pcre.jit', '0');
+            $limit_res = ini_set('pcre.backtrack_limit', '1');
+
+            $this->assertNotFalse($jit_res, 'pcre.jit must be settable at runtime for this test');
+            $this->assertNotFalse($limit_res, 'pcre.backtrack_limit must be settable at runtime for this test');
+
+            Dj_App_Hooks::doAction('app/test/pattern/runtime/a/b/c/d/e/f/nope');
+        } catch (Dj_App_Hooks_Exception $e) {
+            $error['code'] = $e->getErrorCode();
+            $error['data'] = $e->getData();
+        } finally {
+            ini_set('pcre.jit', $saved_jit);
+            ini_set('pcre.backtrack_limit', $saved_backtrack_limit);
+        }
+
+        $this->assertEquals('app.core.hooks.pattern.match_failed', $error['code']);
+        $this->assertEquals('app/test/pattern/runtime/a/b/c/d/e/f/nope', $error['data']['hook_name']);
     }
 }

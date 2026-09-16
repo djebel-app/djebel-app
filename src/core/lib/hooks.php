@@ -19,6 +19,14 @@ class Dj_App_Hooks {
     private static $filters = [];
 
     /**
+     * Registry names that are wildcard patterns (name => name). Flat, not keyed by type: every
+     * doAction() / applyFilter() checks them, and a nested read measured ~30 ns slower.
+     * @var array
+     */
+    private static $action_patterns = [];
+    private static $filter_patterns = [];
+
+    /**
      * Registry of deferred actions. Full mirror of $actions:
      *   $deferred_actions[$formatted_hook][$priority][$action_id] = $callback;
      *
@@ -330,9 +338,13 @@ class Dj_App_Hooks {
      * // Register as DEFERRED — runs after the response has gone out, on app/shutdown
      * $opts = [ 'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED, ];
      * Dj_App_Hooks::addAction('app/messages/insert', [ $obj, 'sendPush', ], 50, $opts);
+     *
+     * // Wildcard: '*' = any characters inside one segment, '**' = any number of whole segments.
+     * // Dots, because a star next to a slash would close this docblock.
+     * Dj_App_Hooks::addAction('app.plugin.*.action.message_processed', [ $obj, 'onAnyMessage', ]);
      * ```
      *
-     * @param string|array $hook_name Single hook name or array of hook names
+     * @param string|array $hook_name Single hook name, wildcard pattern, or array of either
      * @param callable $callback Function to execute
      * @param int $priority Execution priority (default: 20)
      * @param array $opts Optional flags. Supported keys:
@@ -365,6 +377,20 @@ class Dj_App_Hooks {
         // opcode per assignment, no isset+init dance needed.
         foreach ($hooks as $hook) {
             $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (str_contains($formatted_hook, '*')) {
+                // The deferred replay runs listeners by exact name only, so a deferred pattern would never run.
+                if ($type === Dj_App_Hooks::ACTION_TYPE_DEFERRED) {
+                    $exc_data = [
+                        'code' => 'app.core.hooks.pattern.deferred_not_supported',
+                        'pattern' => $formatted_hook,
+                    ];
+
+                    throw new Dj_App_Hooks_Exception('A wildcard hook pattern cannot be a deferred action', $exc_data);
+                }
+
+                Dj_App_Hooks::$action_patterns[$formatted_hook] = $formatted_hook;
+            }
 
             // SORTED INVARIANT: priorities stay sorted at registration so doAction()
             // never sorts on the fire path. A new priority key appends at the end of
@@ -513,7 +539,7 @@ class Dj_App_Hooks {
         // key→value array directly) to avoid array_keys/array_values per call.
         static $separator_chars = [ ' ', "\t", "\n", "\r", ':', '.', ];
         static $separator_chars_str = " \t\n\r:.";
-        static $alnum_extra_chars = [ '_', '/', ];
+        static $alnum_extra_chars = [ '_', '/', '*', ];
         static $singlefy_chars = [ '_', '-', '/', ];
         static $plural_map = [
             '/apps/' => '/app/',
@@ -544,6 +570,20 @@ class Dj_App_Hooks {
         // Note: dots and dashes are already converted by this point
         if (strpos($hook_name, 's/') !== false) { // plural? - make it singular
             $hook_name = strtr($hook_name, $plural_map);
+        }
+
+        // A '*' makes it a wildcard pattern, validated once per spelling so a bad one fails where it
+        // is registered. Rejected: no segment without '*' (*/*), '**' inside a segment (app/a**),
+        // '**' twice in a row (a/**/**/b). A preg_match() failure rejects too.
+        if (str_contains($hook_name, '*')) {
+            if (!preg_match('#(?:^|/)[^*/]+(?:/|$)#', $hook_name) || (preg_match('#[^/]\*\*|\*\*[^/]#', $hook_name) !== 0) || str_contains($hook_name, '**/**')) {
+                $exc_data = [
+                    'code' => 'app.core.hooks.pattern.invalid',
+                    'pattern' => $hook_name,
+                ];
+
+                throw new Dj_App_Hooks_Exception('Invalid wildcard hook pattern: it needs a segment without *, and ** only as a whole segment, never twice in a row', $exc_data);
+            }
         }
 
         // Growth cap, not eviction: canonical hook names are a small fixed set, so
@@ -600,15 +640,25 @@ class Dj_App_Hooks {
             $type = empty($opts['type']) ? Dj_App_Hooks::ACTION_TYPE_NORMAL : $opts['type'];
             $source_actions = $type === Dj_App_Hooks::ACTION_TYPE_DEFERRED ? Dj_App_Hooks::$deferred_actions : Dj_App_Hooks::$actions;
 
-            if (empty($source_actions[$executed_hook_fmt])) {
-                return;
-            }
+            // The pattern check comes first: on a site without patterns it is the one extra check
+            // a fire pays. The deferred replay runs by exact name, so patterns join normal fires only.
+            if (!empty(Dj_App_Hooks::$action_patterns) && $type === Dj_App_Hooks::ACTION_TYPE_NORMAL) {
+                $resolve_params = [
+                    'hook_name' => $executed_hook_fmt,
+                    'registry' => Dj_App_Hooks::$actions,
+                    'patterns' => Dj_App_Hooks::$action_patterns,
+                ];
 
-            // No sort here: priorities are kept sorted at registration time
-            // (addAction/setActions/enableAction maintain the sorted invariant).
-            // That also keeps $source_actions a cheap refcount alias — the old
-            // per-fire ksort() wrote to the local and forced a full COW array copy.
-            $source_actions = $source_actions[$executed_hook_fmt];
+                $source_actions = Dj_App_Hooks::resolveRunList($resolve_params);
+            } elseif (empty($source_actions[$executed_hook_fmt])) {
+                return;
+            } else {
+                // No sort here: priorities are kept sorted at registration time
+                // (addAction/setActions/enableAction maintain the sorted invariant).
+                // That also keeps $source_actions a cheap refcount alias — the old
+                // per-fire ksort() wrote to the local and forced a full COW array copy.
+                $source_actions = $source_actions[$executed_hook_fmt];
+            }
 
             // NORMAL mode + this hook has deferred callbacks → capture (hook, params) NOW,
             // once, before the loop. We know the loop WILL skip them (they're registered),
@@ -686,9 +736,21 @@ class Dj_App_Hooks {
             // Mark as processed even if no callbacks exist
             Dj_App_Hooks::$executed_hooks[$executed_hook_fmt] = Dj_App_Hooks::HOOK_PROCESSED;
 
-            // If no callbacks registered for this hook, return current value
-            if (empty(Dj_App_Hooks::$filters[$executed_hook_fmt])) {
+            // The pattern check comes first: on a site without patterns it is the one extra check
+            // a filter call pays.
+            if (!empty(Dj_App_Hooks::$filter_patterns)) {
+                $resolve_params = [
+                    'hook_name' => $executed_hook_fmt,
+                    'registry' => Dj_App_Hooks::$filters,
+                    'patterns' => Dj_App_Hooks::$filter_patterns,
+                ];
+
+                $hook_filters = Dj_App_Hooks::resolveRunList($resolve_params);
+            } elseif (empty(Dj_App_Hooks::$filters[$executed_hook_fmt])) {
+                // If no callbacks registered for this hook, return current value
                 return $cur_val;
+            } else {
+                $hook_filters = Dj_App_Hooks::$filters[$executed_hook_fmt];
             }
 
             // Execute callbacks in priority order. is_callable() is NOT checked on
@@ -696,7 +758,7 @@ class Dj_App_Hooks {
             // contract as doAction). Quick-return sentinels are checked FIRST:
             // is_scalar() + isset() are C-level checks, cheaper than invoking, and
             // this matches checkAllowed()'s precedence (sentinel before callable).
-            foreach (Dj_App_Hooks::$filters[$executed_hook_fmt] as $callbacks_by_priority) {
+            foreach ($hook_filters as $callbacks_by_priority) {
                 foreach ($callbacks_by_priority as $callback) {
                     if (is_scalar($callback) && isset(Dj_App_Hooks::$allowed_predefined_quick_returns[$callback])) {
                         $cur_val = Dj_App_Hooks::$allowed_predefined_quick_returns[$callback];
@@ -770,9 +832,12 @@ class Dj_App_Hooks {
      *
      * // Using predefined returns
      * Dj_App_Hooks::addFilter('show_admin', Dj_App_Hooks::RETURN_FALSE);
+     *
+     * // Wildcard pattern, in dot notation: a star next to a slash would close this docblock
+     * Dj_App_Hooks::addFilter('app.plugin.**.filter.item', ['Djebel_Plugin_Demo', 'filterAnyItem']);
      * ```
-     * 
-     * @param string|array $hook_name Single hook name or array of hook names
+     *
+     * @param string|array $hook_name Single hook name, wildcard pattern, or array of either
      * @param callable|string $callback Function to execute or predefined return value
      * @param int $priority Execution priority (default: 20)
      * @return void Registering cannot fail once the input passes; invalid input throws.
@@ -795,6 +860,10 @@ class Dj_App_Hooks {
 
         foreach ($hooks as $hook) {
             $formatted_hook = Dj_App_Hooks::formatHookName($hook);
+
+            if (str_contains($formatted_hook, '*')) {
+                Dj_App_Hooks::$filter_patterns[$formatted_hook] = $formatted_hook;
+            }
 
             if (!isset(Dj_App_Hooks::$filters[$formatted_hook])) {
                 Dj_App_Hooks::$filters[$formatted_hook] = [];
@@ -822,9 +891,28 @@ class Dj_App_Hooks {
         }
     }
 
-    public static function getActions()
+    /**
+     * The action registry, or with 'hook_name' the listeners that run for that name, in run order.
+     * @param array $params Optional. hook_name
+     * @return array
+     */
+    public static function getActions($params = [])
     {
-        return Dj_App_Hooks::$actions;
+        if (empty($params['hook_name'])) {
+            return Dj_App_Hooks::$actions;
+        }
+
+        $hook_name_fmt = Dj_App_Hooks::formatHookName($params['hook_name']);
+
+        $resolve_params = [
+            'hook_name' => $hook_name_fmt,
+            'registry' => Dj_App_Hooks::$actions,
+            'patterns' => Dj_App_Hooks::$action_patterns,
+        ];
+
+        $run_list = Dj_App_Hooks::resolveRunList($resolve_params);
+
+        return $run_list;
     }
 
     public static function setActions($actions = [])
@@ -833,6 +921,7 @@ class Dj_App_Hooks {
         // re-establish the sorted invariant here so the fire path keeps skipping sorts.
         // Setters run rarely (tests, state restore), so the cost is irrelevant.
         $hook_names = array_keys($actions);
+        $action_patterns = [];
 
         foreach ($hook_names as $hook) {
             if (!is_array($actions[$hook])) {
@@ -840,14 +929,38 @@ class Dj_App_Hooks {
             }
 
             ksort($actions[$hook]);
+
+            if (str_contains($hook, '*')) {
+                $action_patterns[$hook] = $hook;
+            }
         }
 
+        Dj_App_Hooks::$action_patterns = $action_patterns;
         Dj_App_Hooks::$actions = $actions;
     }
 
-    public static function getFilters()
+    /**
+     * The filter registry, or with 'hook_name' the listeners that run for that name, in run order.
+     * @param array $params Optional. hook_name
+     * @return array
+     */
+    public static function getFilters($params = [])
     {
-        return Dj_App_Hooks::$filters;
+        if (empty($params['hook_name'])) {
+            return Dj_App_Hooks::$filters;
+        }
+
+        $hook_name_fmt = Dj_App_Hooks::formatHookName($params['hook_name']);
+
+        $resolve_params = [
+            'hook_name' => $hook_name_fmt,
+            'registry' => Dj_App_Hooks::$filters,
+            'patterns' => Dj_App_Hooks::$filter_patterns,
+        ];
+
+        $run_list = Dj_App_Hooks::resolveRunList($resolve_params);
+
+        return $run_list;
     }
 
     public static function setFilters($filters = [])
@@ -855,6 +968,7 @@ class Dj_App_Hooks {
         // Bulk replace bypasses addFilter()'s sorted-at-registration bookkeeping —
         // re-establish the sorted invariant here so the fire path keeps skipping sorts.
         $hook_names = array_keys($filters);
+        $filter_patterns = [];
 
         foreach ($hook_names as $hook) {
             if (!is_array($filters[$hook])) {
@@ -862,9 +976,14 @@ class Dj_App_Hooks {
             }
 
             ksort($filters[$hook]);
+
+            if (str_contains($hook, '*')) {
+                $filter_patterns[$hook] = $hook;
+            }
         }
 
         Dj_App_Hooks::$filters = $filters;
+        Dj_App_Hooks::$filter_patterns = $filter_patterns;
     }
 
     public static function getDeferredActions()
@@ -1560,6 +1679,79 @@ class Dj_App_Hooks {
     public static function setDisabledDeferredActions($disabled_deferred_actions = [])
     {
         Dj_App_Hooks::$disabled_deferred_actions = $disabled_deferred_actions;
+    }
+
+    /**
+     * The listeners that run for a fired name: its own plus those of every pattern it matches, in
+     * one priority order, exact ones first at equal priority.
+     *   qs_app.*.save   matches qs_app/vehicles/save, not qs_app/a/b/save
+     *   qs_app.**.save  matches qs_app/save and qs_app/a/b/save
+     *
+     * @param array $params hook_name (formatted), registry, patterns
+     * @return array
+     * @throws Dj_App_Hooks_Exception When PCRE fails while matching
+     */
+    private static function resolveRunList($params) {
+        static $pattern_regexes = [];
+
+        // '**' carries its own slashes, which lets it match zero segments.
+        static $wildcard_regex_map = [
+            '\*\*/' => '(?:[^/]+/)*',
+            '/\*\*' => '(?:/[^/]+)*',
+            '\*' => '[^/]*',
+        ];
+
+        $hook_name = $params['hook_name'];
+        $registry = $params['registry'];
+        $run_list = empty($registry[$hook_name]) ? [] : $registry[$hook_name];
+        $has_pattern_listeners = false;
+
+        foreach ($params['patterns'] as $pattern) {
+            // A removed or disabled pattern keeps its entry with no listeners left.
+            if (empty($registry[$pattern])) {
+                continue;
+            }
+
+            if (!isset($pattern_regexes[$pattern])) {
+                $pattern_regex = preg_quote($pattern, '#');
+                $pattern_regex = strtr($pattern_regex, $wildcard_regex_map);
+                $pattern_regexes[$pattern] = '#^' . $pattern_regex . '$#';
+            }
+
+            $pattern_match = preg_match($pattern_regexes[$pattern], $hook_name);
+
+            if ($pattern_match === false) {
+                $exc_data = [
+                    'code' => 'app.core.hooks.pattern.match_failed',
+                    'hook_name' => $hook_name,
+                    'pattern' => $pattern,
+                ];
+
+                throw new Dj_App_Hooks_Exception('Matching a fired hook name against a wildcard pattern failed', $exc_data);
+            }
+
+            if (empty($pattern_match)) {
+                continue;
+            }
+
+            foreach ($registry[$pattern] as $priority => $callbacks_at_priority) {
+                if (empty($run_list[$priority])) {
+                    $run_list[$priority] = [];
+                }
+
+                // + keeps the entries already there: exact listeners stay first and none runs twice.
+                $run_list[$priority] += $callbacks_at_priority;
+            }
+
+            $has_pattern_listeners = true;
+        }
+
+        // Each registry list is kept sorted; two merged may not be.
+        if ($has_pattern_listeners) {
+            ksort($run_list);
+        }
+
+        return $run_list;
     }
 
     /**
