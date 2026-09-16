@@ -1757,7 +1757,7 @@ class Dj_App_Hooks {
     /**
      * Generates a unique hash for a callback
      *
-     * @param callable|string $callback The callback to hash
+     * @param string|array|object $callback The callback to hash
      * @return string Unique identifier for the callback
      */
     private static function generateCallbackHash($callback) {
