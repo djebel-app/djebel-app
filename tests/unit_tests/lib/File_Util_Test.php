@@ -1393,6 +1393,7 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertTrue($second_res_obj->isError());
         $this->assertEquals(Dj_App_File_Util::CODE_LOCK_BUSY, $second_res_obj->code());
         $this->assertEmpty($second_res_obj->lock_handle, 'a refused lock hands back no handle');
+        $this->assertEmpty($second_res_obj->lock_owner, 'who holds it is read only for a caller that asked');
 
         $release_res_obj = Dj_App_File_Util::releaseLock($first_res_obj);
 
@@ -1483,6 +1484,7 @@ class Dj_App_File_Util_Test extends TestCase {
             'file' => $file,
             'retry_count' => 2,
             'retry_wait_ms' => 1,
+            'read_owner' => 1,
         ];
 
         $second_res_obj = Dj_App_File_Util::acquireLock($second_params);
@@ -1540,6 +1542,7 @@ class Dj_App_File_Util_Test extends TestCase {
             'file' => $file,
             'retry_count' => 1,
             'retry_wait_ms' => 1,
+            'read_owner' => 1,
         ];
 
         $reader_res_obj = Dj_App_File_Util::acquireLock($busy_params);

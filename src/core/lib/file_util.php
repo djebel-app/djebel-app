@@ -281,15 +281,17 @@ class Dj_App_File_Util {
      * The lock is its own file beside the one being guarded, so the operating system
      * releases it however the process ends, including a crash.
      *
-     * Who is holding it gets written into the lock file only when the caller passes
-     * 'data' — that write costs several times what taking the lock does, so it is opt-in
-     * and a caller that only needs mutual exclusion pays nothing for it. An empty array
-     * opts in and records the process alone.
+     * Who is holding it is BOTH halves opt-in, because a caller that only needs mutual
+     * exclusion should pay for nothing else. 'data' writes the record on the way in — that
+     * write costs several times what taking the lock does, and an empty array still opts
+     * in and records the process alone. 'read_owner' reads it back on a refusal, which is
+     * the only moment there is anyone to name.
      *
      * Dj_App_File_Util::acquireLock([ 'file' => $file, ]);
      *
-     * @param array $inp_params file, and optionally data, retry_count, retry_wait_ms, shared
-     * @return Dj_App_Result lock_handle, lock_file, and lock_owner when 'data' was passed
+     * @param array $inp_params file, and optionally data, read_owner, retry_count,
+     *                          retry_wait_ms, shared
+     * @return Dj_App_Result lock_handle, lock_file, and lock_owner when it was asked for
      */
     public static function acquireLock($inp_params = []) {
         $res_obj = new Dj_App_Result();
@@ -348,13 +350,21 @@ class Dj_App_File_Util {
             if (empty($has_lock)) {
                 $fail_code = self::CODE_LOCK_BUSY;
 
-                // Read from OUR OWN handle: no second open, and no lock of any kind, so
-                // asking who holds the file cannot itself wait on the holder. A torn read
-                // is possible and harmless — this is for a person reading a log, and
+                // Most callers only need to know the file is busy, so who holds it is
+                // fetched only for one that asked — and only here, on the path where there
+                // is something to tell.
+                //
+                // Read from OUR OWN handle: no second open and no lock of any kind, so
+                // asking who holds the file cannot itself wait on the holder. That is also
+                // why it happens here instead of in the caller, where a plain read would
+                // take a shared lock and block on the very lock it is asking about. A torn
+                // read is possible and harmless — this is for a person reading a log, and
                 // NEVER for deciding to take a lock somebody else holds.
-                rewind($lock_handle);
-                $owner_info = fread($lock_handle, self::LOCK_OWNER_MAX_LEN);
-                $res_obj->lock_owner = empty($owner_info) ? '' : $owner_info;
+                if (!empty($inp_params['read_owner'])) {
+                    rewind($lock_handle);
+                    $owner_info = fread($lock_handle, self::LOCK_OWNER_MAX_LEN);
+                    $res_obj->lock_owner = empty($owner_info) ? '' : $owner_info;
+                }
 
                 throw new Dj_App_File_Util_Exception("The file is in use", [ 'file' => $lock_file, ]);
             }
