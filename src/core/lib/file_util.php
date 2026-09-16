@@ -444,8 +444,12 @@ class Dj_App_File_Util {
             // The handle IS the lock, so closing it is what releases it — and on success
             // the caller is holding it, which is the point of the call. It is released
             // here only where nobody is getting it: every failure, and an Error that
-            // skips the catch. Deliberately unchecked — nothing is left to release, so a
-            // failed close changes no outcome.
+            // skips the catch.
+            //
+            // No LOCK_UN: the close drops the lock on its own, because every lock on a
+            // file goes when the process closes a descriptor for it. Releasing takes the
+            // explicit step only where the answer is whether the release worked; here
+            // nothing is left to report, so a failed close changes no outcome.
             if ($res_obj->isError() && !empty($lock_handle)) {
                 fclose($lock_handle);
                 $res_obj->lock_handle = null;
