@@ -1461,6 +1461,101 @@ class Dj_App_File_Util_Test extends TestCase {
     }
 
     /**
+     * A refused lock says WHO holds it, so a log line names the holder instead of only
+     * reporting that something was busy.
+     */
+    public function testAcquireLockReportsWhoHoldsABusyFile() {
+        $file = $this->test_dir . '/owned.json';
+
+        $first_data = [ 'operation' => 'first holder', ];
+
+        $first_params = [
+            'file' => $file,
+            'data' => $first_data,
+        ];
+
+        $first_res_obj = Dj_App_File_Util::acquireLock($first_params);
+
+        $this->assertTrue($first_res_obj->isSuccess());
+        $this->assertStringContainsString('first holder', $first_res_obj->lock_owner);
+
+        $second_params = [
+            'file' => $file,
+            'retry_count' => 2,
+            'retry_wait_ms' => 1,
+        ];
+
+        $second_res_obj = Dj_App_File_Util::acquireLock($second_params);
+
+        $this->assertTrue($second_res_obj->isError());
+
+        $owner_rec = Dj_App_String_Util::jsonDecode($second_res_obj->lock_owner);
+
+        $this->assertEquals('first holder', $owner_rec['data']['operation'], 'what the caller passed comes back under data');
+        $this->assertEquals(getmypid(), $owner_rec['meta']['pid'], 'the system half is always there');
+        $this->assertNotEmpty($owner_rec['meta']['taken_at']);
+
+        $req_id = Dj_App_Util::reqId();
+
+        $this->assertEquals($req_id, $owner_rec['meta']['req_id'], 'a stuck lock leads back to the request that took it');
+
+        $release_res_obj = Dj_App_File_Util::releaseLock($first_res_obj);
+
+        $this->assertTrue($release_res_obj->isSuccess());
+    }
+
+    /**
+     * A later, shorter owner must not read back with the previous one's tail still on the
+     * end of it.
+     */
+    public function testAcquireLockReplacesTheWholePreviousOwner() {
+        $file = $this->test_dir . '/reused.json';
+
+        $long_data = [ 'operation' => 'a considerably longer operation name than the one that follows it', ];
+
+        $long_params = [
+            'file' => $file,
+            'data' => $long_data,
+        ];
+
+        $long_res_obj = Dj_App_File_Util::acquireLock($long_params);
+        $long_release_res_obj = Dj_App_File_Util::releaseLock($long_res_obj);
+
+        $this->assertTrue($long_release_res_obj->isSuccess());
+
+        $short_data = [ 'operation' => 'short', ];
+
+        $short_params = [
+            'file' => $file,
+            'data' => $short_data,
+        ];
+
+        $short_res_obj = Dj_App_File_Util::acquireLock($short_params);
+
+        $this->assertTrue($short_res_obj->isSuccess());
+
+        // Read it back while the short holder still HAS the lock, so what comes back is
+        // the file as that holder left it.
+        $busy_params = [
+            'file' => $file,
+            'retry_count' => 1,
+            'retry_wait_ms' => 1,
+        ];
+
+        $reader_res_obj = Dj_App_File_Util::acquireLock($busy_params);
+
+        $this->assertTrue($reader_res_obj->isError());
+
+        $owner_rec = Dj_App_String_Util::jsonDecode($reader_res_obj->lock_owner);
+
+        $this->assertEquals('short', $owner_rec['data']['operation'], 'the longer value left no tail behind');
+
+        $short_release_res_obj = Dj_App_File_Util::releaseLock($short_res_obj);
+
+        $this->assertTrue($short_release_res_obj->isSuccess());
+    }
+
+    /**
      * Without a file there is nothing to guard, and the caller is told rather than handed
      * a lock on a made-up name.
      */

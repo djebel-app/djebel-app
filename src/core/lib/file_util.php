@@ -14,6 +14,11 @@ class Dj_App_File_Util {
     const LOCK_RETRY_COUNT = 20;
     const LOCK_RETRY_WAIT_MS = 100;
 
+    // Who holds a lock, written when it is taken and read back when it is refused, so a
+    // busy file says WHO rather than only that it is busy. Bounded because it is read from
+    // a file another process is writing.
+    const LOCK_OWNER_MAX_LEN = 512;
+
     const CODE_LOCK_BUSY = 'app.file.lock_busy';
     const CODE_LOCK_FAILED = 'app.file.lock_failed';
 
@@ -272,8 +277,8 @@ class Dj_App_File_Util {
      *
      * Dj_App_File_Util::acquireLock([ 'file' => $file, ]);
      *
-     * @param array $inp_params file, and optionally retry_count, retry_wait_ms, shared
-     * @return Dj_App_Result lock_handle, lock_file
+     * @param array $inp_params file, and optionally data, retry_count, retry_wait_ms, shared
+     * @return Dj_App_Result lock_handle, lock_file, lock_owner
      */
     public static function acquireLock($inp_params = []) {
         $res_obj = new Dj_App_Result();
@@ -298,9 +303,10 @@ class Dj_App_File_Util {
                 throw new Dj_App_File_Util_Exception("Couldn't create dir", [ 'dir' => $dir, ]);
             }
 
-            // 'c' creates the file when it is missing and, unlike 'w', never truncates.
-            // What the file holds is nobody's business; only the handle matters.
-            $lock_handle = fopen($lock_file, 'c');
+            // 'c+' creates the file when it is missing and, unlike 'w', never truncates —
+            // and it READS as well as writes, which is what lets a refused caller find out
+            // who is holding the file.
+            $lock_handle = fopen($lock_file, 'c+');
 
             if (empty($lock_handle)) {
                 throw new Dj_App_File_Util_Exception("Couldn't open the lock file", [ 'file' => $lock_file, ]);
@@ -331,11 +337,75 @@ class Dj_App_File_Util {
             if (empty($has_lock)) {
                 $fail_code = self::CODE_LOCK_BUSY;
 
+                // Read from OUR OWN handle: no second open, and no lock of any kind, so
+                // asking who holds the file cannot itself wait on the holder. A torn read
+                // is possible and harmless — this is for a person reading a log, and
+                // NEVER for deciding to take a lock somebody else holds.
+                rewind($lock_handle);
+                $owner_info = fread($lock_handle, self::LOCK_OWNER_MAX_LEN);
+                $res_obj->lock_owner = empty($owner_info) ? '' : $owner_info;
+
                 throw new Dj_App_File_Util_Exception("The file is in use", [ 'file' => $lock_file, ]);
+            }
+
+            // Neither can change while the process lives, and both are syscalls — read
+            // once and reuse. The time is NOT cached: every lock is taken at its own.
+            static $pid = null;
+            static $host = null;
+
+            if (is_null($pid)) {
+                $pid = getmypid();
+                $host = gethostname();
+                $host = empty($host) ? '' : $host;
+            }
+
+            $taken_at = gmdate('Y-m-d\TH:i:s\Z');
+
+            // The request that took it, so a stuck lock leads straight to that request's
+            // own log lines rather than to a pid and a guess.
+            $req_id = Dj_App_Util::reqId();
+
+            $owner_meta = [
+                'pid' => $pid,
+                'host' => $host,
+                'req_id' => $req_id,
+                'taken_at' => $taken_at,
+            ];
+
+            $lock_data = Dj_App_Util::getField('data', $inp_params, []);
+
+            $owner_rec = [
+                'meta' => $owner_meta,
+                'data' => $lock_data,
+            ];
+
+            $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
+            $owner_info_len = strlen($owner_info);
+
+            // The read side is bounded, so an oversized payload would come back truncated
+            // and decode to nothing — losing the system half with it. Dropping the
+            // caller's half keeps what says WHO, which is the part a stuck lock needs.
+            if ($owner_info_len > self::LOCK_OWNER_MAX_LEN) {
+                $owner_rec['data'] = [];
+                $owner_info = Dj_App_String_Util::jsonEncode($owner_rec);
+            }
+
+            // Truncate first: a shorter owner than the last one would otherwise leave that
+            // one's tail behind and read back as nonsense.
+            $truncate_res = ftruncate($lock_handle, 0);
+
+            if (!empty($truncate_res)) {
+                rewind($lock_handle);
+                $write_res = fwrite($lock_handle, $owner_info);
+
+                if (!empty($write_res)) {
+                    fflush($lock_handle);
+                }
             }
 
             $res_obj->lock_handle = $lock_handle;
             $res_obj->lock_file = $lock_file;
+            $res_obj->lock_owner = $owner_info;
             $res_obj->status(true);
         } catch (Exception $e) {
             // Best effort, and deliberately unchecked: the lock was never handed out, so
