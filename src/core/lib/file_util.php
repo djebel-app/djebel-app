@@ -81,9 +81,10 @@ class Dj_App_File_Util {
             $res_obj->msg = $e->getMessage();
         } finally {
             // Unlike a lock, a read handle is never handed to the caller, so it closes on
-            // every path — including an Error that skips the catch.
+            // every path — including an Error that skips the catch. Closing is also what
+            // drops the shared lock, and this is the most-travelled read there is, so no
+            // unlock is spent ahead of it to buy something already done.
             if (!empty($fp)) {
-                flock($fp, LOCK_UN);
                 fclose($fp);
             }
 
@@ -441,15 +442,16 @@ class Dj_App_File_Util {
             $res_obj->msg = $e->getMessage();
             $res_obj->code($fail_code);
         } finally {
-            // The handle IS the lock, so closing it is what releases it — and on success
-            // the caller is holding it, which is the point of the call. It is released
-            // here only where nobody is getting it: every failure, and an Error that
-            // skips the catch.
+            // The handle IS the lock, so letting it go is what releases it — and on
+            // success the caller is holding it, which is the point of the call. It is
+            // released here only where nobody is getting it: every failure, and an Error
+            // that skips the catch.
             //
-            // No LOCK_UN: the close drops the lock on its own, because every lock on a
-            // file goes when the process closes a descriptor for it. Releasing takes the
-            // explicit step only where the answer is whether the release worked; here
-            // nothing is left to report, so a failed close changes no outcome.
+            // No LOCK_UN before it: closing drops the lock on its own, since every lock
+            // on a file goes when the process closes a descriptor for it. Measured on
+            // 7.4 and 8.4. Windows emulates flock and is not covered by that, and this
+            // runs on servers, which are Linux — so the syscall is not spent guarding a
+            // case that does not arise. Deliberately unchecked: nothing is left to report.
             if ($res_obj->isError() && !empty($lock_handle)) {
                 fclose($lock_handle);
                 $res_obj->lock_handle = null;
