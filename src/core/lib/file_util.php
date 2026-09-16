@@ -44,20 +44,20 @@ class Dj_App_File_Util {
             Dj_App_Util::microtime( __METHOD__, $func_args );
 
             if (!file_exists($file)) {
-                throw new Dj_App_Exception("File not found", [ 'file' => $file ]);
+                throw new Dj_App_File_Util_Exception("File not found", [ 'file' => $file ]);
             }
 
             $fp = fopen($file, 'rb');
 
             if (empty($fp)) {
-                throw new Dj_App_Exception("Couldn't open file for reading", [ 'file' => $file ]);
+                throw new Dj_App_File_Util_Exception("Couldn't open file for reading", [ 'file' => $file ]);
             }
 
             flock($fp, LOCK_SH);
 
             if ($seek_bytes > 0) {
                 if (fseek($fp, $seek_bytes) === -1) {
-                    throw new Dj_App_Exception("Couldn't seek to position", [ 'file' => $file, 'seek_bytes' => $seek_bytes ]);
+                    throw new Dj_App_File_Util_Exception("Couldn't seek to position", [ 'file' => $file, 'seek_bytes' => $seek_bytes ]);
                 }
             }
 
@@ -77,9 +77,11 @@ class Dj_App_File_Util {
 
             $res_obj->output = $buff;
             $res_obj->status(true);
-        } catch (Exception $e) {
+        } catch (Dj_App_File_Util_Exception $e) {
             $res_obj->msg = $e->getMessage();
         } finally {
+            // Unlike a lock, a read handle is never handed to the caller, so it closes on
+            // every path — including an Error that skips the catch.
             if (!empty($fp)) {
                 flock($fp, LOCK_UN);
                 fclose($fp);
@@ -246,13 +248,15 @@ class Dj_App_File_Util {
             }
 
             $res_obj->status = true;
-        } catch (Exception $e) {
+        } catch (Dj_App_File_Util_Exception $e) {
             $res_obj->msg = $e->getMessage();
-
-            // Clean up temp file on error. is_file() is the right check here because it
-            // admits exactly what unlink() can delete — file_exists() also says yes to a
-            // directory, and unlink on one only raises a warning. The stat cache merges
-            // this call with the unlink, so the pair costs one filesystem stat.
+        } finally {
+            // A success renamed the temp away, so only a failure can still have one — and
+            // an Error that skips the catch leaves one too, which is why this is here and
+            // not there. is_file() is the right check because it admits exactly what
+            // unlink() can delete: file_exists() also says yes to a directory, and unlink
+            // on one only raises a warning. The stat cache merges this call with the
+            // unlink, so the pair costs one filesystem stat.
             if (!empty($tmp_file) && is_file($tmp_file)) {
                 $unlink_res = unlink($tmp_file);
 
@@ -264,8 +268,6 @@ class Dj_App_File_Util {
                     $res_obj->temp_file_left_behind = is_file($tmp_file);
                 }
             }
-        } finally {
-
         }
 
         return $res_obj;
@@ -359,7 +361,6 @@ class Dj_App_File_Util {
 
             $res_obj->lock_handle = $lock_handle;
             $res_obj->lock_file = $lock_file;
-            $res_obj->status(true);
 
             // Recording the holder costs several times what taking the lock does, and the
             // write is what dominates — so it happens only for a caller that asked, by
@@ -422,15 +423,23 @@ class Dj_App_File_Util {
 
                 $res_obj->lock_owner = $owner_info;
             }
-        } catch (Exception $e) {
-            // Best effort, and deliberately unchecked: the lock was never handed out, so
-            // the caller has nothing to release and a failed close changes no outcome.
-            if (!empty($lock_handle)) {
-                fclose($lock_handle);
-            }
 
+            // Last, so that nothing which can still throw runs after the success flip and
+            // the cleanup below can trust it.
+            $res_obj->status(true);
+        } catch (Dj_App_File_Util_Exception $e) {
             $res_obj->msg = $e->getMessage();
             $res_obj->code($fail_code);
+        } finally {
+            // The handle IS the lock, so closing it is what releases it — and on success
+            // the caller is holding it, which is the point of the call. It is released
+            // here only where nobody is getting it: every failure, and an Error that
+            // skips the catch. Deliberately unchecked — nothing is left to release, so a
+            // failed close changes no outcome.
+            if ($res_obj->isError() && !empty($lock_handle)) {
+                fclose($lock_handle);
+                $res_obj->lock_handle = null;
+            }
         }
 
         return $res_obj;
@@ -503,9 +512,12 @@ class Dj_App_File_Util {
             }
 
             $res_obj->status = true;
-        } catch (Exception $e) {
+        } catch (Dj_App_File_Util_Exception $e) {
             $res_obj->msg = $e->getMessage();
         } finally {
+            // umask is process-global, so it is restored on every path — including an
+            // Error that skips the catch. Leaving it changed would silently reshape the
+            // permissions of every file created later in this request.
             umask($old_mask);
         }
 
@@ -766,6 +778,11 @@ class Dj_App_File_Util {
         } catch (Exception $e) {
             // An unreadable dir throws rather than returning nothing — report it as the
             // error it is instead of an empty listing that reads like "nothing here".
+            //
+            // Broad on purpose, and NOT to be narrowed to this file's own exception like
+            // its siblings: nothing here throws: the throw comes from the iterators, as
+            // an SPL UnexpectedValueException. Narrowing would let an unreadable dir take
+            // the request down.
             $res_obj->msg = $e->getMessage();
 
             return $res_obj;
@@ -868,7 +885,7 @@ class Dj_App_File_Util {
 
             $res_obj->deleted = true;
             $res_obj->status = true;
-        } catch (Exception $e) {
+        } catch (Dj_App_File_Util_Exception $e) {
             $res_obj->msg = $e->getMessage();
         }
 
