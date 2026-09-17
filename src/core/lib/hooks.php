@@ -340,6 +340,7 @@ class Dj_App_Hooks {
      * Dj_App_Hooks::addAction('app/messages/insert', [ $obj, 'sendPush', ], 50, $opts);
      *
      * // Wildcard: '*' = any characters inside one segment, '**' = any number of whole segments.
+     * // A whole '*' as the first or last segment acts like '**'.
      * // Dots, because a star next to a slash would close this docblock.
      * Dj_App_Hooks::addAction('app.plugin.*.action.message_processed', [ $obj, 'onAnyMessage', ]);
      * ```
@@ -1686,6 +1687,7 @@ class Dj_App_Hooks {
      * one priority order, exact ones first at equal priority.
      *   qs_app.*.save   matches qs_app/vehicles/save, not qs_app/a/b/save
      *   qs_app.**.save  matches qs_app/save and qs_app/a/b/save
+     *   qs_app.*        matches qs_app and qs_app/a/b, like qs_app.**
      *
      * @param array $params hook_name (formatted), registry, patterns
      * @return array
@@ -1713,7 +1715,18 @@ class Dj_App_Hooks {
             }
 
             if (!isset($pattern_regexes[$pattern])) {
-                $pattern_regex = preg_quote($pattern, '#');
+                // A whole * as the first or last segment reaches any depth, the same as **.
+                $regex_source = $pattern;
+
+                if (str_starts_with($regex_source, '*/')) {
+                    $regex_source = '*' . $regex_source;
+                }
+
+                if (str_ends_with($regex_source, '/*')) {
+                    $regex_source .= '*';
+                }
+
+                $pattern_regex = preg_quote($regex_source, '#');
                 $pattern_regex = strtr($pattern_regex, $wildcard_regex_map);
                 $pattern_regexes[$pattern] = '#^' . $pattern_regex . '$#';
             }

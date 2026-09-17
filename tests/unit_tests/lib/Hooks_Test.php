@@ -2290,8 +2290,9 @@ class Dj_App_Hooks_Test extends TestCase {
     }
 
     /**
-     * Pins the syntax: '*' stays inside one segment, '**' spans zero or more segments at the
-     * start, middle or end, and dots and plurals format the same on both sides.
+     * Pins the syntax: '*' stays inside one segment except as a whole first or last segment,
+     * where it spans any depth like '**'; '**' spans zero or more segments at the start, middle
+     * or end; dots and plurals format the same on both sides.
      */
     public function testPatternMatching() {
         $cases = [
@@ -2322,7 +2323,23 @@ class Dj_App_Hooks_Test extends TestCase {
             ],
             'app.plugins.*.action.*' => [
                 'app/plugin/contact/action/saved' => true,
+                'app/plugin/contact/action/saved/later' => true,
                 'app.plugins.contact.extra.action.saved' => false,
+            ],
+            'qs_app/*' => [
+                'qs_app' => true,
+                'qs_app/a/b' => true,
+                'qs_apps/a' => false,
+            ],
+            '*/post_save' => [
+                'post_save' => true,
+                'a/b/post_save' => true,
+                'a/b/post_saved' => false,
+            ],
+            '*/qs_app/*' => [
+                'qs_app' => true,
+                'a/qs_app/b/c' => true,
+                'a/qs_apps/b' => false,
             ],
         ];
 
