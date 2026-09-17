@@ -575,15 +575,45 @@ class Dj_App_Hooks {
 
         // A '*' makes it a wildcard pattern, validated once per spelling so a bad one fails where it
         // is registered. Rejected: no segment without '*' (*/*), '**' inside a segment (app/a**),
-        // '**' twice in a row (a/**/**/b). A preg_match() failure rejects too.
+        // '**' twice in a row (a/**/**/b), counting a whole '*' at either end as '**' (*/**/b).
         if (str_contains($hook_name, '*')) {
-            if (!preg_match('#(?:^|/)[^*/]+(?:/|$)#', $hook_name) || (preg_match('#[^/]\*\*|\*\*[^/]#', $hook_name) !== 0) || str_contains($hook_name, '**/**')) {
-                $exc_data = [
-                    'code' => 'app.core.hooks.pattern.invalid',
-                    'pattern' => $hook_name,
-                ];
+            $first_slash_pos = strpos($hook_name, '/');
+            $first_star_pos = strpos($hook_name, '*');
 
-                throw new Dj_App_Hooks_Exception('Invalid wildcard hook pattern: it needs a segment without *, and ** only as a whole segment, never twice in a row', $exc_data);
+            // Decided from the first characters in the common shape: a plain first segment and no
+            // '**' anywhere breaks none of the rules, so only other shapes walk the segments.
+            if ($first_slash_pos === false || $first_star_pos < $first_slash_pos || str_contains($hook_name, '**')) {
+                $segments = explode('/', $hook_name);
+                $last_segment_index = count($segments) - 1;
+                $has_literal_segment = false;
+                $prev_is_double_star = false;
+                $is_invalid = false;
+
+                foreach ($segments as $segment_index => $segment) {
+                    if (!str_contains($segment, '*')) {
+                        $has_literal_segment = true;
+                        $prev_is_double_star = false;
+                        continue;
+                    }
+
+                    $is_double_star = $segment == '**' || ($segment == '*' && ($segment_index == 0 || $segment_index == $last_segment_index));
+
+                    if (($is_double_star && $prev_is_double_star) || (!$is_double_star && str_contains($segment, '**'))) {
+                        $is_invalid = true;
+                        break;
+                    }
+
+                    $prev_is_double_star = $is_double_star;
+                }
+
+                if ($is_invalid || !$has_literal_segment) {
+                    $exc_data = [
+                        'code' => 'app.core.hooks.pattern.invalid',
+                        'pattern' => $hook_name,
+                    ];
+
+                    throw new Dj_App_Hooks_Exception('Invalid wildcard hook pattern: it needs a segment without *, and ** only as a whole segment, never twice in a row', $exc_data);
+                }
             }
         }
 

@@ -2479,7 +2479,7 @@ class Dj_App_Hooks_Test extends TestCase {
     }
 
     public function testInvalidPatternsThrowAtRegistration() {
-        $invalid_patterns = [ '**', '*/*', 'vehicle*/**', 'qs_app/vehicle**/post_save', 'qs_app/***/post_save', 'qs_app/**/**/post_save', ];
+        $invalid_patterns = [ '**', '*/*', 'vehicle*/**', 'qs_app/vehicle**/post_save', 'qs_app/***/post_save', 'qs_app/**/**/post_save', '*/**/post_save', 'qs_app/**/*', ];
 
         foreach ($invalid_patterns as $invalid_pattern) {
             $registration_params = [ 'hook_name' => $invalid_pattern, ];
