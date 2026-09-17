@@ -182,10 +182,9 @@ class Dj_App_Plugins {
                     // A crashed plugin must leave a trace — full detail (message,
                     // file, line, trace) goes to the app error log. The page shows
                     // the raw message only on a dev/debug setup.
-                    // The logger hands back the reference the entry is findable by, and an
-                    // empty answer means nothing was written. What that reference is made of
-                    // is the logger's business — nothing here needs to know.
-                    $log_ref = Dj_App_Log::logAppError($e);
+                    // Deliberately unchecked: the crash is reported to the visitor either
+                    // way, and there is nothing to do differently when the write fails.
+                    Dj_App_Log::logAppError($e);
 
                     // The id resolved during discovery — the same string the activation check
                     // and the options filter use, so what the box names is what a site owner
@@ -197,7 +196,10 @@ class Dj_App_Plugins {
                     $is_debug = Dj_App_Config::cfg('app.debug', false);
 
                     if (empty($is_debug)) {
-                        $msg = empty($log_ref) ? 'error' : 'error logged';
+                        // The same either way. Whether the line got written is this box's
+                        // business, and a visitor reading two different sentences learns
+                        // only how it is configured.
+                        $msg = 'error';
                     } else {
                         $msg = $e->getMessage();
                         $msg = dj_esc_html($msg);
@@ -205,12 +207,13 @@ class Dj_App_Plugins {
 
                     $error_msg = sprintf('Plugin [%s] crashed: %s', $plugin_id_esc, $msg);
 
-                    // Shown so what the visitor quotes locates the entry. Absent only when
-                    // the write itself failed, and then there is nothing to look up anyway.
-                    if (!empty($log_ref)) {
-                        $log_ref_esc = dj_esc_html($log_ref);
-                        $error_msg = sprintf('%s (ref: %s)', $error_msg, $log_ref_esc);
-                    }
+                    // Shown so what the visitor quotes locates the entry — the same value
+                    // stamped inside it. Always, because it names THIS request whether or
+                    // not a line was written, and the other entries from the same run
+                    // carry it too.
+                    $req_id = Dj_App_Util::reqId();
+                    $req_id_esc = dj_esc_html($req_id);
+                    $error_msg = sprintf('%s (ref: %s)', $error_msg, $req_id_esc);
 
                     // The whole line goes THROUGH msg(), not beside it — the prefix used to be
                     // echoed as bare text next to the box, leaving half the sentence unstyled.
