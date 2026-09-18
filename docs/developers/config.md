@@ -187,7 +187,7 @@ Dj_App_Assets::register([
 | `app.debug` | `false` | Debug mode. |
 | `app.error_logging` | `true` | Write PHP errors to a log. |
 | `app.error_log_file` | *(derived)* | Where those errors go. |
-| `app.request.finish_request_time_limit` | `45` | Seconds allowed for post-response work after the client is released. |
+| `app.request.finish_request_time_limit` | `120` | Seconds allowed for post-response work after the client is released. |
 | `env` | *(unset)* | Environment name (`dev`, `staging`, `live`). See below. |
 
 ### The environment name

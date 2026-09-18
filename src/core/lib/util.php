@@ -77,7 +77,10 @@ class Dj_App_Util {
      */
     public static function flushResponse()
     {
-        $time_limit = Dj_App_Config::cfg('app.request.finish_request_time_limit', 45);
+        // Restarts the clock rather than capping the request: the shutdown phase gets these
+        // seconds whatever rendering already spent. Long enough for a batch of mails or API
+        // calls, short enough that a stuck listener frees its worker in minutes, not hours.
+        $time_limit = Dj_App_Config::cfg('app.request.finish_request_time_limit', 120);
         $time_limit = Dj_App_Hooks::applyFilter('app/request/finish_request_time_limit', $time_limit);
         set_time_limit($time_limit);
         ignore_user_abort(true);
