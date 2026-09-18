@@ -1779,11 +1779,11 @@ class Dj_App_Hooks_Test extends TestCase {
     }
 
     public static function recordCurrentAction($params = []) {
-        self::$nested_action_seen = Dj_App_Hooks::currentAction();
+        self::$nested_action_seen = Dj_App_Hooks::getCurrentAction();
     }
 
     public static function recordCurrentActionMatch($params = []) {
-        self::$nested_action_matched = Dj_App_Hooks::currentAction('app.core.test.nested.match_outer');
+        self::$nested_action_matched = Dj_App_Hooks::isCurrentAction('app.core.test.nested.match_outer');
     }
 
     public static function fireNestedFilter($value, $params = []) {
@@ -1795,12 +1795,12 @@ class Dj_App_Hooks_Test extends TestCase {
     }
 
     public static function recordCurrentFilter($value, $params = []) {
-        self::$nested_filter_seen = Dj_App_Hooks::currentFilter();
+        self::$nested_filter_seen = Dj_App_Hooks::getCurrentFilter();
 
         return $value;
     }
 
-    public function testNestedActionRestoresOuterCurrentAction() {
+    public function testNestedActionRestoresTheOuterActionName() {
         self::$nested_action_seen = '';
 
         // Priority 10 fires an action of its own; priority 20 then asks which action it
@@ -1816,7 +1816,7 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertEquals($expected_hook, self::$nested_action_seen);
     }
 
-    public function testNestedFilterRestoresOuterCurrentFilter() {
+    public function testNestedFilterRestoresTheOuterFilterName() {
         self::$nested_filter_seen = '';
 
         Dj_App_Hooks::addFilter('app.core.test.nested.outer_filter', ['Dj_App_Hooks_Test', 'fireNestedFilter'], 10);
@@ -1831,7 +1831,7 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertEquals('seedinner', $res);
     }
 
-    public function testNestedActionKeepsTheBooleanCurrentActionForm() {
+    public function testNestedActionKeepsIsCurrentActionAnswering() {
         self::$nested_action_matched = null;
 
         // The documented boolean form has to survive nesting too, not just the getter.
@@ -1848,11 +1848,11 @@ class Dj_App_Hooks_Test extends TestCase {
         // nothing is running, so both readers report empty again.
         Dj_App_Hooks::doAction('app.core.test.nested.standalone_action');
 
-        $this->assertEmpty(Dj_App_Hooks::currentAction());
+        $this->assertEmpty(Dj_App_Hooks::getCurrentAction());
 
         $res = Dj_App_Hooks::applyFilter('app.core.test.nested.standalone_filter', 'v');
 
-        $this->assertEmpty(Dj_App_Hooks::currentFilter());
+        $this->assertEmpty(Dj_App_Hooks::getCurrentFilter());
         $this->assertEquals('v', $res);
     }
 
@@ -2237,7 +2237,7 @@ class Dj_App_Hooks_Test extends TestCase {
     public static $pattern_call_log = [];
 
     public static function recordPatternAction($params = []) {
-        self::$pattern_call_log[] = Dj_App_Hooks::currentAction();
+        self::$pattern_call_log[] = Dj_App_Hooks::getCurrentAction();
     }
 
     /**
@@ -2794,8 +2794,8 @@ class Dj_App_Hooks_Test extends TestCase {
     public static $current_filter_answers = [];
 
     public static function recordCurrentFilterMatch($value, $params = []) {
-        self::$current_filter_answers['running'] = Dj_App_Hooks::currentFilter('app.test.current.filter');
-        self::$current_filter_answers['other'] = Dj_App_Hooks::currentFilter('app/test/other/filter');
+        self::$current_filter_answers['running'] = Dj_App_Hooks::isCurrentFilter('app.test.current.filter');
+        self::$current_filter_answers['other'] = Dj_App_Hooks::isCurrentFilter('app/test/other/filter');
 
         return $value;
     }
@@ -2853,10 +2853,10 @@ class Dj_App_Hooks_Test extends TestCase {
     }
 
     /**
-     * Pins the compare form of currentFilter(): a listener shared by several filters tells them
+     * Pins isCurrentFilter(): a listener shared by several filters tells them
      * apart by name, in either spelling, and gets false for a filter that is not running.
      */
-    public function testCurrentFilterAnswersWhichFilterIsRunning() {
+    public function testIsCurrentFilterAnswersWhichFilterIsRunning() {
         self::$current_filter_answers = [];
 
         try {

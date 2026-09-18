@@ -111,13 +111,21 @@ class Dj_App_Hooks {
     private static $current_filter = '';
 
     /**
-     * Get the name of the currently executing action, or check if specific action is running
-     * @param string $hook_name Optional hook name to check
-     * @return string|bool Hook name if no param, true/false if hook name provided
+     * The name of the action running right now, formatted, or an empty string outside a fire.
+     * @return string
      */
-    public static function currentAction($hook_name = '') {
+    public static function getCurrentAction() {
+        return Dj_App_Hooks::$current_action;
+    }
+
+    /**
+     * Is this the action running right now? Any spelling of the name works — it is formatted first.
+     * @param string $hook_name
+     * @return bool
+     */
+    public static function isCurrentAction($hook_name) {
         if (empty($hook_name)) {
-            return Dj_App_Hooks::$current_action;
+            return false;
         }
 
         $hook_name_fmt = Dj_App_Hooks::formatHookName($hook_name);
@@ -127,13 +135,21 @@ class Dj_App_Hooks {
     }
 
     /**
-     * Get the name of the currently executing filter, or check if specific filter is running
-     * @param string $hook_name Optional hook name to check
-     * @return string|bool Hook name if no param, true/false if hook name provided
+     * The name of the filter running right now, formatted, or an empty string outside a chain.
+     * @return string
      */
-    public static function currentFilter($hook_name = '') {
+    public static function getCurrentFilter() {
+        return Dj_App_Hooks::$current_filter;
+    }
+
+    /**
+     * Is this the filter running right now? Any spelling of the name works — it is formatted first.
+     * @param string $hook_name
+     * @return bool
+     */
+    public static function isCurrentFilter($hook_name) {
         if (empty($hook_name)) {
-            return Dj_App_Hooks::$current_filter;
+            return false;
         }
 
         $hook_name_fmt = Dj_App_Hooks::formatHookName($hook_name);
@@ -611,7 +627,7 @@ class Dj_App_Hooks {
             // A restore and not a blank because dispatch nests: a listener that fires a
             // hook of its own would otherwise return here having erased the outer one,
             // leaving every listener still to run on it seeing no current action, which
-            // is the single question currentAction() exists to answer.
+            // is the single question getCurrentAction() exists to answer.
             $prev_action = Dj_App_Hooks::$current_action;
 
             $executed_hook_fmt = Dj_App_Hooks::formatHookName($executed_hook);

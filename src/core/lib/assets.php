@@ -1810,9 +1810,9 @@ class Dj_App_Assets {
         if (empty($placement)) {
             $placement = Dj_App_Assets::PLACEMENT_FOOTER;
 
-            if (Dj_App_Hooks::currentAction(Dj_App_Assets::HOOK_PAGE_HEAD)) {
+            if (Dj_App_Hooks::isCurrentAction(Dj_App_Assets::HOOK_PAGE_HEAD)) {
                 $placement = Dj_App_Assets::PLACEMENT_HEAD;
-            } elseif (Dj_App_Hooks::currentAction(Dj_App_Assets::HOOK_PAGE_BODY_START)) {
+            } elseif (Dj_App_Hooks::isCurrentAction(Dj_App_Assets::HOOK_PAGE_BODY_START)) {
                 $placement = Dj_App_Assets::PLACEMENT_BODY_START;
             }
         }
