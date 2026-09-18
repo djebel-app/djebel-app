@@ -573,50 +573,6 @@ class Dj_App_Hooks {
             $hook_name = strtr($hook_name, $plural_map);
         }
 
-        // A '*' makes it a wildcard pattern, validated once per spelling so a bad one fails where it
-        // is registered. Rejected: no segment without '*' (*/*), '**' inside a segment (app/a**),
-        // '**' twice in a row (a/**/**/b), counting a whole '*' at either end as '**' (*/**/b).
-        if (str_contains($hook_name, '*')) {
-            $first_slash_pos = strpos($hook_name, '/');
-            $first_star_pos = strpos($hook_name, '*');
-
-            // Decided from the first characters in the common shape: a plain first segment and no
-            // '**' anywhere breaks none of the rules, so only other shapes walk the segments.
-            if ($first_slash_pos === false || $first_star_pos < $first_slash_pos || str_contains($hook_name, '**')) {
-                $segments = explode('/', $hook_name);
-                $last_segment_index = count($segments) - 1;
-                $has_literal_segment = false;
-                $prev_is_double_star = false;
-                $is_invalid = false;
-
-                foreach ($segments as $segment_index => $segment) {
-                    if (!str_contains($segment, '*')) {
-                        $has_literal_segment = true;
-                        $prev_is_double_star = false;
-                        continue;
-                    }
-
-                    $is_double_star = $segment == '**' || ($segment == '*' && ($segment_index == 0 || $segment_index == $last_segment_index));
-
-                    if (($is_double_star && $prev_is_double_star) || (!$is_double_star && str_contains($segment, '**'))) {
-                        $is_invalid = true;
-                        break;
-                    }
-
-                    $prev_is_double_star = $is_double_star;
-                }
-
-                if ($is_invalid || !$has_literal_segment) {
-                    $exc_data = [
-                        'code' => 'app.core.hooks.pattern.invalid',
-                        'pattern' => $hook_name,
-                    ];
-
-                    throw new Dj_App_Hooks_Exception('Invalid wildcard hook pattern: it needs a segment without *, and ** only as a whole segment, never twice in a row', $exc_data);
-                }
-            }
-        }
-
         // Growth cap, not eviction: canonical hook names are a small fixed set, so
         // 1000 distinct raw spellings means something is generating dynamic names —
         // those format normally, just uncached. count() is O(1) on PHP arrays.
@@ -1718,6 +1674,7 @@ class Dj_App_Hooks {
      *   qs_app.*.save   matches qs_app/vehicles/save, not qs_app/a/b/save
      *   qs_app.**.save  matches qs_app/save and qs_app/a/b/save
      *   qs_app.*        matches qs_app and qs_app/a/b, like qs_app.**
+     *   * or **         matches every name
      *
      * @param array $params hook_name (formatted), registry, patterns
      * @return array
@@ -1726,12 +1683,21 @@ class Dj_App_Hooks {
     private static function resolveRunList($params) {
         static $pattern_regexes = [];
 
-        // '**' carries its own slashes, which lets it match zero segments.
+        // strtr() tries the longest key first, and it runs on the anchored regex, so a whole * at
+        // either end, or as the entire pattern, is a key of its own and reaches any depth, the same
+        // as **. '**' next to a slash carries that slash, which lets it match zero segments; any
+        // other '**' matches anything, slashes included.
         static $wildcard_regex_map = [
+            '^\*$' => '^.*$',
+            '^\*/' => '^(?:[^/]+/)*',
+            '/\*$' => '(?:/[^/]+)*$',
             '\*\*/' => '(?:[^/]+/)*',
             '/\*\*' => '(?:/[^/]+)*',
+            '\*\*' => '.*',
             '\*' => '[^/]*',
         ];
+
+        static $star_runs = [ '***', '**/**', ];
 
         $hook_name = $params['hook_name'];
         $registry = $params['registry'];
@@ -1745,20 +1711,19 @@ class Dj_App_Hooks {
             }
 
             if (!isset($pattern_regexes[$pattern])) {
-                // A whole * as the first or last segment reaches any depth, the same as **.
+                // Three or more stars, and '**' twice in a row, mean '**'. Typed as they are,
+                // qs_app/*** would also run for qs_app_other, and a repeated group costs
+                // backtracking on every name that does not match.
                 $regex_source = $pattern;
 
-                if (str_starts_with($regex_source, '*/')) {
-                    $regex_source = '*' . $regex_source;
-                }
-
-                if (str_ends_with($regex_source, '/*')) {
-                    $regex_source .= '*';
+                while (str_contains($regex_source, '***') || str_contains($regex_source, '**/**')) {
+                    $regex_source = str_replace($star_runs, '**', $regex_source);
                 }
 
                 $pattern_regex = preg_quote($regex_source, '#');
+                $pattern_regex = '^' . $pattern_regex . '$';
                 $pattern_regex = strtr($pattern_regex, $wildcard_regex_map);
-                $pattern_regexes[$pattern] = '#^' . $pattern_regex . '$#';
+                $pattern_regexes[$pattern] = '#' . $pattern_regex . '#';
             }
 
             $pattern_match = preg_match($pattern_regexes[$pattern], $hook_name);

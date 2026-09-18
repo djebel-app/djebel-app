@@ -2478,31 +2478,76 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertCount(2, $matched_hooks, 'a second priority runs it a second time');
     }
 
-    public function testInvalidPatternsThrowAtRegistration() {
-        $invalid_patterns = [ '**', '*/*', 'vehicle*/**', 'qs_app/vehicle**/post_save', 'qs_app/***/post_save', 'qs_app/**/**/post_save', '*/**/post_save', 'qs_app/**/*', ];
+    /**
+     * Pins that a lone * or ** runs for every hook, one segment or many, actions and filters alike.
+     */
+    public function testCatchAllPatternRunsForEveryHook() {
+        $fired_hooks = [ 'app', 'app/page/content', 'qs_app/vehicles/action/post_save', ];
 
-        foreach ($invalid_patterns as $invalid_pattern) {
-            $registration_params = [ 'hook_name' => $invalid_pattern, ];
-            $error = $this->captureRegistrationError($registration_params);
-            $registered_actions = Dj_App_Hooks::getActions();
+        Dj_App_Hooks::addAction('*', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+        $matched_hooks = $this->collectMatchedHooks($fired_hooks);
 
-            $this->assertEquals('app.core.hooks.pattern.invalid', $error['code'], "pattern: $invalid_pattern");
-            $this->assertEquals($invalid_pattern, $error['data']['pattern']);
-            $this->assertArrayNotHasKey($invalid_pattern, $registered_actions);
-        }
-
-        $filter_error_code = '';
+        $this->assertEquals($fired_hooks, $matched_hooks);
 
         try {
-            Dj_App_Hooks::addFilter('*/*', ['Dj_App_Hooks_Test', 'orderFilterA']);
-        } catch (Dj_App_Hooks_Exception $e) {
-            $filter_error_code = $e->getErrorCode();
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter('**', ['Dj_App_Hooks_Test', 'orderFilterA']);
+            $one_segment_result = Dj_App_Hooks::applyFilter('app', '');
+            $deep_result = Dj_App_Hooks::applyFilter('app/page/content', '');
+
+            $this->assertEquals('A', $one_segment_result);
+            $this->assertEquals('A', $deep_result);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
         }
+    }
 
-        $registered_filters = Dj_App_Hooks::getFilters();
+    /**
+     * Pins that a slip of the finger on the star key changes nothing: a run of stars, and '**'
+     * twice in a row, match what a single '**' matches. Left as typed, qs_app/*** would also run
+     * for qs_app_other.
+     */
+    public function testStarRunsMatchTheSameNamesAsDoubleStar() {
+        $cases = [
+            'qs_app/***' => [
+                'qs_app' => true,
+                'qs_app/a/b' => true,
+                'qs_app_other' => false,
+            ],
+            'qs_app/****/post_save' => [
+                'qs_app/post_save' => true,
+                'qs_app/a/b/post_save' => true,
+                'qs_app_other/post_save' => false,
+            ],
+            '***/post_save' => [
+                'post_save' => true,
+                'a/b/post_save' => true,
+                'a/b/post_saved' => false,
+            ],
+            'qs_app/**/**/post_save' => [
+                'qs_app/post_save' => true,
+                'qs_app/a/b/post_save' => true,
+                'qs_app_other/post_save' => false,
+            ],
+            '***' => [
+                'app' => true,
+                'app/page/content' => true,
+            ],
+        ];
 
-        $this->assertEquals('app.core.hooks.pattern.invalid', $filter_error_code);
-        $this->assertArrayNotHasKey('*/*', $registered_filters);
+        foreach ($cases as $pattern => $fired_hooks) {
+            Dj_App_Hooks::setActions();
+            Dj_App_Hooks::addAction($pattern, ['Dj_App_Hooks_Test', 'recordPatternAction']);
+
+            foreach ($fired_hooks as $fired_hook => $should_match) {
+                $single_hook = [ $fired_hook, ];
+                $matched_hooks = $this->collectMatchedHooks($single_hook);
+                $did_match = !empty($matched_hooks);
+
+                $this->assertSame($should_match, $did_match, "$pattern vs $fired_hook");
+            }
+        }
     }
 
     public function testDeferredPatternThrows() {
