@@ -299,9 +299,10 @@ class Dj_App_Log {
      * so every failure kind lands in the SAME log.
      * Dj_App_Log::logAppError($exception);
      * @param Throwable|array|object|string $data
-     * @return string The reference the entry is findable by — hand it to whoever reports
-     *                the failure, so what a visitor quotes locates the line. Empty when
-     *                nothing was written, so it doubles as the success check.
+     * @return bool whether the entry was written. The reference it is findable by is
+     *              stamped INTO the entry and comes from Dj_App_Util::reqId(), which any
+     *              caller can read for itself — handing it back as well only invites one
+     *              to treat this as where a request id comes from.
      */
     public static function logAppError($data) {
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
@@ -309,7 +310,7 @@ class Dj_App_Log {
         // Critical facility: stays ON unless REALLY disabled (0/false/off/no) —
         // a blank or garbage value must not silently kill error logging.
         if (Dj_App_Util::isDisabled($log_errors)) {
-            return '';
+            return false;
         }
 
         // A Throwable can arrive bare, under an 'exception' key, or in a result obj.
@@ -337,9 +338,8 @@ class Dj_App_Log {
                 ' in ' . $data['file'] . ' on line ' . $data['line'];
         }
 
-        // The reference this entry is findable by, and what the caller hands the visitor.
-        // Read once, up here, so every exit path below returns the same value — and so a
-        // caller never has to know what the reference is made of.
+        // The reference this entry is findable by. Read once, up here, so a run that writes
+        // more than one line stamps the same value on all of them.
         $req_id = Dj_App_Util::reqId();
 
         if (empty($entry_body)) {
@@ -363,15 +363,15 @@ class Dj_App_Log {
         // PHP's default log, so enabled logging never silently drops an entry.
         if (empty($error_log_file)) {
             $log_res = error_log($log_entry);
-            $log_ref = empty($log_res) ? '' : $req_id;
+            $is_logged = !empty($log_res);
 
-            return $log_ref;
+            return $is_logged;
         }
 
         $written_line = Dj_App_Log::msg($log_entry, '', $error_log_file, [ 'raw' => 1, ]);
-        $log_ref = empty($written_line) ? '' : $req_id;
+        $is_logged = !empty($written_line);
 
-        return $log_ref;
+        return $is_logged;
     }
 
     /**
