@@ -19,7 +19,7 @@
   </php>
   <source>
     <include>
-      <directory suffix=".php">dj-app/</directory>
+      <directory suffix=".php">../src/</directory>
     </include>
   </source>
 </phpunit>
