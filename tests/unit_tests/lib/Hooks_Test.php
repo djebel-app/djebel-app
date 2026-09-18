@@ -2790,4 +2790,195 @@ class Dj_App_Hooks_Test extends TestCase {
         $this->assertEquals('app.core.hooks.pattern.match_failed', $error['code']);
         $this->assertEquals('app/test/pattern/runtime/a/b/c/d/e/f/nope', $error['data']['hook_name']);
     }
+
+    public static $current_filter_answers = [];
+
+    public static function recordCurrentFilterMatch($value, $params = []) {
+        self::$current_filter_answers['running'] = Dj_App_Hooks::currentFilter('app.test.current.filter');
+        self::$current_filter_answers['other'] = Dj_App_Hooks::currentFilter('app/test/other/filter');
+
+        return $value;
+    }
+
+    /**
+     * Pins that a hook name which is not a scalar is refused at the door by every entry point that
+     * takes one, rather than reaching a registry keyed by whatever it casts to.
+     */
+    public function testNonScalarHookNameIsRefused() {
+        $entry_points = [
+            'doAction', 'applyFilter', 'formatHookName', 'removeAction', 'removeFilter',
+            'disableFilter', 'enableFilter', 'disableAction', 'enableAction',
+        ];
+
+        $bad_hook_name = new stdClass();
+
+        foreach ($entry_points as $entry_point) {
+            $call_args = [ $bad_hook_name, ];
+
+            if ($entry_point == 'removeAction' || $entry_point == 'removeFilter') {
+                $call_args[] = ['Dj_App_Hooks_Test', 'recordPatternAction'];
+            }
+
+            $refused = false;
+
+            try {
+                call_user_func_array(['Dj_App_Hooks', $entry_point], $call_args);
+            } catch (Dj_App_Exception $e) {
+                $refused = true;
+            }
+
+            $this->assertTrue($refused, "$entry_point must refuse a hook name that is not a scalar");
+        }
+    }
+
+    /**
+     * Pins the difference between the two answers about running: getExecutedHooks() names only the
+     * hooks that reached a listener, while hasRun() is true for one that fired with nothing
+     * registered.
+     */
+    public function testExecutedHooksNameOnlyHooksThatReachedAListener() {
+        Dj_App_Hooks::setActions();
+        Dj_App_Hooks::addAction('app/test/executed/with_listener', ['Dj_App_Hooks_Test', 'recordPatternAction']);
+        Dj_App_Hooks::doAction('app/test/executed/with_listener');
+        Dj_App_Hooks::doAction('app/test/executed/no_listener');
+
+        $executed_hooks = Dj_App_Hooks::getExecutedHooks();
+
+        $this->assertContains('app/test/executed/with_listener', $executed_hooks);
+        $this->assertNotContains('app/test/executed/no_listener', $executed_hooks);
+
+        $fired_without_listeners = Dj_App_Hooks::hasRun('app/test/executed/no_listener');
+
+        $this->assertTrue($fired_without_listeners);
+    }
+
+    /**
+     * Pins the compare form of currentFilter(): a listener shared by several filters tells them
+     * apart by name, in either spelling, and gets false for a filter that is not running.
+     */
+    public function testCurrentFilterAnswersWhichFilterIsRunning() {
+        self::$current_filter_answers = [];
+
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter('app/test/current/filter', ['Dj_App_Hooks_Test', 'recordCurrentFilterMatch']);
+            $filtered = Dj_App_Hooks::applyFilter('app/test/current/filter', 'untouched');
+
+            $this->assertEquals('untouched', $filtered);
+            $this->assertTrue(self::$current_filter_answers['running']);
+            $this->assertFalse(self::$current_filter_answers['other']);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    /**
+     * Pins the priority ceiling: registering above it fails loudly instead of quietly ordering a
+     * listener last.
+     */
+    public function testPriorityAboveTheCeilingIsRefused() {
+        $refused = false;
+
+        try {
+            Dj_App_Hooks::addAction('app/test/priority/ceiling', ['Dj_App_Hooks_Test', 'recordPatternAction'], 10001);
+        } catch (Dj_App_Exception $e) {
+            $refused = true;
+        }
+
+        $this->assertTrue($refused);
+    }
+
+    /**
+     * Pins that the plural spelling still applies the filter, and warns the caller off it.
+     */
+    public function testApplyFiltersAliasStillFiltersAndWarns() {
+        self::$captured_warnings = [];
+
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter('app/test/alias/value', ['Dj_App_Hooks_Test', 'orderFilterA']);
+
+            set_error_handler([$this, 'captureHookWarning']);
+
+            try {
+                $filtered = Dj_App_Hooks::applyFilters('app/test/alias/value', '');
+            } finally {
+                restore_error_handler();
+            }
+
+            $this->assertEquals('A', $filtered);
+            $this->assertCount(1, self::$captured_warnings);
+            $this->assertEquals(E_USER_WARNING, self::$captured_warnings[0]['errno']);
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    /**
+     * Pins that an entry which is not a priority map passes through a bulk restore untouched
+     * instead of tripping it, and that a pattern restored beside it still runs.
+     */
+    public function testBulkSettersToleratePriorityMapsThatAreNotArrays() {
+        $saved_actions = Dj_App_Hooks::getActions();
+        $saved_filters = Dj_App_Hooks::getFilters();
+        $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
+        try {
+            $pattern_callbacks = [
+                20 => [ 'Dj_App_Hooks_Test::recordPatternAction' => ['Dj_App_Hooks_Test', 'recordPatternAction'], ],
+            ];
+
+            $restored_registry = [
+                'app/test/bulk/bad' => 'not a priority map',
+                'app/test/bulk/*' => $pattern_callbacks,
+            ];
+
+            Dj_App_Hooks::setActions($restored_registry);
+            Dj_App_Hooks::setFilters($restored_registry);
+            Dj_App_Hooks::setDeferredActions($restored_registry);
+
+            $fired_hooks = [ 'app/test/bulk/name', ];
+            $matched_hooks = $this->collectMatchedHooks($fired_hooks);
+
+            $this->assertEquals($fired_hooks, $matched_hooks, 'the restored pattern still runs');
+
+            $stored_actions = Dj_App_Hooks::getActions();
+
+            $this->assertEquals('not a priority map', $stored_actions['app/test/bulk/bad']);
+        } finally {
+            Dj_App_Hooks::setActions($saved_actions);
+            Dj_App_Hooks::setFilters($saved_filters);
+            Dj_App_Hooks::setDeferredActions($saved_deferred_actions);
+        }
+    }
+
+    /**
+     * Pins that parking a whole hook parks its deferred mirror with it, so nothing replays after
+     * the response, and that enabling the hook brings both back.
+     */
+    public function testDisableAndEnableCoverTheDeferredMirror() {
+        $saved_actions = Dj_App_Hooks::getActions();
+        $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
+        try {
+            Dj_App_Hooks::addDeferredAction('app/test/deferred/park', ['Dj_App_Hooks_Test', 'deferredCallback']);
+
+            $disabled = Dj_App_Hooks::disableAction('app/test/deferred/park');
+            $parked_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
+            $this->assertTrue($disabled);
+            $this->assertArrayNotHasKey('app/test/deferred/park', $parked_deferred_actions);
+
+            $enabled = Dj_App_Hooks::enableAction('app/test/deferred/park');
+            $restored_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
+            $this->assertTrue($enabled);
+            $this->assertArrayHasKey('app/test/deferred/park', $restored_deferred_actions);
+        } finally {
+            Dj_App_Hooks::setActions($saved_actions);
+            Dj_App_Hooks::setDeferredActions($saved_deferred_actions);
+        }
+    }
 }
