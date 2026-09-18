@@ -19,7 +19,8 @@ class Dj_App_Hooks {
     private static $filters = [];
 
     /**
-     * Registry names that are wildcard patterns (name => name). Flat, not keyed by type: every
+     * Registry names that are wildcard patterns, each with the regex it matches names with
+     * (name => regex), built once when the pattern is registered. Flat, not keyed by type: every
      * doAction() / applyFilter() checks them, and a nested read measured ~30 ns slower.
      * @var array
      */
@@ -390,7 +391,7 @@ class Dj_App_Hooks {
                     throw new Dj_App_Hooks_Exception('A wildcard hook pattern cannot be a deferred action', $exc_data);
                 }
 
-                Dj_App_Hooks::$action_patterns[$formatted_hook] = $formatted_hook;
+                Dj_App_Hooks::$action_patterns[$formatted_hook] = Dj_App_Hooks::buildPatternRegex($formatted_hook);
             }
 
             // SORTED INVARIANT: priorities stay sorted at registration so doAction()
@@ -849,7 +850,7 @@ class Dj_App_Hooks {
             $formatted_hook = Dj_App_Hooks::formatHookName($hook);
 
             if (str_contains($formatted_hook, '*')) {
-                Dj_App_Hooks::$filter_patterns[$formatted_hook] = $formatted_hook;
+                Dj_App_Hooks::$filter_patterns[$formatted_hook] = Dj_App_Hooks::buildPatternRegex($formatted_hook);
             }
 
             if (!isset(Dj_App_Hooks::$filters[$formatted_hook])) {
@@ -918,7 +919,7 @@ class Dj_App_Hooks {
             ksort($actions[$hook]);
 
             if (str_contains($hook, '*')) {
-                $action_patterns[$hook] = $hook;
+                $action_patterns[$hook] = Dj_App_Hooks::buildPatternRegex($hook);
             }
         }
 
@@ -965,7 +966,7 @@ class Dj_App_Hooks {
             ksort($filters[$hook]);
 
             if (str_contains($hook, '*')) {
-                $filter_patterns[$hook] = $hook;
+                $filter_patterns[$hook] = Dj_App_Hooks::buildPatternRegex($hook);
             }
         }
 
@@ -1669,20 +1670,17 @@ class Dj_App_Hooks {
     }
 
     /**
-     * The listeners that run for a fired name: its own plus those of every pattern it matches, in
-     * one priority order, exact ones first at equal priority.
+     * The regex a wildcard pattern matches fired names with, built when the pattern is registered
+     * so a fire only runs it.
      *   qs_app.*.save   matches qs_app/vehicles/save, not qs_app/a/b/save
      *   qs_app.**.save  matches qs_app/save and qs_app/a/b/save
      *   qs_app.*        matches qs_app and qs_app/a/b, like qs_app.**
      *   * or **         matches every name
      *
-     * @param array $params hook_name (formatted), registry, patterns
-     * @return array
-     * @throws Dj_App_Hooks_Exception When PCRE fails while matching
+     * @param string $pattern Formatted hook name holding at least one *
+     * @return string
      */
-    private static function resolveRunList($params) {
-        static $pattern_regexes = [];
-
+    private static function buildPatternRegex($pattern) {
         // strtr() tries the longest key first, and it runs on the anchored regex, so a whole * at
         // either end, or as the entire pattern, is a key of its own and reaches any depth, the same
         // as **. '**' next to a slash carries that slash, which lets it match zero segments; any
@@ -1699,34 +1697,39 @@ class Dj_App_Hooks {
 
         static $star_runs = [ '***', '**/**', ];
 
+        // Three or more stars, and '**' twice in a row, mean '**'. Typed as they are, qs_app/***
+        // would also run for qs_app_other, and a repeated group costs backtracking on every name
+        // that does not match.
+        $regex_source = $pattern;
+
+        while (str_contains($regex_source, '***') || str_contains($regex_source, '**/**')) {
+            $regex_source = str_replace($star_runs, '**', $regex_source);
+        }
+
+        $pattern_regex = preg_quote($regex_source, '#');
+        $pattern_regex = '^' . $pattern_regex . '$';
+        $pattern_regex = strtr($pattern_regex, $wildcard_regex_map);
+        $pattern_regex = '#' . $pattern_regex . '#';
+
+        return $pattern_regex;
+    }
+
+    /**
+     * The listeners that run for a fired name: its own plus those of every pattern it matches, in
+     * one priority order, exact ones first at equal priority.
+     *
+     * @param array $params hook_name (formatted), registry, patterns (name => regex)
+     * @return array
+     * @throws Dj_App_Hooks_Exception When PCRE fails while matching
+     */
+    private static function resolveRunList($params) {
         $hook_name = $params['hook_name'];
         $registry = $params['registry'];
         $run_list = empty($registry[$hook_name]) ? [] : $registry[$hook_name];
         $has_pattern_listeners = false;
 
-        foreach ($params['patterns'] as $pattern) {
-            // A removed or disabled pattern keeps its entry with no listeners left.
-            if (empty($registry[$pattern])) {
-                continue;
-            }
-
-            if (!isset($pattern_regexes[$pattern])) {
-                // Three or more stars, and '**' twice in a row, mean '**'. Typed as they are,
-                // qs_app/*** would also run for qs_app_other, and a repeated group costs
-                // backtracking on every name that does not match.
-                $regex_source = $pattern;
-
-                while (str_contains($regex_source, '***') || str_contains($regex_source, '**/**')) {
-                    $regex_source = str_replace($star_runs, '**', $regex_source);
-                }
-
-                $pattern_regex = preg_quote($regex_source, '#');
-                $pattern_regex = '^' . $pattern_regex . '$';
-                $pattern_regex = strtr($pattern_regex, $wildcard_regex_map);
-                $pattern_regexes[$pattern] = '#' . $pattern_regex . '#';
-            }
-
-            $pattern_match = preg_match($pattern_regexes[$pattern], $hook_name);
+        foreach ($params['patterns'] as $pattern => $pattern_regex) {
+            $pattern_match = preg_match($pattern_regex, $hook_name);
 
             if ($pattern_match === false) {
                 $exc_data = [
@@ -1738,7 +1741,9 @@ class Dj_App_Hooks {
                 throw new Dj_App_Hooks_Exception('Matching a fired hook name against a wildcard pattern failed', $exc_data);
             }
 
-            if (empty($pattern_match)) {
+            // A removed or disabled pattern keeps its entry with no listeners left, so the registry
+            // is read only once a name has matched — a miss never touches it.
+            if (empty($pattern_match) || empty($registry[$pattern])) {
                 continue;
             }
 
