@@ -2483,21 +2483,57 @@ class Dj_App_Hooks_Test extends TestCase {
      */
     public function testCatchAllPatternRunsForEveryHook() {
         $fired_hooks = [ 'app', 'app/page/content', 'qs_app/vehicles/action/post_save', ];
+        $catch_all_patterns = [ '*', '**', ];
 
-        Dj_App_Hooks::addAction('*', ['Dj_App_Hooks_Test', 'recordPatternAction']);
-        $matched_hooks = $this->collectMatchedHooks($fired_hooks);
+        foreach ($catch_all_patterns as $catch_all_pattern) {
+            Dj_App_Hooks::setActions();
+            Dj_App_Hooks::addAction($catch_all_pattern, ['Dj_App_Hooks_Test', 'recordPatternAction']);
+            $matched_hooks = $this->collectMatchedHooks($fired_hooks);
 
-        $this->assertEquals($fired_hooks, $matched_hooks);
+            $this->assertEquals($fired_hooks, $matched_hooks, "action $catch_all_pattern");
+
+            try {
+                $saved_filters = Dj_App_Hooks::getFilters();
+
+                Dj_App_Hooks::addFilter($catch_all_pattern, ['Dj_App_Hooks_Test', 'orderFilterA']);
+
+                foreach ($fired_hooks as $fired_hook) {
+                    $filtered = Dj_App_Hooks::applyFilter($fired_hook, '');
+
+                    $this->assertEquals('A', $filtered, "filter $catch_all_pattern on $fired_hook");
+                }
+            } finally {
+                Dj_App_Hooks::setFilters($saved_filters);
+            }
+        }
+    }
+
+    /**
+     * Pins the way to run a catch-all after everything else: at 10000, the highest priority the
+     * framework accepts, the exact listeners on the fired hook have all run, and a filter sees the
+     * value they finished with.
+     */
+    public function testCatchAllAtHighestPriorityRunsLast() {
+        self::$order_call_log = [];
+
+        Dj_App_Hooks::setActions();
+        Dj_App_Hooks::addAction('*', ['Dj_App_Hooks_Test', 'orderActionB'], 10000);
+        Dj_App_Hooks::addAction('app/test/catch_all/last', ['Dj_App_Hooks_Test', 'orderActionA'], 10000);
+        Dj_App_Hooks::doAction('app/test/catch_all/last');
+
+        $expected_calls = [ 'A', 'B', ];
+
+        $this->assertEquals($expected_calls, self::$order_call_log);
 
         try {
             $saved_filters = Dj_App_Hooks::getFilters();
 
-            Dj_App_Hooks::addFilter('**', ['Dj_App_Hooks_Test', 'orderFilterA']);
-            $one_segment_result = Dj_App_Hooks::applyFilter('app', '');
-            $deep_result = Dj_App_Hooks::applyFilter('app/page/content', '');
+            Dj_App_Hooks::addFilter('*', ['Dj_App_Hooks_Test', 'orderFilterB'], 10000);
+            Dj_App_Hooks::addFilter('app/test/catch_all/value', ['Dj_App_Hooks_Test', 'orderFilterA'], 20);
 
-            $this->assertEquals('A', $one_segment_result);
-            $this->assertEquals('A', $deep_result);
+            $result = Dj_App_Hooks::applyFilter('app/test/catch_all/value', '');
+
+            $this->assertEquals('AB', $result);
         } finally {
             Dj_App_Hooks::setFilters($saved_filters);
         }
