@@ -67,7 +67,7 @@ class Dj_App_Plugins_Test extends TestCase {
     {
         $unwritable_log_dir = $this->createUnwritableLogTarget();
 
-        Dj_App_Env::set('DJEBEL_APP_DEBUG', '1');
+        Dj_App_Env::set('DJEBEL_APP_DEBUG', 1);
 
         $crash_params = [
             'crash_msg' => 'dev crash detail',
@@ -92,7 +92,7 @@ class Dj_App_Plugins_Test extends TestCase {
     {
         $log_file = Dj_App_File_Util::generateTempFile();
 
-        Dj_App_Env::set('DJEBEL_APP_DEBUG', '1');
+        Dj_App_Env::set('DJEBEL_APP_DEBUG', 1);
 
         $crash_params = [
             'crash_msg' => 'logged crash detail',
