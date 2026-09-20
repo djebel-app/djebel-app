@@ -119,7 +119,8 @@ class Dj_App_Hooks {
     }
 
     /**
-     * Is this the action running right now? Any spelling of the name works — it is formatted first.
+     * Is this the action running right now? Any spelling of a name works — it is formatted first.
+     * A wildcard pattern is compared as written, never expanded, so it matches no fired name.
      * @param string $hook_name
      * @return bool
      */
@@ -129,7 +130,8 @@ class Dj_App_Hooks {
         }
 
         $hook_name_fmt = Dj_App_Hooks::formatHookName($hook_name);
-        $is_current_action = Dj_App_Hooks::$current_action === $hook_name_fmt;
+        $current_action = Dj_App_Hooks::getCurrentAction();
+        $is_current_action = $current_action == $hook_name_fmt;
 
         return $is_current_action;
     }
@@ -143,7 +145,8 @@ class Dj_App_Hooks {
     }
 
     /**
-     * Is this the filter running right now? Any spelling of the name works — it is formatted first.
+     * Is this the filter running right now? Any spelling of a name works — it is formatted first.
+     * A wildcard pattern is compared as written, never expanded, so it matches no fired name.
      * @param string $hook_name
      * @return bool
      */
@@ -153,7 +156,8 @@ class Dj_App_Hooks {
         }
 
         $hook_name_fmt = Dj_App_Hooks::formatHookName($hook_name);
-        $is_current_filter = Dj_App_Hooks::$current_filter === $hook_name_fmt;
+        $current_filter = Dj_App_Hooks::getCurrentFilter();
+        $is_current_filter = $current_filter == $hook_name_fmt;
 
         return $is_current_filter;
     }
