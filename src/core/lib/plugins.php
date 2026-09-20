@@ -120,17 +120,17 @@ class Dj_App_Plugins {
                 }
 
                 $buff = $partial_plugin_header_res_obj->output;
-                $extr_res = Dj_App_Util::extractMetaInfo($buff);
+                $extr_res_obj = Dj_App_Util::extractMetaInfo($buff);
 
                 // missing meta info in a system plugin file is not an error.
-                if (empty($ctx['is_system']) && $extr_res->isError()) {
-                    $res_obj->data($prefix, $extr_res->msg);
+                if (empty($ctx['is_system']) && $extr_res_obj->isError()) {
+                    $res_obj->data($prefix, $extr_res_obj->msg);
                     // @todo log error
                     continue;
                 }
 
-                if (!empty($extr_res->plugin_id)) {
-                    $plugin_id = Dj_App_Plugins::formatId($extr_res->plugin_id);
+                if (!empty($extr_res_obj->plugin_id)) {
+                    $plugin_id = Dj_App_Plugins::formatId($extr_res_obj->plugin_id);
 
                     // check for activeness using internal plugin id
                     if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
@@ -139,8 +139,8 @@ class Dj_App_Plugins {
                 }
 
                 // if the plugin requires a higher version of the php skip it.
-                if (!empty($extr_res->min_php_ver) && version_compare(PHP_VERSION, $extr_res->min_php_ver, '<')) {
-                    $res_obj->data($prefix, "PHP version is too low. Required: {$extr_res->min_php_ver}");
+                if (!empty($extr_res_obj->min_php_ver) && version_compare(PHP_VERSION, $extr_res_obj->min_php_ver, '<')) {
+                    $res_obj->data($prefix, "PHP version is too low. Required: {$extr_res_obj->min_php_ver}");
                     continue;
                 }
 
@@ -156,7 +156,7 @@ class Dj_App_Plugins {
                     }
                 }
 
-                $plugin_meta_info = $extr_res->data();
+                $plugin_meta_info = $extr_res_obj->data();
                 $plugin_meta_info['plugin_file'] = $plugin_file;
 
                 // Carried so the load loop names a plugin the same way the activation check
