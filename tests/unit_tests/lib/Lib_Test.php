@@ -26,6 +26,23 @@ class Dj_App_Lib_Test extends TestCase {
         $this->assertFalse(class_exists('Djebel_Absent_Lib'));
     }
 
+    /**
+     * Pins that the ids that did not load come back named, so a caller answers "which one was
+     * missing" from the Result instead of from the log or a diff of its own request.
+     */
+    public function testLoadLibNamesTheMissingLibs()
+    {
+        $lib_dir = $this->getLibDir();
+        $lib_ids = [ 'djebel-test-lib', 'djebel-absent-lib', ];
+        $load_opts = [ 'dir' => $lib_dir, ];
+
+        $res_obj = Dj_App_Lib::loadLib($lib_ids, $load_opts);
+
+        $this->assertFalse($res_obj->loaded, 'a named lib was missing');
+        $this->assertEquals([ 'djebel-absent-lib', ], $res_obj->missing_libs, 'the missing id is named');
+        $this->assertContains('djebel-test-lib', $res_obj->loaded_libs, 'the present one still loaded');
+    }
+
     public function testLoadLibAcceptsArrayOfIds()
     {
         $res_obj = Dj_App_Lib::loadLib([ 'djebel-test-lib', 'djebel-absent-lib', ], [ 'dir' => $this->getLibDir(), ]);

@@ -1144,7 +1144,9 @@ class Dj_App_Util {
      * Receives a small buffer and parses meta info in the plugin or theme file's header.
      * Dj_App_Util::extractMetaInfo()
      * @param string $buff
-     * @return Dj_App_Result
+     * @return Dj_App_Result the parsed header under `meta_info`. It is also still spread across
+     *                       the data bag for callers written before the key existed; read the
+     *                       key, because the bag carries this method's own timing beside it.
      */
     public static function extractMetaInfo($buff)
     {
@@ -1237,6 +1239,10 @@ class Dj_App_Util {
             }
 
             $res_obj->status(true);
+            $res_obj->meta_info = $meta;
+
+            // The parsed fields spread across the bag as well: callers predating meta_info read
+            // them that way. Dropped once none are left.
             $res_obj->data($meta);
         } catch (Exception $e) {
             $res_obj->msg = $e->getMessage();

@@ -1073,6 +1073,25 @@ BUFF_EOF;
     /**
      * Test extractMetaInfo method - parsing array notation
      */
+    /**
+     * Pins that the parsed header comes back under its own key. The data bag also carries this
+     * method's own timing, so a caller taking the whole bag gets an internal mixed into the meta.
+     */
+    public function testExtractMetaInfoCarriesMetaUnderItsOwnKey() {
+        $meta_text = "plugin_name: Demo\nversion: 1.0.0";
+        $res_obj = Dj_App_Util::extractMetaInfo($meta_text);
+
+        $meta_info = $res_obj->meta_info;
+
+        $this->assertEquals('Demo', $meta_info['plugin_name'], 'the header fields are under the key');
+        $this->assertEquals('1.0.0', $meta_info['version']);
+        $this->assertArrayNotHasKey('exec_time', $meta_info, 'the timing stays out of the meta');
+
+        $whole_bag = $res_obj->data();
+
+        $this->assertArrayHasKey('exec_time', $whole_bag, 'the bag still carries it, which is why the key exists');
+    }
+
     public function testExtractMetaInfoArrayNotation() {
         // Test basic array notation with brackets
         $meta_text = "tags: [php, web, development]\ncategory: general";
