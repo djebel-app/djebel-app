@@ -352,7 +352,7 @@ class Dj_App_Config {
                 $val = $fallback_val;
             }
         } finally {
-            $val = self::replaceSystemVars($val);
+            $val = Dj_App_Config::replaceSystemVars($val);
 
             if (class_exists('Dj_App_Hooks')) { // maybe too early
                 $val = Dj_App_Hooks::applyFilter( 'app.core.cfg', $val, [ 'key' => $key_fmt ] );
@@ -370,8 +370,8 @@ class Dj_App_Config {
     }
 
     /**
-     * Load an ini file and return the parsed data. Applying values to the
-     * environment is the caller's job — Dj_App_Env::setEnvVars() owns env vars.
+     * Load an ini file and return the parsed data. Parsing only — nothing here reaches the
+     * environment, so what becomes of the values is the caller's decision.
      * Dj_App_Config::loadIniFile()
      * @param string $file
      * @return array
@@ -417,7 +417,7 @@ class Dj_App_Config {
 
         // Handle {home} and {user_home} variables
         if (stripos($val, 'home}') !== false) {
-            $home = self::getUserHome();
+            $home = Dj_App_Config::getUserHome();
             $replace_vars['{home}'] = $home;
             $replace_vars['{user_home}'] = $home;
         }
@@ -514,7 +514,7 @@ class Dj_App_Bootstrap {
         if (empty($exception) && empty($err_no)) {
             $last_error = error_get_last();
 
-            if (empty($last_error['type']) || !in_array($last_error['type'], self::FATAL_ERROR_TYPES)) {
+            if (empty($last_error['type']) || !in_array($last_error['type'], Dj_App_Bootstrap::FATAL_ERROR_TYPES)) {
                 return false;
             }
 
@@ -524,7 +524,7 @@ class Dj_App_Bootstrap {
             $err_line = $last_error['line'];
         }
 
-        $is_fatal = !empty($err_no) && in_array($err_no, self::FATAL_ERROR_TYPES);
+        $is_fatal = !empty($err_no) && in_array($err_no, Dj_App_Bootstrap::FATAL_ERROR_TYPES);
         $ends_request = !empty($exception) || $is_fatal;
 
         // Honor the active error_reporting level for the recoverable diagnostics — one the
@@ -580,7 +580,6 @@ class Dj_App_Bootstrap {
     public static function renderErrorPage($params = []) {
         $exception = empty($params['exception']) ? null : $params['exception'];
         $is_dev = Dj_App_Config::cfg('app.debug', false);
-        $log_errors = Dj_App_Config::cfg('app.error_logging', true);
 
         // Discard any partially rendered output so the error page renders alone.
         while (ob_get_level() > 0) {
@@ -598,9 +597,13 @@ class Dj_App_Bootstrap {
         $content = sprintf("<h1 class='djebel-app-error-title'>%s</h1>\n", $title_esc);
         $content .= sprintf("<div class='djebel-app-error-message'>%s</div>\n", $display_msg_esc);
 
-        if (!Dj_App_Util::isDisabled($log_errors) && empty($params['log_ok'])) {
-            $content .= "<div class='djebel-app-error-message'>Log Error: Log log dir/file is no writable </div>\n";
-        }
+        // Every visitor gets a ref to quote when reporting the failure. Whether the entry
+        // was written stays off the public page: a visitor comparing two different pages
+        // learns only how the site is configured.
+        $req_id = Dj_App_Util::reqId();
+        $req_id_esc = dj_esc_html($req_id);
+
+        $content .= sprintf("<div class='djebel-app-error-message'>Ref: %s</div>\n", $req_id_esc);
 
         if ($is_dev) {
             // label => value; every row renders through the ONE format below. A fatal
@@ -618,6 +621,10 @@ class Dj_App_Bootstrap {
             // escaped like every other value here.
             if (!empty($exception)) {
                 $detail_rows['Code'] = $exception->getCode();
+            }
+
+            if (empty($params['log_ok'])) {
+                $detail_rows['App error log'] = 'Not written';
             }
 
             $content .= "<div class='djebel-app-error-details'>\n";

@@ -208,8 +208,13 @@ class Dj_App_Log {
                 // PHP's own log right away rather than spending the retry loop — and its
                 // sleeps — on a write that has nowhere to land. Nothing can be logged ABOUT a
                 // logger that cannot reach its own directory.
+                //
+                // Empty, like the fallback below: the entry did not reach the file the caller
+                // named, and a caller checking the answer must not be told that it did.
                 if ($mk_res->isError() && !is_dir($parent_dir)) {
-                    $file = '';
+                    error_log($line_nl);
+
+                    return '';
                 }
             }
         }
@@ -299,10 +304,10 @@ class Dj_App_Log {
      * so every failure kind lands in the SAME log.
      * Dj_App_Log::logAppError($exception);
      * @param Throwable|array|object|string $data
-     * @return bool whether the entry was written. The reference it is findable by is
-     *              stamped INTO the entry and comes from Dj_App_Util::reqId(), which any
-     *              caller can read for itself — handing it back as well only invites one
-     *              to treat this as where a request id comes from.
+     * @return bool true when the entry reached the app error log — app.error_log_file, or
+     *              PHP's own log when that setting is blank. false when error logging is off,
+     *              or when that file could not be written. The answer covers that destination
+     *              only, never whether the entry survived somewhere else.
      */
     public static function logAppError($data) {
         $log_errors = Dj_App_Config::cfg('app.error_logging', true);
@@ -338,14 +343,11 @@ class Dj_App_Log {
                 ' in ' . $data['file'] . ' on line ' . $data['line'];
         }
 
-        // The reference this entry is findable by. Read once, up here, so a run that writes
-        // more than one line stamps the same value on all of them.
-        $req_id = Dj_App_Util::reqId();
-
         if (empty($entry_body)) {
             $log_entry = $data; // already a formatted entry
         } else {
             $timestamp = date('Y-m-d H:i:s');
+            $req_id = Dj_App_Util::reqId();
 
             // This entry is written raw — raw means the caller owns the formatting, so the
             // reference has to be stamped HERE or it is simply absent. Without it a crash

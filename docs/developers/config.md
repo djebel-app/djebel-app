@@ -240,9 +240,15 @@ Dj_App_Hooks::addFilter('app.core.log.req_id', ['My_Plugin', 'filterReqId']);
 
 Resolved once per run — an id that changed halfway through would correlate nothing.
 
-`Dj_App_Log::logAppError()` returns that id, so whatever reports a failure to a visitor can
-show the reference its log entry is findable by, and an empty answer means nothing was
-written.
+A failure shown to a visitor carries this id as its ref — the fatal-error page and the
+plugin-crash box both show it, always, whether or not the log entry got written. The public
+page never says whether logging worked: two different pages would tell a visitor how the site
+is configured. With `app.debug` on, both also say when the entry was not written.
+
+`Dj_App_Log::logAppError()` returns a bool: `true` when the entry reached the app error log
+(`app.error_log_file`, or PHP's own log when that setting is blank). `false` when error
+logging is off (nothing is written) or when that file could not be written (the entry lands
+in PHP's own log instead).
 
 ## `[site]` — site identity
 

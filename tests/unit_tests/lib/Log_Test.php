@@ -64,7 +64,8 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('hello world', $contents);
         $this->assertStringContainsString('MYLABEL', $contents);
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testLevelsPrefixTheMessage()
@@ -81,7 +82,8 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('[INFO] note', $contents);
         $this->assertStringContainsString('[WARN] careful', $contents);
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testDisabledLoggingWritesNothing()
@@ -173,7 +175,8 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($file);
         $this->assertEquals($entry, $read_res->output, 'raw mode writes VERBATIM — no prefix, no extra newline');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testMsgRawKeepsMultibyteEntryIntact()
@@ -182,14 +185,17 @@ class Dj_App_Log_Test extends TestCase {
 
         $entry = "[2026-08-05 00:00:00] Exception: Разбрах — тест\n";
 
-        Dj_App_Log::msg($entry, '', $file, [ 'raw' => 1, ]);
+        $line = Dj_App_Log::msg($entry, '', $file, [ 'raw' => 1, ]);
+
+        $this->assertNotEmpty($line, 'the entry was written');
 
         $read_res = Dj_App_File_Util::read($file);
         $contents = $read_res->output;
         $this->assertEquals($entry, $contents, 'the multibyte entry survives byte-for-byte');
         $this->assertNotFalse(mb_check_encoding($contents, 'UTF-8'), 'still valid UTF-8');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testMsgFallsBackAndReturnsEmptyWhenFileWriteFails()
@@ -227,8 +233,52 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($fallback_file);
         $this->assertStringContainsString('lost? never', $read_res->output, 'the entry is never lost');
 
-        unlink($fallback_file);
-        Dj_App_File_Util::rmdir($bad_target_dir);
+        $delete_res = Dj_App_File_Util::delete($fallback_file);
+        $this->assertFalse($delete_res->isError(), 'the fallback log fixture was removed');
+
+        $rmdir_res = Dj_App_File_Util::rmdir($bad_target_dir);
+        $this->assertFalse($rmdir_res->isError(), 'the directory fixture was removed');
+    }
+
+    /**
+     * Pins that both ways of missing the target file answer alike, so a caller can never read
+     * the answer as "the file has it" for an entry the file never received.
+     */
+    public function testMsgReturnsEmptyWhenTheLogDirCannotBeCreated()
+    {
+        // A FILE where the log's parent dir should be — no dir can be created under it.
+        $blocker_file = Dj_App_File_Util::generateTempFile();
+        $fallback_file = Dj_App_File_Util::generateTempFile();
+
+        $write_res = Dj_App_File_Util::write($blocker_file, 'not a dir');
+        $this->assertTrue($write_res->isSuccess(), 'Failed to write the blocker fixture');
+
+        $target_file = $blocker_file . '/logs/app.log';
+
+        try {
+            $prior_error_log = ini_get('error_log');
+            $prior_error_reporting = error_reporting();
+
+            ini_set('error_log', $fallback_file);
+            error_reporting(0);
+
+            $line = Dj_App_Log::msg('no dir for me', '', $target_file);
+        } finally {
+            error_reporting($prior_error_reporting);
+            ini_set('error_log', $prior_error_log);
+        }
+
+        $this->assertEmpty($line, 'an entry that missed the named file answers empty');
+        $this->assertFileExists($fallback_file, 'the entry fell back to the default error log');
+
+        $read_res = Dj_App_File_Util::read($fallback_file);
+        $this->assertStringContainsString('no dir for me', $read_res->output, 'the entry is never lost');
+
+        $delete_fallback_res = Dj_App_File_Util::delete($fallback_file);
+        $this->assertFalse($delete_fallback_res->isError(), 'the fallback log fixture was removed');
+
+        $delete_blocker_res = Dj_App_File_Util::delete($blocker_file);
+        $this->assertFalse($delete_blocker_res->isError(), 'the blocker fixture was removed');
     }
 
     public function testLogAppErrorWritesVerbatimToConfiguredFile()
@@ -246,7 +296,8 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($file);
         $this->assertEquals($entry, $read_res->output, 'the entry is written verbatim — full paths intact');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     /**
@@ -274,7 +325,8 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('Warning: something odd', $read_res->output, 'labelled by errno, not as a fatal');
         $this->assertStringContainsString('/x.php on line 12', $read_res->output, 'file and line are kept');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     /**
@@ -300,7 +352,8 @@ class Dj_App_Log_Test extends TestCase {
 
         $this->assertStringContainsString('Fatal Error: legacy shape', $read_res->output, 'a typeless entry keeps the fatal label');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     /**
@@ -321,7 +374,8 @@ class Dj_App_Log_Test extends TestCase {
 
         $this->assertStringContainsString('User Warning: handler routed', $read_res->output, 'the warning reached the app log');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     /**
@@ -353,7 +407,9 @@ class Dj_App_Log_Test extends TestCase {
 
         // Pin the default log file, then pass the OPTIONS as the 3rd arg — the
         // smart slot means no '' file placeholder is needed.
-        Dj_App_Log::file($file);
+        $pinned_file = Dj_App_Log::file($file);
+
+        $this->assertEquals($file, $pinned_file, 'the default log file was pinned');
 
         $entry = "verbatim via smart arg\n";
 
@@ -364,7 +420,8 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($file);
         $this->assertEquals($entry, $read_res->output, 'the entry went to the default log file, raw');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testMsgOptionsCarryTheTargetFile()
@@ -373,12 +430,15 @@ class Dj_App_Log_Test extends TestCase {
 
         $entry = "verbatim via options file\n";
 
-        Dj_App_Log::msg($entry, '', [ 'raw' => 1, 'file' => $file, ]);
+        $line = Dj_App_Log::msg($entry, '', [ 'raw' => 1, 'file' => $file, ]);
+
+        $this->assertNotEmpty($line, 'the entry was written');
 
         $read_res = Dj_App_File_Util::read($file);
         $this->assertEquals($entry, $read_res->output, "the 'file' options key targets the file — no pin, no placeholder");
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testLogAppErrorBlankFileFallsBackToDefaultErrorLog()
@@ -404,7 +464,8 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($fallback_file);
         $this->assertStringContainsString('still logged', $read_res->output, 'the entry is never lost');
 
-        unlink($fallback_file);
+        $delete_res = Dj_App_File_Util::delete($fallback_file);
+        $this->assertFalse($delete_res->isError(), 'the fallback log fixture was removed');
     }
 
     public function testLogAppErrorFormatsAThrowable()
@@ -424,7 +485,8 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('Stack trace:', $contents, 'the trace is part of the entry');
         $this->assertStringContainsString(str_repeat('-', 80), $contents, 'entries stay separator-delimited');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testLogAppErrorFormatsAFatalErrorArray()
@@ -442,7 +504,8 @@ class Dj_App_Log_Test extends TestCase {
         $read_res = Dj_App_File_Util::read($file);
         $this->assertStringContainsString('Fatal Error: oom in /x.php on line 7', $read_res->output, 'the logger built the entry from the error_get_last() array');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testLogAppErrorExtractsACarriedException()
@@ -462,7 +525,8 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertStringContainsString('Exception: carried by array', $contents, "the 'exception' array key is unwrapped");
         $this->assertStringContainsString('Exception: carried by result', $contents, 'a result obj carrying the exception is unwrapped');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 
     public function testLogAppErrorHonorsErrorLoggingDisabled()
@@ -478,6 +542,51 @@ class Dj_App_Log_Test extends TestCase {
 
         $this->assertFalse($is_logged, 'disabled error logging refuses the write');
         $this->assertFileDoesNotExist($file, 'nothing is written when disabled');
+    }
+
+    /**
+     * Pins false for an entry that missed the app error log file, so "logged" never covers an
+     * entry that is not where whoever reads that log will look for it.
+     */
+    public function testLogAppErrorReturnsFalseWhenTheFileCannotBeWritten()
+    {
+        // An existing DIRECTORY as the target "file" — the write must fail.
+        $bad_target_opts = [
+            'prefix' => 'dj_log_bad',
+            'ext' => '',
+        ];
+
+        $bad_target_dir = Dj_App_File_Util::generateTempFile($bad_target_opts);
+        $fallback_file = Dj_App_File_Util::generateTempFile();
+
+        $mkdir_res = Dj_App_File_Util::mkdir($bad_target_dir);
+        $this->assertFalse($mkdir_res->isError(), 'Failed to create the directory fixture');
+
+        Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $bad_target_dir);
+
+        try {
+            $prior_error_log = ini_get('error_log');
+            $prior_error_reporting = error_reporting();
+
+            ini_set('error_log', $fallback_file);
+            error_reporting(0);
+
+            $is_logged = Dj_App_Log::logAppError(new Exception('missed the app log'));
+        } finally {
+            error_reporting($prior_error_reporting);
+            ini_set('error_log', $prior_error_log);
+        }
+
+        $this->assertFalse($is_logged, 'an entry outside the app error log is not reported as logged');
+
+        $read_res = Dj_App_File_Util::read($fallback_file);
+        $this->assertStringContainsString('missed the app log', $read_res->output, 'the entry is never lost');
+
+        $delete_fallback_res = Dj_App_File_Util::delete($fallback_file);
+        $this->assertFalse($delete_fallback_res->isError(), 'the fallback log fixture was removed');
+
+        $rmdir_res = Dj_App_File_Util::rmdir($bad_target_dir);
+        $this->assertFalse($rmdir_res->isError(), 'the directory fixture was removed');
     }
 
     public function testLogAppErrorBlankGateValueStillLogs()
@@ -496,6 +605,7 @@ class Dj_App_Log_Test extends TestCase {
         $this->assertTrue($is_logged, 'a blank gate value does not kill error logging');
         $this->assertFileExists($file, 'the entry was written');
 
-        unlink($file);
+        $delete_res = Dj_App_File_Util::delete($file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
     }
 }
