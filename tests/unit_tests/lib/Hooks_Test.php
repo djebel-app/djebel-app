@@ -1183,6 +1183,35 @@ class Dj_App_Hooks_Test extends TestCase {
         Dj_App_Hooks::runShutdownHooks();
     }
 
+    public static $recursion_runs = 0;
+
+    public static function reapplySameFilter($cur_val, $params = []) {
+        self::$recursion_runs++;
+
+        $filtered = Dj_App_Hooks::applyFilter('app/test/recursion/value', $cur_val);
+
+        return $filtered;
+    }
+
+    public static function refireSameAction($params = []) {
+        self::$recursion_runs++;
+
+        Dj_App_Hooks::doAction('app/test/recursion/fire');
+    }
+
+    public static function reapplyBoundedFilter($cur_val, $params = []) {
+        self::$recursion_runs++;
+
+        if (self::$recursion_runs > 3) {
+            return $cur_val;
+        }
+
+        $nested_val = $cur_val . '+';
+        $filtered = Dj_App_Hooks::applyFilter('app/test/recursion/bounded', $nested_val);
+
+        return $filtered;
+    }
+
     public static function deferredCallback($params, $hook = '') {
         self::$deferred_call_log[] = [
             'params' => $params,
@@ -1834,7 +1863,7 @@ class Dj_App_Hooks_Test extends TestCase {
     public function testNestedActionKeepsIsCurrentActionAnswering() {
         self::$nested_action_matched = null;
 
-        // The documented boolean form has to survive nesting too, not just the getter.
+        // The check method has to survive nesting too, not just the getter.
         Dj_App_Hooks::addAction('app.core.test.nested.match_outer', ['Dj_App_Hooks_Test', 'fireNestedAction'], 10);
         Dj_App_Hooks::addAction('app.core.test.nested.match_outer', ['Dj_App_Hooks_Test', 'recordCurrentActionMatch'], 20);
 
@@ -2892,7 +2921,7 @@ class Dj_App_Hooks_Test extends TestCase {
     /**
      * Pins that the plural spelling still applies the filter, and warns the caller off it.
      */
-    public function testApplyFiltersAliasStillFiltersAndWarns() {
+    public function testApplyFiltersAliasStillFiltersWithAWarning() {
         self::$captured_warnings = [];
 
         try {
@@ -2921,11 +2950,11 @@ class Dj_App_Hooks_Test extends TestCase {
      * instead of tripping it, and that a pattern restored beside it still runs.
      */
     public function testBulkSettersToleratePriorityMapsThatAreNotArrays() {
-        $saved_actions = Dj_App_Hooks::getActions();
-        $saved_filters = Dj_App_Hooks::getFilters();
-        $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
-
         try {
+            $saved_actions = Dj_App_Hooks::getActions();
+            $saved_filters = Dj_App_Hooks::getFilters();
+            $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
             $pattern_callbacks = [
                 20 => [ 'Dj_App_Hooks_Test::recordPatternAction' => ['Dj_App_Hooks_Test', 'recordPatternAction'], ],
             ];
@@ -2958,11 +2987,11 @@ class Dj_App_Hooks_Test extends TestCase {
      * Pins that parking a whole hook parks its deferred mirror with it, so nothing replays after
      * the response, and that enabling the hook brings both back.
      */
-    public function testDisableAndEnableCoverTheDeferredMirror() {
-        $saved_actions = Dj_App_Hooks::getActions();
-        $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
-
+    public function testDeferredMirrorFollowsTheHookParking() {
         try {
+            $saved_actions = Dj_App_Hooks::getActions();
+            $saved_deferred_actions = Dj_App_Hooks::getDeferredActions();
+
             Dj_App_Hooks::addDeferredAction('app/test/deferred/park', ['Dj_App_Hooks_Test', 'deferredCallback']);
 
             $disabled = Dj_App_Hooks::disableAction('app/test/deferred/park');
@@ -2979,6 +3008,109 @@ class Dj_App_Hooks_Test extends TestCase {
         } finally {
             Dj_App_Hooks::setActions($saved_actions);
             Dj_App_Hooks::setDeferredActions($saved_deferred_actions);
+        }
+    }
+
+    /**
+     * Pins that a filter re-entering itself is refused at the cap rather than running until the
+     * memory limit ends the request, and that the refusal leaves the next chain the same room.
+     */
+    public function testNestedFilterStopsAtTheNestingCap() {
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+            $hook_name = 'app/test/recursion/value';
+
+            Dj_App_Hooks::addFilter($hook_name, ['Dj_App_Hooks_Test', 'reapplySameFilter']);
+
+            self::$recursion_runs = 0;
+            $first_code = '';
+
+            try {
+                $filtered = Dj_App_Hooks::applyFilter($hook_name, 'seed');
+
+                $this->fail('the runaway chain was not refused, it returned: ' . $filtered);
+            } catch (Dj_App_Hooks_Exception $e) {
+                $first_code = $e->getErrorCode();
+            }
+
+            $first_runs = self::$recursion_runs;
+
+            $this->assertEquals('app.core.hooks.max_nested_depth', $first_code, 'the runaway chain was refused');
+
+            // One more than the cap: the outermost call cannot be its own recursion, so it is
+            // never counted, and the listener it ran is what opens the first nested level.
+            $expected_runs = Dj_App_Hooks::MAX_NESTED_DEPTH + 1;
+
+            $this->assertEquals($expected_runs, $first_runs, 'it ran to the cap, not past it');
+
+            self::$recursion_runs = 0;
+            $second_code = '';
+
+            try {
+                $filtered = Dj_App_Hooks::applyFilter($hook_name, 'seed');
+
+                $this->fail('the second chain was not refused, it returned: ' . $filtered);
+            } catch (Dj_App_Hooks_Exception $e) {
+                $second_code = $e->getErrorCode();
+            }
+
+            $second_runs = self::$recursion_runs;
+
+            $this->assertEquals($first_code, $second_code, 'the second chain is refused the same way');
+            $this->assertEquals($first_runs, $second_runs, 'the count unwound, so the second chain got the same room');
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
+        }
+    }
+
+    /**
+     * Pins the same cap on the action side, where a runaway chain costs the request its memory
+     * limit just as a filter's does.
+     */
+    public function testNestedActionStopsAtTheNestingCap() {
+        try {
+            $saved_actions = Dj_App_Hooks::getActions();
+            $hook_name = 'app/test/recursion/fire';
+
+            Dj_App_Hooks::addAction($hook_name, ['Dj_App_Hooks_Test', 'refireSameAction']);
+
+            self::$recursion_runs = 0;
+            $code = '';
+
+            try {
+                Dj_App_Hooks::doAction($hook_name);
+
+                $this->fail('the runaway chain was not refused');
+            } catch (Dj_App_Hooks_Exception $e) {
+                $code = $e->getErrorCode();
+            }
+
+            $expected_runs = Dj_App_Hooks::MAX_NESTED_DEPTH + 1;
+
+            $this->assertEquals('app.core.hooks.max_nested_depth', $code, 'the runaway chain was refused');
+            $this->assertEquals($expected_runs, self::$recursion_runs, 'it ran to the cap, not past it');
+        } finally {
+            Dj_App_Hooks::setActions($saved_actions);
+        }
+    }
+
+    /**
+     * Pins that nesting below the cap is untouched — without this an over-eager cap would pass
+     * the tests above while breaking every legitimate nested chain.
+     */
+    public function testNestedFilterBelowTheCapRunsThrough() {
+        try {
+            $saved_filters = Dj_App_Hooks::getFilters();
+
+            Dj_App_Hooks::addFilter('app/test/recursion/bounded', ['Dj_App_Hooks_Test', 'reapplyBoundedFilter']);
+
+            self::$recursion_runs = 0;
+            $filtered = Dj_App_Hooks::applyFilter('app/test/recursion/bounded', 'seed');
+
+            $this->assertEquals('seed+++', $filtered, 'every nested level applied');
+            $this->assertEquals(4, self::$recursion_runs, 'the chain stopped itself, the cap never spoke');
+        } finally {
+            Dj_App_Hooks::setFilters($saved_filters);
         }
     }
 }

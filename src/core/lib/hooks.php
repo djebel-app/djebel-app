@@ -15,6 +15,19 @@ class Dj_App_Hooks {
     const ACTION_TYPE_NORMAL = 1;   // default — skips deferred callbacks, queues their params
     const ACTION_TYPE_DEFERRED = 2; // shutdown replay — runs ONLY deferred callbacks
 
+    /**
+     * How deep one hook may re-enter itself before the fire is refused.
+     *
+     * Runaway recursion is a per-request denial of service: the same hook re-enters until PHP
+     * dies on the memory limit, which is a fatal no handler can catch and a request that spent
+     * the whole limit getting there. Refusing at a depth no legitimate chain reaches turns that
+     * into a caught exception naming the hook, for the cost of one array write per NESTED fire.
+     *
+     * 50 is far above real nesting — a page render nests a handful of levels — and far below
+     * what it takes to exhaust memory.
+     */
+    const MAX_NESTED_DEPTH = 50;
+
     private static $actions = [];
     private static $filters = [];
 
@@ -99,6 +112,15 @@ class Dj_App_Hooks {
     private static $executed_hooks = [];
 
     /**
+     * How many times each hook is currently re-entered, name => depth. Only a NESTED fire is
+     * counted: a hook fired from outside any hook of its own kind cannot be its own recursion,
+     * so the ordinary top-level fire never touches these.
+     * @var array
+     */
+    private static $running_actions = [];
+    private static $running_filters = [];
+
+    /**
      * Currently executing action name
      * @var string
      */
@@ -180,15 +202,15 @@ class Dj_App_Hooks {
      * @return array
      */
     public static function getExecutedHooks() {
-        $exeecuted_hooks = [];
+        $executed_hooks = [];
 
         foreach (Dj_App_Hooks::$executed_hooks as $hook => $status) {
             if ($status == Dj_App_Hooks::HOOK_RUN) {
-                $exeecuted_hooks[] = $hook;
+                $executed_hooks[] = $hook;
             }
         }
 
-        return $exeecuted_hooks;
+        return $executed_hooks;
     }
 
     /**
@@ -268,7 +290,7 @@ class Dj_App_Hooks {
         $hook_fmt = Dj_App_Hooks::formatHookName($hook);
         $expected_hook_fmt = Dj_App_Hooks::formatHookName($expected_hook);
 
-        $is_match = $hook_fmt === $expected_hook_fmt;
+        $is_match = $hook_fmt == $expected_hook_fmt;
 
         return $is_match;
     }
@@ -402,7 +424,7 @@ class Dj_App_Hooks {
 
             if (str_contains($formatted_hook, '*')) {
                 // The deferred replay runs listeners by exact name only, so a deferred pattern would never run.
-                if ($type === Dj_App_Hooks::ACTION_TYPE_DEFERRED) {
+                if ($type == Dj_App_Hooks::ACTION_TYPE_DEFERRED) {
                     $exc_data = [
                         'code' => 'app.core.hooks.pattern.deferred_not_supported',
                         'pattern' => $formatted_hook,
@@ -426,7 +448,7 @@ class Dj_App_Hooks {
             Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id] = $callback;
 
             // Mirror into $deferred_actions so doAction() in DEFERRED mode reads it directly.
-            if ($type === Dj_App_Hooks::ACTION_TYPE_DEFERRED) {
+            if ($type == Dj_App_Hooks::ACTION_TYPE_DEFERRED) {
                 // Same sorted invariant for the mirror — the DEFERRED replay iterates it.
                 if (!isset(Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority]) && !empty(Dj_App_Hooks::$deferred_actions[$formatted_hook]) && $priority < array_key_last(Dj_App_Hooks::$deferred_actions[$formatted_hook])) {
                     Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority] = [];
@@ -625,6 +647,11 @@ class Dj_App_Hooks {
             ]);
         }
 
+        // False until this fire is counted as nested, so the finally knows whether it owes a
+        // decrement — a fire that returned early, or was refused, never took one. A bool and
+        // not the name: this is read on EVERY fire, and the name is in scope whenever it is true.
+        $is_counted = false;
+
         try {
             // First statement in the try, so the finally below always has a value to put
             // back — a property read cannot throw, so nothing can fail ahead of it.
@@ -646,11 +673,11 @@ class Dj_App_Hooks {
             // PHP COW: assigning the static to a local is a refcount bump, not a copy.
             // $source_actions starts as the whole registry, then narrows to this hook's callbacks.
             $type = empty($opts['type']) ? Dj_App_Hooks::ACTION_TYPE_NORMAL : $opts['type'];
-            $source_actions = $type === Dj_App_Hooks::ACTION_TYPE_DEFERRED ? Dj_App_Hooks::$deferred_actions : Dj_App_Hooks::$actions;
+            $source_actions = $type == Dj_App_Hooks::ACTION_TYPE_DEFERRED ? Dj_App_Hooks::$deferred_actions : Dj_App_Hooks::$actions;
 
             // The pattern check comes first: on a site without patterns it is the one extra check
             // a fire pays. The deferred replay runs by exact name, so patterns join normal fires only.
-            if (!empty(Dj_App_Hooks::$action_patterns) && $type === Dj_App_Hooks::ACTION_TYPE_NORMAL) {
+            if (!empty(Dj_App_Hooks::$action_patterns) && $type == Dj_App_Hooks::ACTION_TYPE_NORMAL) {
                 $resolve_params = [
                     'hook_name' => $executed_hook_fmt,
                     'registry' => Dj_App_Hooks::$actions,
@@ -674,9 +701,30 @@ class Dj_App_Hooks {
             // per-hook deferred set so the loop's isset check is O(1).
             $deferred_for_hook = [];
 
-            if ($type === Dj_App_Hooks::ACTION_TYPE_NORMAL && !empty(Dj_App_Hooks::$deferred_actions[$executed_hook_fmt])) {
+            if ($type == Dj_App_Hooks::ACTION_TYPE_NORMAL && !empty(Dj_App_Hooks::$deferred_actions[$executed_hook_fmt])) {
                 Dj_App_Hooks::$deferred_actions_data[$executed_hook_fmt][] = $params;
                 $deferred_for_hook = Dj_App_Hooks::$deferred_actions[$executed_hook_fmt];
+            }
+
+            // A hook fired with no action of its own already running cannot be re-entering
+            // itself, so the ordinary fire settles on this one check and touches no counter.
+            if (!empty($prev_action)) {
+                $depth = empty(Dj_App_Hooks::$running_actions[$executed_hook_fmt]) ? 0 : Dj_App_Hooks::$running_actions[$executed_hook_fmt];
+                $depth++;
+
+                if ($depth > Dj_App_Hooks::MAX_NESTED_DEPTH) {
+                    $exc_data = [
+                        'code' => 'app.core.hooks.max_nested_depth',
+                        'hook_name' => $executed_hook_fmt,
+                        'depth' => $depth,
+                    ];
+
+                    throw new Dj_App_Hooks_Exception('An action re-entered itself past the nesting cap', $exc_data);
+                }
+
+                // Marked AFTER the cap decides, so a refused fire leaves the count as it found it.
+                Dj_App_Hooks::$running_actions[$executed_hook_fmt] = $depth;
+                $is_counted = true;
             }
 
             // ONE loop. is_callable() is NOT checked here — addAction() validates via
@@ -701,6 +749,14 @@ class Dj_App_Hooks {
             }
         } finally {
             Dj_App_Hooks::$current_action = $prev_action;
+
+            if ($is_counted) {
+                Dj_App_Hooks::$running_actions[$executed_hook_fmt]--;
+
+                if (empty(Dj_App_Hooks::$running_actions[$executed_hook_fmt])) {
+                    unset(Dj_App_Hooks::$running_actions[$executed_hook_fmt]);
+                }
+            }
         }
     }
 
@@ -729,6 +785,11 @@ class Dj_App_Hooks {
                 'type' => gettype($executed_hook),
             ]);
         }
+
+        // False until this call is counted as nested, so the finally knows whether it owes a
+        // decrement — a call that returned early, or was refused, never took one. A bool and
+        // not the name: this is read on EVERY call, and the name is in scope whenever it is true.
+        $is_counted = false;
 
         try {
             // First statement in the try — same reasoning as doAction(). It carries more
@@ -759,6 +820,27 @@ class Dj_App_Hooks {
                 return $cur_val;
             } else {
                 $hook_filters = Dj_App_Hooks::$filters[$executed_hook_fmt];
+            }
+
+            // A filter applied with no filter of its own already running cannot be re-entering
+            // itself, so the ordinary call settles on this one check and touches no counter.
+            if (!empty($prev_filter)) {
+                $depth = empty(Dj_App_Hooks::$running_filters[$executed_hook_fmt]) ? 0 : Dj_App_Hooks::$running_filters[$executed_hook_fmt];
+                $depth++;
+
+                if ($depth > Dj_App_Hooks::MAX_NESTED_DEPTH) {
+                    $exc_data = [
+                        'code' => 'app.core.hooks.max_nested_depth',
+                        'hook_name' => $executed_hook_fmt,
+                        'depth' => $depth,
+                    ];
+
+                    throw new Dj_App_Hooks_Exception('A filter re-entered itself past the nesting cap', $exc_data);
+                }
+
+                // Marked AFTER the cap decides, so a refused call leaves the count as it found it.
+                Dj_App_Hooks::$running_filters[$executed_hook_fmt] = $depth;
+                $is_counted = true;
             }
 
             // Execute callbacks in priority order. is_callable() is NOT checked on
@@ -808,6 +890,14 @@ class Dj_App_Hooks {
             return $cur_val;
         } finally {
             Dj_App_Hooks::$current_filter = $prev_filter;
+
+            if ($is_counted) {
+                Dj_App_Hooks::$running_filters[$executed_hook_fmt]--;
+
+                if (empty(Dj_App_Hooks::$running_filters[$executed_hook_fmt])) {
+                    unset(Dj_App_Hooks::$running_filters[$executed_hook_fmt]);
+                }
+            }
         }
     }
 
@@ -1250,7 +1340,7 @@ class Dj_App_Hooks {
         }
 
         $type = empty($opts['type']) ? Dj_App_Hooks::ACTION_TYPE_NORMAL : $opts['type'];
-        $remove_deferred = ($type === Dj_App_Hooks::ACTION_TYPE_DEFERRED);
+        $remove_deferred = $type == Dj_App_Hooks::ACTION_TYPE_DEFERRED;
 
         $hooks = (array) $hook_name;
         $removed = false;
