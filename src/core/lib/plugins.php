@@ -78,7 +78,10 @@ class Dj_App_Plugins {
             $plugins_root_dirs = glob($dir . '/*', GLOB_ONLYDIR);
 
             foreach ($plugins_root_dirs as $idx => $plugin_dir) {
-                $ctx = [];
+                // Fresh per plugin, but starting from what the CALLER passed: the flags that
+                // decide how a plugin is treated (is_system, active_plugins) ride in there, and
+                // an empty start silently dropped every one of them.
+                $ctx = empty($params) ? [] : $params;
                 $ctx['plugin_dir'] = $plugin_dir;
                 $plugin_dir = Dj_App_Hooks::applyFilter( 'app.plugin.dir', $plugin_dir, $ctx );
 
@@ -121,7 +124,7 @@ class Dj_App_Plugins {
 
                 // missing meta info in a system plugin file is not an error.
                 if (empty($ctx['is_system']) && $extr_res->isError()) {
-                    $res_obj->data($prefix, $partial_plugin_header_res_obj->msg);
+                    $res_obj->data($prefix, $extr_res->msg);
                     // @todo log error
                     continue;
                 }
@@ -182,9 +185,7 @@ class Dj_App_Plugins {
                     // A crashed plugin must leave a trace — full detail (message,
                     // file, line, trace) goes to the app error log. The page shows
                     // the raw message only on a dev/debug setup.
-                    // Deliberately unchecked: the crash is reported to the visitor either
-                    // way, and there is nothing to do differently when the write fails.
-                    Dj_App_Log::logAppError($e);
+                    $is_logged = Dj_App_Log::logAppError($e);
 
                     // The id resolved during discovery — the same string the activation check
                     // and the options filter use, so what the box names is what a site owner
@@ -196,9 +197,8 @@ class Dj_App_Plugins {
                     $is_debug = Dj_App_Config::cfg('app.debug', false);
 
                     if (empty($is_debug)) {
-                        // The same either way. Whether the line got written is this box's
-                        // business, and a visitor reading two different sentences learns
-                        // only how it is configured.
+                        // The same sentence whether or not the entry was written: a visitor
+                        // reading two different ones learns only how the site is configured.
                         $msg = 'error';
                     } else {
                         $msg = $e->getMessage();
@@ -207,13 +207,15 @@ class Dj_App_Plugins {
 
                     $error_msg = sprintf('Plugin [%s] crashed: %s', $plugin_id_esc, $msg);
 
-                    // Shown so what the visitor quotes locates the entry — the same value
-                    // stamped inside it. Always, because it names THIS request whether or
-                    // not a line was written, and the other entries from the same run
-                    // carry it too.
+                    // Shown so the visitor has something to quote when reporting the crash.
+                    // Always, because it names THIS request either way.
                     $req_id = Dj_App_Util::reqId();
                     $req_id_esc = dj_esc_html($req_id);
                     $error_msg = sprintf('%s (ref: %s)', $error_msg, $req_id_esc);
+
+                    if (!empty($is_debug) && empty($is_logged)) {
+                        $error_msg .= ' Not written to the app error log.';
+                    }
 
                     // The whole line goes THROUGH msg(), not beside it — the prefix used to be
                     // echoed as bare text next to the box, leaving half the sentence unstyled.
