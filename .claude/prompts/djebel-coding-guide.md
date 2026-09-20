@@ -1679,13 +1679,26 @@ The hooks system provides methods to check which hook is currently executing. Th
 
 **Getting the name**:
 ```php
-// Get the name of the currently executing action
+// Get the name of the currently executing action — fired as 'app.plugin.static_content.post_loaded'
 $current_action = Dj_App_Hooks::getCurrentAction();
-// Returns: 'app.plugin.static_content.post_loaded' (or empty string if no action running)
+// Returns: 'app/plugin/static_content/post_loaded' (or empty string if no action running)
 
-// Get the name of the currently executing filter
+// Get the name of the currently executing filter — fired as 'app.plugins.markdown.convert_markdown'
 $current_filter = Dj_App_Hooks::getCurrentFilter();
-// Returns: 'app.plugins.markdown.convert_markdown' (or empty string if no filter running)
+// Returns: 'app/plugin/markdown/convert_markdown' (or empty string if no filter running)
+```
+
+The name comes back in its formatted form — the one the registry is keyed by — never the
+spelling the hook was fired with. To test for a hook, use `isCurrentAction()` /
+`isCurrentFilter()`: they format the name you pass. Never compare a returned name with `===`
+against a name you typed:
+
+```php
+// ❌ WRONG - never true: the returned name is 'app/plugin/markdown/convert_markdown'
+if (Dj_App_Hooks::getCurrentFilter() === 'app.plugins.markdown.convert_markdown') {
+
+// ✅ CORRECT
+if (Dj_App_Hooks::isCurrentFilter('app.plugins.markdown.convert_markdown')) {
 ```
 
 **Checking a name** - returns a boolean:
@@ -1746,42 +1759,66 @@ public function logHookExecution($data, $ctx = []) {
 }
 ```
 
-**Use Case: Nested Hook Detection**
+**Use Case: Preventing Re-entry**
 
-Prevent recursive hook execution:
+`isCurrentFilter()` answers for the INNERMOST filter only, so it cannot guard a chain that comes
+back around through another hook — by then the current filter is whatever ran in between, and the
+guard waves the second entry through. Guard re-entry with a flag the plugin owns, cleared in a
+`finally` so a listener that throws cannot leave it stuck on:
 
 ```php
-public function processData($data, $ctx = []) {
-    // Prevent infinite recursion
-    if (Dj_App_Hooks::isCurrentFilter('app.plugin.example.process_data')) {
-        // Already processing this hook - return immediately
+class Djebel_Plugin_Example {
+    private $is_processing = false;
+
+    public function processData($data, $ctx = []) {
+        if ($this->is_processing) {
+            return $data;
+        }
+
+        $this->is_processing = true;
+
+        try {
+            $data = Dj_App_Hooks::applyFilter('app.plugin.example.process_data', $data, $ctx);
+        } finally {
+            $this->is_processing = false;
+        }
+
         return $data;
     }
-
-    // Safe to apply the filter
-    $data = Dj_App_Hooks::applyFilter('app.plugin.example.process_data', $data, $ctx);
-
-    return $data;
 }
 ```
 
+The framework caps how deep ONE hook may re-enter itself (`Dj_App_Hooks::MAX_NESTED_DEPTH`):
+past that, the fire throws a `Dj_App_Hooks_Exception` carrying the code
+`app.core.hooks.max_nested_depth` and the hook's name. That is a backstop — it stops a runaway
+chain from spending the request's whole memory limit on an uncatchable fatal. The guard above is
+what keeps a chain from reaching it, and a cap that trips in production is a bug to go and find.
+
 **Hook Name Formatting**
 
-The check methods format hook names before comparing (normalize separators, lowercase, etc.), so these are equivalent:
+A hook has ONE name however it is spelled: separators become `/`, it is lowercased, and
+`/plugins/` style segments are singularized. `getCurrentAction()` / `getCurrentFilter()`
+return that form, and the check methods format their argument into it before comparing, so
+these are equivalent:
 
 ```php
-// All of these check the same hook
+// All of these check the same hook — the current action reads 'app/core/init'
 Dj_App_Hooks::isCurrentAction('app.core.init')
 Dj_App_Hooks::isCurrentAction('app/core/init')
 Dj_App_Hooks::isCurrentAction('App.Core.Init')
 ```
 
+A wildcard pattern is not expanded by the check methods: `isCurrentAction('app.plugin.*.save')`
+is never true. Inside a pattern's listener, `getCurrentAction()` names the hook that fired.
+
 **WordPress Compatibility**
 
-Similar to WordPress's `current_filter()` and `doing_filter()` functions:
-- `getCurrentFilter()` = WordPress's `current_filter()`
-- `isCurrentFilter('hook.name')` = WordPress's `doing_filter('hook.name')`
-- `getCurrentAction()` and `isCurrentAction()` work the same way for actions
+- `getCurrentFilter()` = WordPress's `current_filter()` — the filter running right now.
+- `isCurrentFilter('hook.name')` is NOT WordPress's `doing_filter('hook.name')`. `doing_filter()`
+  answers for the WHOLE stack, so it is true for an outer filter while an inner one runs;
+  `isCurrentFilter()` compares against the innermost filter alone. Nothing here answers the
+  stack question — a listener that needs it tracks its own re-entry (see above).
+- `getCurrentAction()` and `isCurrentAction()` work the same way for actions.
 
 **Exception Safety**
 
