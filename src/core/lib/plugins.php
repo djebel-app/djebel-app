@@ -52,7 +52,9 @@ class Dj_App_Plugins {
      * Loads regular or system plugins from a folder.
      * Dj_App_Plugins::loadPlugins();
      * @param array $params Associative array with 'dir' and optional context params
-     * @return Dj_App_Result
+     * @return Dj_App_Result what this run did, each under its own key: `plugins` (the ones that
+     *                       loaded, meta keyed by file), `skipped_plugins` and `crashed_plugins`
+     *                       (id, file and the reason, one entry each), `plugin_load_times`.
      * @throws Dj_App_Exception
      */
     public static function loadPlugins($params = [])
@@ -65,6 +67,12 @@ class Dj_App_Plugins {
         $res_obj = new Dj_App_Result();
         $plugins = [];
         $plugin_load_times = [];
+
+        // Every plugin this run did NOT load, one entry each: which plugin, and what stopped it.
+        // Built here and handed over under its own key, so a caller reads the answer instead of
+        // parsing it out of strings.
+        $skipped_plugins = [];
+        $crashed_plugins = [];
         $options_obj = Dj_App_Options::getInstance();
         $plugins_options = $options_obj->get('plugins');
         $plugins_options = empty($plugins_options) ? [] : (array) $plugins_options;
@@ -77,7 +85,7 @@ class Dj_App_Plugins {
             // plugins must be in folders.
             $plugins_root_dirs = glob($dir . '/*', GLOB_ONLYDIR);
 
-            foreach ($plugins_root_dirs as $idx => $plugin_dir) {
+            foreach ($plugins_root_dirs as $plugin_dir) {
                 // Fresh per plugin, but starting from what the CALLER passed: the flags that
                 // decide how a plugin is treated (is_system, active_plugins) ride in there, and
                 // an empty start silently dropped every one of them.
@@ -103,11 +111,14 @@ class Dj_App_Plugins {
                 $plugin_file = $plugin_dir . '/plugin.php';
                 $plugin_file_rel = Dj_App_Plugins::getRelFile($plugin_file);
 
-                $prefix = "[$idx] plugin [$plugin_file_rel]";
-
                 if (!file_exists($plugin_file)) {
                     // @todo log error
-                    $res_obj->data($prefix, "main plugin file not found");
+                    $skipped_plugins[] = [
+                        'plugin_id' => $plugin_id,
+                        'plugin_file' => $plugin_file_rel,
+                        'reason' => 'main plugin file not found',
+                    ];
+
                     continue;
                 }
 
@@ -115,7 +126,12 @@ class Dj_App_Plugins {
 
                 if ($partial_plugin_header_res_obj->isError()) {
                     // @todo log error
-                    $res_obj->data($prefix, $partial_plugin_header_res_obj->msg);
+                    $skipped_plugins[] = [
+                        'plugin_id' => $plugin_id,
+                        'plugin_file' => $plugin_file_rel,
+                        'reason' => $partial_plugin_header_res_obj->msg,
+                    ];
+
                     continue;
                 }
 
@@ -124,8 +140,13 @@ class Dj_App_Plugins {
 
                 // missing meta info in a system plugin file is not an error.
                 if (empty($ctx['is_system']) && $extr_res_obj->isError()) {
-                    $res_obj->data($prefix, $extr_res_obj->msg);
                     // @todo log error
+                    $skipped_plugins[] = [
+                        'plugin_id' => $plugin_id,
+                        'plugin_file' => $plugin_file_rel,
+                        'reason' => $extr_res_obj->msg,
+                    ];
+
                     continue;
                 }
 
@@ -140,7 +161,12 @@ class Dj_App_Plugins {
 
                 // if the plugin requires a higher version of the php skip it.
                 if (!empty($extr_res_obj->min_php_ver) && version_compare(PHP_VERSION, $extr_res_obj->min_php_ver, '<')) {
-                    $res_obj->data($prefix, "PHP version is too low. Required: {$extr_res_obj->min_php_ver}");
+                    $skipped_plugins[] = [
+                        'plugin_id' => $plugin_id,
+                        'plugin_file' => $plugin_file_rel,
+                        'reason' => "PHP version is too low. Required: {$extr_res_obj->min_php_ver}",
+                    ];
+
                     continue;
                 }
 
@@ -156,7 +182,7 @@ class Dj_App_Plugins {
                     }
                 }
 
-                $plugin_meta_info = $extr_res_obj->data();
+                $plugin_meta_info = $extr_res_obj->meta_info;
                 $plugin_meta_info['plugin_file'] = $plugin_file;
 
                 // Carried so the load loop names a plugin the same way the activation check
@@ -193,6 +219,14 @@ class Dj_App_Plugins {
                     // that name on its own identifies nothing.
                     $plugin_id = Dj_App_Util::getField('plugin_id', $plugin_meta_info);
                     $plugin_id_esc = dj_esc_html($plugin_id);
+                    $crash_msg = $e->getMessage();
+
+                    $crashed_plugins[] = [
+                        'plugin_id' => $plugin_id,
+                        'plugin_file' => $plugin_file,
+                        'reason' => $crash_msg,
+                        'logged' => $is_logged,
+                    ];
 
                     $is_debug = Dj_App_Config::cfg('app.debug', false);
 
@@ -201,8 +235,7 @@ class Dj_App_Plugins {
                         // reading two different ones learns only how the site is configured.
                         $msg = 'error';
                     } else {
-                        $msg = $e->getMessage();
-                        $msg = dj_esc_html($msg);
+                        $msg = dj_esc_html($crash_msg);
                     }
 
                     $error_msg = sprintf('Plugin [%s] crashed: %s', $plugin_id_esc, $msg);
@@ -262,6 +295,8 @@ class Dj_App_Plugins {
             $res_obj->msg = $e->getMessage();
         } finally {
             $res_obj->plugins = $plugins;
+            $res_obj->skipped_plugins = $skipped_plugins;
+            $res_obj->crashed_plugins = $crashed_plugins;
             $res_obj->exec_time = Dj_App_Util::microtime( $timer_id );
             $res_obj->plugin_load_times = $plugin_load_times;
         }
