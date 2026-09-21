@@ -81,11 +81,28 @@ class Dj_App_Themes {
     }
 
     /**
-     * @return void
+     * Loads the active theme and hands the finished page to the request.
+     * @param array $inp_params Optional. 'theme' forces a theme id instead of resolving one.
+     * @return Dj_App_Result what the load settled on, under `theme_info`: theme, theme_dir,
+     *                       theme_url, functions_loaded, header_loaded, footer_loaded and
+     *                       render_mode (the header/footer sandwich, or the theme's main file).
      */
     public function loadTheme($inp_params = [])
     {
         $req_obj = Dj_App_Request::getInstance();
+        $res_obj = new Dj_App_Result();
+
+        // Declared with every key up front, so a run that dies partway still describes itself
+        // and no branch has to remember to add its own key.
+        $theme_info = [
+            'theme' => '',
+            'theme_dir' => '',
+            'theme_url' => '',
+            'functions_loaded' => false,
+            'header_loaded' => false,
+            'footer_loaded' => false,
+            'render_mode' => '',
+        ];
 
         try {
             $page_obj = Dj_App_Page::getInstance();
@@ -99,6 +116,7 @@ class Dj_App_Themes {
             $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme($ctx) : $inp_params['theme'];
             $current_theme = $this->formatId($current_theme);
             $this->current_theme = $current_theme;
+            $theme_info['theme'] = $current_theme;
             $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
 
             $themes_dir = $this->getThemesDir();
@@ -107,10 +125,12 @@ class Dj_App_Themes {
             $current_theme_dir = Dj_App_Hooks::applyFilter('app.themes.current_theme_dir', $current_theme_dir, $ctx);
 
             $this->current_theme_dir = $current_theme_dir;
+            $theme_info['theme_dir'] = $current_theme_dir;
 
             // Build full URL: site_url/dj-content/themes/theme-name
             $content_dir_url = Dj_App_Util::getContentDirUrl();
             $this->current_theme_url = $content_dir_url . '/themes/' . $current_theme;
+            $theme_info['theme_url'] = $this->current_theme_url;
             $default_theme_file = $current_theme_dir . '/index.php';
 
             // should we load theme's functions file?
@@ -126,6 +146,7 @@ class Dj_App_Themes {
                 if (file_exists($theme_func_file)) {
                     Dj_App_Hooks::doAction('app.core.theme.functions_before_load');
                     include_once $theme_func_file;
+                    $theme_info['functions_loaded'] = true;
                     Dj_App_Hooks::doAction('app.core.theme.functions_loaded');
                 }
             }
@@ -143,6 +164,7 @@ class Dj_App_Themes {
             if ($load_theme_header_file && file_exists($theme_header_file)) {
                 include_once $theme_header_file;
                 $header_loaded = true;
+                $theme_info['header_loaded'] = true;
             }
 
             $header_buff = ob_get_clean();
@@ -159,6 +181,7 @@ class Dj_App_Themes {
             if ($load_theme_footer_file && file_exists($theme_footer_file)) {
                 include_once $theme_footer_file;
                 $footer_loaded = true;
+                $theme_info['footer_loaded'] = true;
             }
 
             $footer_buff = ob_get_clean();
@@ -183,6 +206,7 @@ class Dj_App_Themes {
 
                 $page_content_buff = Dj_App_Hooks::applyFilter('app.page.content', $page_content_buff, $ctx);
                 $full_page_content = $header_buff . $page_content_buff . $footer_buff;
+                $theme_info['render_mode'] = 'sandwich';
             } else {
                 if (!file_exists($default_theme_file)) {
                     Dj_App_Util::die("Theme file not found: [theme:$current_theme]", ['code' => 404,]);
@@ -191,15 +215,20 @@ class Dj_App_Themes {
                 ob_start();
                 include_once $default_theme_file;
                 $full_page_content = ob_get_clean();
+                $theme_info['render_mode'] = 'main_file';
             }
 
             $full_page_content = Dj_App_Hooks::applyFilter('app.page.full_content', $full_page_content);
             $full_page_content = trim($full_page_content);
 
             $req_obj->setContent($full_page_content);
+            $res_obj->status(true);
         } finally {
+            $res_obj->theme_info = $theme_info;
             Dj_App_Hooks::doAction( 'app.core.theme.theme_loaded', $ctx );
         }
+
+        return $res_obj;
     }
 
     public function installHooks()

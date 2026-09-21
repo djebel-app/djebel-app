@@ -266,7 +266,7 @@ try {
         require_once $app_lib_dir . '/themes.php';
         $themes_obj = Dj_App_Themes::getInstance();
         $themes_obj->installHooks();
-        $themes_obj->loadTheme();
+        $theme_load_res_obj = $themes_obj->loadTheme();
     } else {
         ob_start();
         Dj_App_Hooks::doAction( 'app.core.theme.theme_not_loaded' );
