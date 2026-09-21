@@ -520,9 +520,9 @@ class Dj_App_Hooks {
      * @return bool True if a callback was removed
      */
     public static function removeShutdownAction($callback, $priority = Dj_App_Hooks::DEFAULT_PRIORITY) {
-        $removed = Dj_App_Hooks::removeAction('app/shutdown', $callback, $priority);
+        $is_shutdown_action_removed = Dj_App_Hooks::removeAction('app/shutdown', $callback, $priority);
 
-        return $removed;
+        return $is_shutdown_action_removed;
     }
 
     /**
@@ -540,9 +540,9 @@ class Dj_App_Hooks {
             'type' => Dj_App_Hooks::ACTION_TYPE_DEFERRED,
         ];
 
-        $removed = Dj_App_Hooks::removeAction($hook_name, $callback, $priority, $opts);
+        $is_deferred_action_removed = Dj_App_Hooks::removeAction($hook_name, $callback, $priority, $opts);
 
-        return $removed;
+        return $is_deferred_action_removed;
     }
 
     /**
@@ -1343,7 +1343,7 @@ class Dj_App_Hooks {
         $remove_deferred = $type == Dj_App_Hooks::ACTION_TYPE_DEFERRED;
 
         $hooks = (array) $hook_name;
-        $removed = false;
+        $is_action_removed = false;
 
         // Generate the action_id (callback fingerprint) once.
         $action_id = Dj_App_Hooks::generateCallbackHash($callback);
@@ -1354,7 +1354,7 @@ class Dj_App_Hooks {
             // Remove from the regular $actions store.
             if (isset(Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id])) {
                 unset(Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id]);
-                $removed = true;
+                $is_action_removed = true;
 
                 if (empty(Dj_App_Hooks::$actions[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$actions[$formatted_hook][$priority]);
@@ -1380,7 +1380,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $removed;
+        return $is_action_removed;
     }
 
     /**
@@ -1401,7 +1401,7 @@ class Dj_App_Hooks {
         }
 
         $hooks = (array) $hook_name;
-        $removed = false;
+        $is_filter_removed = false;
 
         // Generate the action_id (callback fingerprint) once for the callback we want to remove
         $action_id = Dj_App_Hooks::generateCallbackHash($callback);
@@ -1416,7 +1416,7 @@ class Dj_App_Hooks {
             // Remove the specific callback if it exists for this hook
             if (isset(Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id])) {
                 unset(Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id]);
-                $removed = true;
+                $is_filter_removed = true;
 
                 // Clean up empty arrays for this specific hook
                 if (empty(Dj_App_Hooks::$filters[$formatted_hook][$priority])) {
@@ -1429,7 +1429,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $removed;
+        return $is_filter_removed;
     }
 
     /**
@@ -1457,7 +1457,7 @@ class Dj_App_Hooks {
         }
 
         $hooks = (array) $hook_name;
-        $disabled = false;
+        $is_filter_disabled = false;
 
         $action_id = '';
 
@@ -1483,14 +1483,14 @@ class Dj_App_Hooks {
                 }
 
                 unset(Dj_App_Hooks::$filters[$formatted_hook]);
-                $disabled = true;
+                $is_filter_disabled = true;
                 continue;
             }
 
             if (isset(Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id]);
-                $disabled = true;
+                $is_filter_disabled = true;
 
                 // Clean up empty levels so the fire path's empty() quick-return kicks in.
                 if (empty(Dj_App_Hooks::$filters[$formatted_hook][$priority])) {
@@ -1503,7 +1503,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $disabled;
+        return $is_filter_disabled;
     }
 
     /**
@@ -1528,7 +1528,7 @@ class Dj_App_Hooks {
         }
 
         $hooks = (array) $hook_name;
-        $enabled = false;
+        $is_filter_enabled = false;
 
         $action_id = '';
 
@@ -1552,14 +1552,14 @@ class Dj_App_Hooks {
 
                 unset(Dj_App_Hooks::$disabled_filters[$formatted_hook]);
                 ksort(Dj_App_Hooks::$filters[$formatted_hook]);
-                $enabled = true;
+                $is_filter_enabled = true;
                 continue;
             }
 
             if (isset(Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$filters[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority][$action_id]);
-                $enabled = true;
+                $is_filter_enabled = true;
 
                 if (empty(Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$disabled_filters[$formatted_hook][$priority]);
@@ -1573,7 +1573,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $enabled;
+        return $is_filter_enabled;
     }
 
     /**
@@ -1598,7 +1598,7 @@ class Dj_App_Hooks {
         }
 
         $hooks = (array) $hook_name;
-        $disabled = false;
+        $is_action_disabled = false;
 
         $action_id = '';
 
@@ -1618,7 +1618,7 @@ class Dj_App_Hooks {
                     }
 
                     unset(Dj_App_Hooks::$actions[$formatted_hook]);
-                    $disabled = true;
+                    $is_action_disabled = true;
                 }
 
                 // Park the deferred mirror too — keeps doAction()'s capture/skip view coherent.
@@ -1630,7 +1630,7 @@ class Dj_App_Hooks {
                     }
 
                     unset(Dj_App_Hooks::$deferred_actions[$formatted_hook]);
-                    $disabled = true;
+                    $is_action_disabled = true;
                 }
 
                 continue;
@@ -1639,7 +1639,7 @@ class Dj_App_Hooks {
             if (isset(Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id]);
-                $disabled = true;
+                $is_action_disabled = true;
 
                 if (empty(Dj_App_Hooks::$actions[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$actions[$formatted_hook][$priority]);
@@ -1653,7 +1653,7 @@ class Dj_App_Hooks {
             if (isset(Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority][$action_id]);
-                $disabled = true;
+                $is_action_disabled = true;
 
                 if (empty(Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority]);
@@ -1665,7 +1665,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $disabled;
+        return $is_action_disabled;
     }
 
     /**
@@ -1689,7 +1689,7 @@ class Dj_App_Hooks {
         }
 
         $hooks = (array) $hook_name;
-        $enabled = false;
+        $is_action_enabled = false;
 
         $action_id = '';
 
@@ -1710,7 +1710,7 @@ class Dj_App_Hooks {
 
                     unset(Dj_App_Hooks::$disabled_actions[$formatted_hook]);
                     ksort(Dj_App_Hooks::$actions[$formatted_hook]);
-                    $enabled = true;
+                    $is_action_enabled = true;
                 }
 
                 if (!empty(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook])) {
@@ -1722,7 +1722,7 @@ class Dj_App_Hooks {
 
                     unset(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook]);
                     ksort(Dj_App_Hooks::$deferred_actions[$formatted_hook]);
-                    $enabled = true;
+                    $is_action_enabled = true;
                 }
 
                 continue;
@@ -1731,7 +1731,7 @@ class Dj_App_Hooks {
             if (isset(Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$actions[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority][$action_id]);
-                $enabled = true;
+                $is_action_enabled = true;
 
                 if (empty(Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$disabled_actions[$formatted_hook][$priority]);
@@ -1747,7 +1747,7 @@ class Dj_App_Hooks {
             if (isset(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority][$action_id])) {
                 Dj_App_Hooks::$deferred_actions[$formatted_hook][$priority][$action_id] = Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority][$action_id];
                 unset(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority][$action_id]);
-                $enabled = true;
+                $is_action_enabled = true;
 
                 if (empty(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority])) {
                     unset(Dj_App_Hooks::$disabled_deferred_actions[$formatted_hook][$priority]);
@@ -1761,7 +1761,7 @@ class Dj_App_Hooks {
             }
         }
 
-        return $enabled;
+        return $is_action_enabled;
     }
 
     public static function setDisabledFilters($disabled_filters = [])
@@ -1886,7 +1886,18 @@ class Dj_App_Hooks {
     private static function generateCallbackHash($callback) {
         // Handle predefined string returns
         if (is_string($callback)) {
-            return $callback;
+            // PHP resolves class, method and function names case-insensitively and ignores a
+            // leading \, so 'Foo::bar', '\Foo::bar' and 'foo::bar' are ONE callable — they must
+            // land on ONE key or the same listener registers twice and a remove*() that spells
+            // it differently matches nothing. The byte test keeps the ltrim() call off the
+            // common path, since a leading \ is the rare spelling.
+            if ($callback != '' && $callback[0] == '\\') {
+                $callback = ltrim($callback, '\\');
+            }
+
+            $callback_hash = strtolower($callback);
+
+            return $callback_hash;
         }
 
         // Handle closure/object methods
@@ -1899,14 +1910,24 @@ class Dj_App_Hooks {
         // Handle array callbacks [class/object, method]
         if (is_array($callback)) {
             if (is_object($callback[0])) {
-                // Instance method: [object, 'method']
+                // Instance method: [object, 'method']. spl_object_hash() is already lowercase
+                // hex, so only the method name is folded — no pass over the 32 hash chars.
                 $object_hash = spl_object_hash($callback[0]);
-                $callback_hash = $object_hash . '::' . $callback[1];
+                $method_name = strtolower($callback[1]);
+                $callback_hash = $object_hash . '::' . $method_name;
 
                 return $callback_hash;
             } else {
-                // Static method: ['Class', 'method']
-                $callback_hash = $callback[0] . '::' . $callback[1];
+                // Static method: ['Class', 'method']. Folded AFTER joining, so one strtolower()
+                // covers both halves instead of one per half.
+                $class_name = $callback[0];
+
+                if ($class_name != '' && $class_name[0] == '\\') {
+                    $class_name = ltrim($class_name, '\\');
+                }
+
+                $callback_hash = $class_name . '::' . $callback[1];
+                $callback_hash = strtolower($callback_hash);
 
                 return $callback_hash;
             }
@@ -1914,14 +1935,14 @@ class Dj_App_Hooks {
 
         // Handle string function names
         if (is_string($callback) && function_exists($callback)) {
-            $callback_hash = 'function::' . $callback;
+            $callback_hash = 'f::' . $callback;
 
             return $callback_hash;
         }
 
         // Fallback for any other callable
         $serialized_callback = serialize($callback);
-        $callback_hash = 'callback::' . $serialized_callback;
+        $callback_hash = 'cb::' . $serialized_callback;
 
         return $callback_hash;
     }

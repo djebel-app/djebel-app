@@ -76,14 +76,14 @@ class Dj_App_Assets_Test extends TestCase {
     {
         // setUp registered both, so both must come off. A filter that fails to unregister
         // is not a cosmetic leak — it stays live for every later test in the class.
-        $removed = Dj_App_Hooks::removeFilter('app.config.content_dir', ['Dj_App_Assets_Test', 'filterContentDir']);
-        $this->assertTrue($removed, 'The content dir filter leaked out of the test');
+        $is_content_dir_filter_removed = Dj_App_Hooks::removeFilter('app.config.content_dir', ['Dj_App_Assets_Test', 'filterContentDir']);
+        $this->assertTrue($is_content_dir_filter_removed, 'The content dir filter leaked out of the test');
 
-        $removed = Dj_App_Hooks::removeFilter('app.core.plugins.non_public_plugins_dir', ['Dj_App_Assets_Test', 'filterNonPublicPluginsDir']);
-        $this->assertTrue($removed, 'The non-public plugins dir filter leaked out of the test');
+        $is_non_public_plugins_dir_filter_removed = Dj_App_Hooks::removeFilter('app.core.plugins.non_public_plugins_dir', ['Dj_App_Assets_Test', 'filterNonPublicPluginsDir']);
+        $this->assertTrue($is_non_public_plugins_dir_filter_removed, 'The non-public plugins dir filter leaked out of the test');
 
-        $removed = Dj_App_Hooks::removeFilter('app.core.request.relative_web_path', ['Dj_App_Assets_Test', 'filterRelWebPath']);
-        $this->assertTrue($removed, 'The relative web path filter leaked out of the test');
+        $is_rel_web_path_filter_removed = Dj_App_Hooks::removeFilter('app.core.request.relative_web_path', ['Dj_App_Assets_Test', 'filterRelWebPath']);
+        $this->assertTrue($is_rel_web_path_filter_removed, 'The relative web path filter leaked out of the test');
 
         self::$rel_url = '';
 
@@ -652,8 +652,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/app.min.js', $footer_html);
             $this->assertStringNotContainsString('/assets/app.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -679,8 +679,8 @@ class Dj_App_Assets_Test extends TestCase {
             // The other asset never asked to opt out and still gets its build.
             $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -697,8 +697,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/main.css', $head_html);
             $this->assertStringNotContainsString('.min.css', $head_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -715,8 +715,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/app.js', $footer_html);
             $this->assertStringNotContainsString('/assets/app.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOff']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOff']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -774,8 +774,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/vendor.min.js', $footer_html);
             $this->assertStringNotContainsString('vendor.min.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -792,8 +792,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/lib.MIN.js', $footer_html);
             $this->assertStringNotContainsString('lib.MIN.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -826,8 +826,8 @@ class Dj_App_Assets_Test extends TestCase {
             // Second answered YES, so it takes the build.
             $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinAlternating']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinAlternating']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
             self::$use_min_calls = 0;
         }
     }
@@ -869,8 +869,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertFalse($assets_obj->checkUseMinified([ 'skip_min' => 1, ]));
             $this->assertTrue($assets_obj->checkUseMinified());
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -891,8 +891,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('/assets/dirtrap.js', $footer_html);
             $this->assertStringNotContainsString('/assets/dirtrap.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -912,8 +912,8 @@ class Dj_App_Assets_Test extends TestCase {
 
             $this->assertStringContainsString('/assets/.min/boxed.min.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
-            $this->assertTrue($removed, 'The use_min filter leaked out of the test');
+            $is_use_min_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_USE_MIN, ['Dj_App_Assets_Test', 'filterUseMinOn']);
+            $this->assertTrue($is_use_min_filter_removed, 'The use_min filter leaked out of the test');
         }
     }
 
@@ -1763,8 +1763,8 @@ class Dj_App_Assets_Test extends TestCase {
 
             $this->assertStringContainsString('https://rewritten.example.com/x.js', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsToCdn']);
-            $this->assertTrue($removed, 'The add_params filter leaked out of the test');
+            $is_add_params_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsToCdn']);
+            $this->assertTrue($is_add_params_filter_removed, 'The add_params filter leaked out of the test');
         }
     }
 
@@ -1791,8 +1791,8 @@ class Dj_App_Assets_Test extends TestCase {
             $footer_html = $assets_obj->buildHtml(Dj_App_Assets::PLACEMENT_FOOTER);
             $this->assertStringContainsString('var kept_anyway = 1;', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemDropId']);
-            $this->assertTrue($removed, 'The item filter leaked out of the test');
+            $is_item_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemDropId']);
+            $this->assertTrue($is_item_filter_removed, 'The item filter leaked out of the test');
         }
     }
 
@@ -1810,8 +1810,8 @@ class Dj_App_Assets_Test extends TestCase {
             $queue = $assets_obj->getQueue();
             $this->assertEmpty($queue);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemVeto']);
-            $this->assertTrue($removed, 'The veto filter leaked out of the test');
+            $is_veto_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.item', ['Dj_App_Assets_Test', 'filterItemVeto']);
+            $this->assertTrue($is_veto_filter_removed, 'The veto filter leaked out of the test');
         }
     }
 
@@ -1825,8 +1825,8 @@ class Dj_App_Assets_Test extends TestCase {
 
             $this->assertContains($res_obj->id, self::$added_asset_ids);
         } finally {
-            $removed = Dj_App_Hooks::removeAction('app.core.assets.action.added', ['Dj_App_Assets_Test', 'recordAddedAsset']);
-            $this->assertTrue($removed, 'The added action listener leaked out of the test');
+            $is_added_action_removed = Dj_App_Hooks::removeAction('app.core.assets.action.added', ['Dj_App_Assets_Test', 'recordAddedAsset']);
+            $this->assertTrue($is_added_action_removed, 'The added action listener leaked out of the test');
             self::$added_asset_ids = [];
         }
     }
@@ -1843,8 +1843,8 @@ class Dj_App_Assets_Test extends TestCase {
 
             $this->assertStringContainsString('nonce="dj-test-nonce"', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.tag_html', ['Dj_App_Assets_Test', 'filterTagHtmlAddNonce']);
-            $this->assertTrue($removed, 'The tag_html filter leaked out of the test');
+            $is_tag_html_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.tag_html', ['Dj_App_Assets_Test', 'filterTagHtmlAddNonce']);
+            $this->assertTrue($is_tag_html_filter_removed, 'The tag_html filter leaked out of the test');
         }
     }
 
@@ -1862,8 +1862,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('var kept = 1;', $footer_html);
             $this->assertStringNotContainsString('var dropped = 1;', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.queue', ['Dj_App_Assets_Test', 'filterQueueDropSecond']);
-            $this->assertTrue($removed, 'The queue filter leaked out of the test');
+            $is_queue_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.queue', ['Dj_App_Assets_Test', 'filterQueueDropSecond']);
+            $this->assertTrue($is_queue_filter_removed, 'The queue filter leaked out of the test');
         }
     }
 
@@ -1880,8 +1880,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertStringContainsString('<!-- dj-assets-start -->', $footer_html);
             $this->assertStringContainsString('var wrapped = 1;', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.html', ['Dj_App_Assets_Test', 'filterHtmlWrapInComment']);
-            $this->assertTrue($removed, 'The html filter leaked out of the test');
+            $is_html_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.html', ['Dj_App_Assets_Test', 'filterHtmlWrapInComment']);
+            $this->assertTrue($is_html_filter_removed, 'The html filter leaked out of the test');
         }
     }
 
@@ -2142,8 +2142,8 @@ class Dj_App_Assets_Test extends TestCase {
             $this->assertContains($open_id, self::$queue_filter_ids);
             $this->assertNotContains($gated_id, self::$queue_filter_ids);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_QUEUE, ['Dj_App_Assets_Test', 'recordQueueIds']);
-            $this->assertTrue($removed, 'The recording queue filter leaked out of the test');
+            $is_recording_queue_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Assets::FILTER_QUEUE, ['Dj_App_Assets_Test', 'recordQueueIds']);
+            $this->assertTrue($is_recording_queue_filter_removed, 'The recording queue filter leaked out of the test');
             self::$queue_filter_ids = [];
         }
     }
@@ -2166,8 +2166,8 @@ class Dj_App_Assets_Test extends TestCase {
 
             $this->assertStringContainsString('var freed = 1;', $footer_html);
         } finally {
-            $removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsLiftCondition']);
-            $this->assertTrue($removed, 'The condition-lifting add_params filter leaked out of the test');
+            $is_add_params_filter_removed = Dj_App_Hooks::removeFilter('app.core.assets.filter.add_params', ['Dj_App_Assets_Test', 'filterAddParamsLiftCondition']);
+            $this->assertTrue($is_add_params_filter_removed, 'The condition-lifting add_params filter leaked out of the test');
         }
     }
 

@@ -66,8 +66,8 @@ class Dj_App_Env_Test extends TestCase
             $this->assertTrue(Dj_App_Env::isDev());
             $this->assertFalse(Dj_App_Env::isLive());
         } finally {
-            $removed = Dj_App_Hooks::removeFilter(Dj_App_Env::FILTER_ENV_NAME, ['Dj_App_Env_Test', 'filterEnvNameToDev']);
-            $this->assertTrue($removed, 'The env name filter leaked out of the test');
+            $is_env_name_filter_removed = Dj_App_Hooks::removeFilter(Dj_App_Env::FILTER_ENV_NAME, ['Dj_App_Env_Test', 'filterEnvNameToDev']);
+            $this->assertTrue($is_env_name_filter_removed, 'The env name filter leaked out of the test');
         }
     }
 

@@ -29,8 +29,8 @@ class Dj_App_Themes_Test extends TestCase {
 
     protected function tearDown(): void
     {
-        $removed = Dj_App_Hooks::removeFilter('app.themes.themes_dir', ['Dj_App_Themes_Test', 'filterThemesDir']);
-        $this->assertTrue($removed, 'the themes dir filter was removed');
+        $is_themes_dir_filter_removed = Dj_App_Hooks::removeFilter('app.themes.themes_dir', ['Dj_App_Themes_Test', 'filterThemesDir']);
+        $this->assertTrue($is_themes_dir_filter_removed, 'the themes dir filter was removed');
 
         // false means the variable was absent, and null is how set() removes one.
         $load_functions = $this->backup_load_functions === false ? null : $this->backup_load_functions;
