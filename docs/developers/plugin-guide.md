@@ -213,6 +213,43 @@ public function saveToCsv($ctx)
 - A hook name shared by the firing plugin and its listeners is a **contract**: change one
   side, grep the other.
 
+## Turn a listener off for a moment — park it, don't remove it
+
+Removing a listener to silence it briefly means putting it back **exactly** as it was: same
+callback, same priority. Get the priority wrong on the way back and it returns in the wrong
+place in the order, with nothing to tell you. Djebel keeps the entry and parks it instead:
+
+```php
+try {
+    Dj_App_Hooks::disableFilter('app.page.content', [ $this, 'addBanner' ], 20);
+    // ...render something this listener must not touch...
+} finally {
+    Dj_App_Hooks::enableFilter('app.page.content', [ $this, 'addBanner' ], 20);
+}
+```
+
+A parked entry keeps its priority, so enabling puts it back where it was — nothing to
+remember, nothing to re-derive.
+
+**Omit the callback to park the WHOLE hook:**
+
+```php
+Dj_App_Hooks::disableAction('app.plugin.contact.message_processed');
+```
+
+A fully parked hook is invisible rather than empty: `hasFilter()` / `hasAction()` answer
+false and `applyFilter()` hands the value straight back, so nothing downstream needs a
+special case for it.
+
+- `disableFilter` / `enableFilter` for filters; `disableAction` / `enableAction` for actions.
+- Parking an action parks its deferred entry with it, so nothing replays after the response
+  either — and enabling brings both back.
+- Each returns **true** when at least one entry moved, so a mistyped hook name answers
+  `false` instead of pretending it parked something.
+- Re-enable in a `finally`. A parked hook stays parked for the rest of the request, and a
+  listener that throws would otherwise leave it that way.
+- Parking is for a **moment**; `removeFilter()` / `removeAction()` are for good.
+
 ## Legacy plugins (migrate later)
 
 The sibling plugins' **dirs** already conform to Tier 1 (`djebel-utm`, `djebel-seo`,
