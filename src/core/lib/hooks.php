@@ -1907,8 +1907,10 @@ class Dj_App_Hooks {
             return $callback_hash;
         }
 
-        // Handle array callbacks [class/object, method]
-        if (is_array($callback)) {
+        // Handle array callbacks [class/object, method]. A malformed pair — only reachable by
+        // injecting one straight into the registry, since add*() refuses it — falls through to
+        // the serialize fallback rather than reading a key that is not there.
+        if (is_array($callback) && isset($callback[0]) && isset($callback[1])) {
             if (is_object($callback[0])) {
                 // Instance method: [object, 'method']. spl_object_hash() is already lowercase
                 // hex, so only the method name is folded — no pass over the 32 hash chars.
@@ -1931,13 +1933,6 @@ class Dj_App_Hooks {
 
                 return $callback_hash;
             }
-        }
-
-        // Handle string function names
-        if (is_string($callback) && function_exists($callback)) {
-            $callback_hash = 'f::' . $callback;
-
-            return $callback_hash;
         }
 
         // Fallback for any other callable
