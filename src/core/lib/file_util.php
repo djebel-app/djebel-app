@@ -184,13 +184,12 @@ class Dj_App_File_Util {
             if (file_exists($file)) {
                 $perms = fileperms($file);
 
-                // Format microtime with 4-digit fractional part
-                $microtime_val = (string) microtime(true);
-                $microtime_parts = explode('.', $microtime_val);
-                $microtime_sec = $microtime_parts[0];
-                $microtime_frac = empty($microtime_parts[1]) ? 0 : (int) substr($microtime_parts[1], 0, 4);
-                $microtime_frac = sprintf('%04d', $microtime_frac);
-                $microtime_fmt = $microtime_sec . '.' . $microtime_frac;
+                // Exactly 4 fraction digits zero-filled on the RIGHT: a float cast drops
+                // trailing zeros (.0930 prints as .093), so left-padding that string would
+                // read .093 as .0093. sprintf also keeps the width independent of the
+                // precision ini. e.g. 1790605036.0930
+                $microtime_fmt = microtime(true);
+                $microtime_fmt = sprintf('%.4f', $microtime_fmt);
 
                 $tmp_file = $file . '.dj_tmp.' . $microtime_fmt;
 
