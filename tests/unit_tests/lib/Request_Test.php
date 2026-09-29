@@ -1256,4 +1256,32 @@ class Dj_App_Request_Test extends TestCase
 
         $this->assertTrue($filter_removed);
     }
+
+    /**
+     * A request that says it sent JSON still reads its query and form values, and an
+     * empty body neither breaks that nor leaves anything behind. The CLI has no
+     * request body, so the merge itself is proven against a served request.
+     */
+    public function testInitKeepsRequestValuesWhenAJsonBodyIsDeclared()
+    {
+        try {
+            $request_was = $_REQUEST;
+
+            $_REQUEST = [ 'seat_id' => 'seat_from_query', ];
+            $_SERVER['CONTENT_TYPE'] = 'application/json; charset=utf-8';
+
+            $req_obj = new Dj_App_Request();
+
+            $this->assertEquals('seat_from_query', $req_obj->get('seat_id'));
+            $this->assertEmpty($req_obj->get('site_url'), 'an empty body adds nothing');
+
+            $_SERVER['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
+
+            $form_req_obj = new Dj_App_Request();
+
+            $this->assertEquals('seat_from_query', $form_req_obj->get('seat_id'), 'a form post reads as before');
+        } finally {
+            $_REQUEST = $request_was;
+        }
+    }
 }

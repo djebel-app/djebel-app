@@ -564,7 +564,24 @@ class Dj_App_Request {
     public function init( $data = null ) {
         // see https://codex.wordpress.org/Function_Reference/stripslashes_deep
         if ( is_null( $this->data ) ) {
-            $data = empty( $data ) ? $_REQUEST : $data;
+            if ( empty( $data ) ) {
+                $data = $_REQUEST;
+
+                // A JSON body is read only when the request says it sent one, so every
+                // other request costs a header lookup and nothing more. Query and form
+                // values win over the body, the same precedence $_REQUEST already has.
+                $content_type = empty($_SERVER['CONTENT_TYPE']) ? '' : $_SERVER['CONTENT_TYPE'];
+
+                if (stripos($content_type, 'application/json') === 0) {
+                    $json_buff = file_get_contents('php://input');
+
+                    if (!empty($json_buff)) {
+                        $json_data = Dj_App_String_Util::jsonDecode($json_buff);
+                        $data = array_replace($json_data, $data);
+                    }
+                }
+            }
+
             $this->raw_data = $data;
 
             if (function_exists('stripslashes_deep')) {
