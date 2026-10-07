@@ -80,7 +80,7 @@ if ($app_load_options) {
     Dj_App_Hooks::doAction( 'app.core.options.loaded' );
 }
 
-// Lib loading — two independent app.ini toggles (env/const default via cfg; filter override).
+// Lib loading — two independent options (env/const default via cfg; filter override).
 //   [app] load_lib_loader — require the loader class (Dj_App_Lib) so on-demand loadLib() calls work.
 //   [app] load_libs        — also eager-load at bootstrap by handing its value to loadLib().
 // Either one requires the loader; both default off.
@@ -389,6 +389,17 @@ class Dj_App_Config {
         // A malformed ini file makes parse_ini_file return false (e.g. a '#'
         // pseudo-comment with parens — '#' is NOT an ini comment); never leak that —
         // this method always returns an array.
+        //
+        // Strict, because false (broken) and [] (comments only) must not read the same: an
+        // install whose config does not parse keeps every key unset and looks normal, so the
+        // loader says so. The NAME only — a line in here may be a secret.
+        if ($env_vars === false) {
+            $msg = 'Config file could not be parsed; no keys were loaded from ' . $file;
+            Dj_App_Log::error($msg, 'config');
+
+            return $data;
+        }
+
         if (empty($env_vars)) {
             return $data;
         }

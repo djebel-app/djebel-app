@@ -56,6 +56,12 @@ env/constant only.
 The resolved value passes through `replaceSystemVars()` and the `app.core.cfg` filter,
 then is written back to the environment so later reads in the same request are cheap.
 
+**A `.env` is an ini file, so its comments start with `;` — never `#`.** `#` is not an ini
+comment character: a `#` line containing a paren makes the whole file fail to parse, and an
+unparseable env file loads as nothing at all — every key reads as unset, which is
+indistinguishable from a file that set none. The loader logs when that happens; nothing
+else will.
+
 **Options** parses `app.ini` from the private conf dir (`.ht_djebel/conf/app.ini` by
 default). Dotted keys nest: `[app] shortcodes.process_all` is read as
 `app.shortcodes.process_all`, exactly like `[plugins] djebel-faq.sort_by` is read as
