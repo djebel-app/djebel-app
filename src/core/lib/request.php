@@ -317,11 +317,12 @@ class Dj_App_Request {
      * slash is stripped (a no-op for a subdir; '/' -> '' for root) and the module path's
      * leading slash ensured — exactly one slash between them.
      *   url('/stats/daily') -> '/stats/daily' (root) or '/myapp/stats/daily' (web path /myapp)
-     * @param string $rel_path Module-relative path, e.g. '/stats/daily'.
+     *   url()               -> '/' (root) or '/myapp/' (web path /myapp), the site's own root
+     * @param string $rel_path Module-relative path, e.g. '/stats/daily'. Defaults to the site root.
      * @param array $ctx
      * @return string
      */
-    public function url($rel_path = '', $ctx = [])
+    public function url($rel_path = '/', $ctx = [])
     {
         $web_path = $this->getWebPath($ctx);
         $web_path = Dj_App_Util::removeSlash($web_path);
@@ -521,7 +522,8 @@ class Dj_App_Request {
             foreach ($multiple_keys as $loop_key) {
                 $loop_val = $this->get($loop_key); // recursion!
 
-                if (!empty($loop_val)) {
+                // A missing or blank key comes back as '', so a '0' counts as found.
+                if ($loop_val != '') {
                     return $loop_val;
                 }
             }
@@ -530,7 +532,16 @@ class Dj_App_Request {
             return $default;
         }
 
-        $val = empty($this->data[$key]) ? $default : $this->data[$key];
+        $val = $default;
+
+        if (isset($this->data[$key])) {
+            $req_val = $this->data[$key];
+
+            // A zero is a value the visitor sent (?enabled=0 means off); only a blank field takes the default.
+            if (!empty($req_val) || is_numeric($req_val)) {
+                $val = $req_val;
+            }
+        }
 
         if ( $force_type & self::INT ) {
             $val = intval($val);
@@ -551,7 +562,7 @@ class Dj_App_Request {
         $val = Dj_App_String_Util::trim($val);
 
         if (is_array($default)) { // smart cast to array if the default val is array.
-            $val = empty($val) ? $default : (array) $val;
+            $val = ($val == '') ? $default : (array) $val;
         }
 
         return $val;

@@ -751,6 +751,73 @@ class Dj_App_Request_Test extends TestCase
     }
 
     /**
+     * A zero is a value the visitor sent (?enabled=0 means off), so it must never turn into the
+     * default. Only a missing or blank field does.
+     */
+    public function testGetKeepsZeroAndDefaultsMissingOrBlank()
+    {
+        $req_obj = new Dj_App_Request();
+        $req_obj->set('zero', '0');
+        $req_obj->set('blank', '');
+
+        $zero_val = $req_obj->get('zero', 'fallback');
+
+        $this->assertSame('0', $zero_val);
+
+        $zero_no_default_val = $req_obj->get('zero');
+
+        $this->assertSame('0', $zero_no_default_val);
+
+        $blank_val = $req_obj->get('blank', 'fallback');
+
+        $this->assertSame('fallback', $blank_val);
+
+        $missing_val = $req_obj->get('missing', 'fallback');
+
+        $this->assertSame('fallback', $missing_val);
+    }
+
+    /**
+     * The first listed key with a value wins, a zero included; the default comes back only when
+     * every key is missing or blank.
+     */
+    public function testGetMultipleKeysStopsAtZero()
+    {
+        $req_obj = new Dj_App_Request();
+        $req_obj->set('blank', '');
+        $req_obj->set('zero', '0');
+        $req_obj->set('word', 'yes');
+
+        $zero_val = $req_obj->get('missing|blank|zero|word', 'fallback');
+
+        $this->assertSame('0', $zero_val);
+
+        $nothing_val = $req_obj->get('missing|blank', 'fallback');
+
+        $this->assertSame('fallback', $nothing_val);
+    }
+
+    /**
+     * With an array default a zero comes back wrapped like any other value, while a blank field
+     * still takes the default.
+     */
+    public function testGetArrayDefaultWrapsZero()
+    {
+        $req_obj = new Dj_App_Request();
+        $req_obj->set('zero', '0');
+        $req_obj->set('blank', '');
+
+        $zero_val = $req_obj->get('zero', []);
+
+        $this->assertSame([ '0', ], $zero_val);
+
+        $blank_val = $req_obj->get('blank', []);
+
+        $this->assertIsArray($blank_val);
+        $this->assertEmpty($blank_val);
+    }
+
+    /**
      * url() prepends the web path to a module path on a subdir mount.
      */
     public function testUrlPrependsWebPathForSubdir()
@@ -793,6 +860,37 @@ class Dj_App_Request_Test extends TestCase
         $url = $req_obj->url('stats/daily');
 
         $this->assertEquals('/myapp/stats/daily', $url, 'leading slash added to a bare module path');
+    }
+
+    /**
+     * url() with no path is the site's own root on a subdir mount, so a caller never spells
+     * out '/' to get it.
+     */
+    public function testUrlDefaultsToSiteRootForSubdir()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/myapp';
+
+        $req_obj = new Dj_App_Request();
+        $url = $req_obj->url();
+
+        $this->assertEquals('/myapp/', $url, 'no path means the site root, with its slash');
+    }
+
+    /**
+     * url() with no path at the domain root is a single '/', never empty and never '//'.
+     */
+    public function testUrlDefaultsToSiteRootAtDomainRoot()
+    {
+        $_SERVER['PHP_SELF'] = '/success.php';
+        $_SERVER['SCRIPT_NAME'] = '/success.php';
+        unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
+
+        $req_obj = new Dj_App_Request();
+        $url = $req_obj->url();
+
+        $this->assertEquals('/', $url, 'no path at the domain root is one slash');
     }
 
     /**
