@@ -562,7 +562,7 @@ class Dj_App_Request {
         $val = Dj_App_String_Util::trim($val);
 
         if (is_array($default)) { // smart cast to array if the default val is array.
-            $val = ($val == '') ? $default : (array) $val;
+            $val = $val == '' ? $default : (array) $val;
         }
 
         return $val;
