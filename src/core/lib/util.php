@@ -2614,7 +2614,8 @@ class Dj_App_Util {
     }
 
     /**
-     * Safe unserialize
+     * Safe unserialize: a value holding an object anywhere fails, so no class is ever built from
+     * the data, and decoding reaches no __wakeup, __unserialize, __destruct or autoloader.
      * Dj_App_Util::unserialize();
      *
      * @param string $data Serialized data
@@ -2642,12 +2643,46 @@ class Dj_App_Util {
             return false;
         }
 
-        // Security: refuse if contains serialized objects (O: or C:)
+        // A cheap early exit for an object near the start; the walk below is what catches one
+        // anywhere else.
         if ((stripos($small_buffer, 'O:') !== false) || (stripos($small_buffer, 'C:') !== false)) {
             return false;
         }
 
-        $result = @unserialize($data);
+        // allowed_classes => false decodes every object as an inert __PHP_Incomplete_Class, so no
+        // constructor, magic method or autoloader runs while decoding.
+        $unserialize_opts = [ 'allowed_classes' => false, ];
+        $result = @unserialize($data, $unserialize_opts);
+
+        // An object anywhere fails the whole value, so the caller never holds one. A value decoded
+        // from N bytes holds fewer than N values unless references repeat parts of it, so counting
+        // past N means a reference loop, which fails the value too instead of looping forever.
+        $values_left = strlen($data);
+        $pending = [ $result, ];
+
+        while (!empty($pending)) {
+            $current = array_pop($pending);
+
+            if (is_object($current)) {
+                return false;
+            }
+
+            if (!is_array($current)) {
+                continue;
+            }
+
+            $values_left -= count($current);
+
+            if ($values_left < 0) {
+                return false;
+            }
+
+            foreach ($current as $value) {
+                if (is_array($value) || is_object($value)) {
+                    $pending[] = $value;
+                }
+            }
+        }
 
         return $result;
     }

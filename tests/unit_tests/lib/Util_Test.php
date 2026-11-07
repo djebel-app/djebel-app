@@ -1337,6 +1337,58 @@ META;
     }
 
     /**
+     * An object deep in the value, past the first bytes the cheap check reads, still fails the
+     * whole value.
+     */
+    public function testUnserializeRejectsAnObjectPastTheFirstBytes()
+    {
+        $padding = str_repeat('x', 100);
+        $serialized = 'a:2:{s:7:"padding";s:100:"' . $padding . '";s:4:"item";O:8:"stdClass":0:{}}';
+
+        $result = Dj_App_Util::unserialize($serialized);
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * A value whose references loop back on themselves fails instead of being walked forever.
+     */
+    public function testUnserializeRejectsAReferenceLoop()
+    {
+        $result = Dj_App_Util::unserialize('a:1:{i:0;R:1;}');
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * A reference that repeats a value without looping still decodes, so the loop check costs
+     * plain data nothing.
+     */
+    public function testUnserializeKeepsARepeatedReference()
+    {
+        $result = Dj_App_Util::unserialize('a:2:{i:0;a:1:{i:0;i:1;}i:1;R:2;}');
+
+        $this->assertSame([ [ 1, ], [ 1, ], ], $result);
+    }
+
+    /**
+     * Arrays nested several levels deep decode unchanged; looking for objects must not cost plain
+     * data anything.
+     */
+    public function testUnserializeKeepsNestedArrays()
+    {
+        $data = [
+            'level1' => [ 'level2' => [ 'level3' => [ 'value' => 'deep', ], ], ],
+            'list' => [ 1, 2, 3, ],
+        ];
+
+        $serialized = serialize($data);
+        $result = Dj_App_Util::unserialize($serialized);
+
+        $this->assertSame($data, $result);
+    }
+
+    /**
      * Test data() method - basic set and get functionality
      */
     public function testDataBasicSetAndGet()
