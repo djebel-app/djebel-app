@@ -47,6 +47,22 @@ class Dj_App_Cache_Test extends TestCase
     }
 
     /**
+     * The listener the params test registers: JSON for one plugin's entries, nothing for the rest.
+     *
+     * @param string $cache_method
+     * @param array $ctx
+     * @return string
+     */
+    public function filterCacheMethodForOnePlugin($cache_method, $ctx = [])
+    {
+        if (empty($ctx['params']['plugin']) || ($ctx['params']['plugin'] != 'plugin_on_json')) {
+            return $cache_method;
+        }
+
+        return Dj_App_Cache::METHOD_JSON;
+    }
+
+    /**
      * Nothing configured means PHP serialize, so a site that never heard of the setting keeps the
      * cache files it has.
      */
@@ -137,6 +153,114 @@ class Dj_App_Cache_Test extends TestCase
         }
 
         $this->assertSame('app.core.cache.unknown_method', $error_code);
+    }
+
+    /**
+     * One entry can ask for JSON on a site that doesn't use it, forgiven the same spellings a
+     * site's setting is.
+     */
+    public function testGetCacheMethodLetsAnEntryAskForJson()
+    {
+        $this->setCacheMethod(Dj_App_Cache::METHOD_PHP_SERIALIZE);
+
+        $entry_params = [ 'cache_method' => '  JSON ', ];
+        $cache_method = Dj_App_Cache::getCacheMethod($entry_params);
+
+        $this->assertSame(Dj_App_Cache::METHOD_JSON, $cache_method);
+    }
+
+    /**
+     * An entry can't take a site off JSON in any spelling: a site set to JSON must never reach
+     * PHP's unserialize for what sits in its cache dir.
+     */
+    public function testGetCacheMethodKeepsAJsonSiteOnJson()
+    {
+        $this->setCacheMethod(Dj_App_Cache::METHOD_JSON);
+
+        $spellings = [ Dj_App_Cache::METHOD_PHP_SERIALIZE, 'PHP-Serialize', ];
+
+        foreach ($spellings as $spelling) {
+            $entry_params = [ 'cache_method' => $spelling, ];
+            $cache_method = Dj_App_Cache::getCacheMethod($entry_params);
+
+            $this->assertSame(Dj_App_Cache::METHOD_JSON, $cache_method, "an entry asking for '{$spelling}'");
+        }
+    }
+
+    /**
+     * A typo in an entry's key throws on every site, the same as one in the site's setting. A key
+     * that formats to nothing throws too, instead of reading as no method and leaving JSON.
+     */
+    public function testGetCacheMethodThrowsOnAnUnknownEntryMethod()
+    {
+        $site_methods = [ Dj_App_Cache::METHOD_PHP_SERIALIZE, Dj_App_Cache::METHOD_JSON, ];
+        $bad_names = [ 'jsn', '---', ];
+
+        foreach ($site_methods as $site_method) {
+            $this->setCacheMethod($site_method);
+
+            foreach ($bad_names as $bad_name) {
+                $error_code = '';
+                $entry_params = [ 'cache_method' => $bad_name, ];
+
+                try {
+                    $cache_method = Dj_App_Cache::getCacheMethod($entry_params);
+                } catch (Dj_App_Exception $e) {
+                    $error_code = $e->getErrorCode();
+                }
+
+                $this->assertSame('app.core.cache.unknown_method', $error_code, "'{$bad_name}' on a {$site_method} site");
+            }
+        }
+    }
+
+    /**
+     * A listener is told the params of the entry, so a site can pick the method per plugin, and an
+     * entry it has no opinion on keeps the site's method.
+     */
+    public function testGetCacheMethodGivesTheFilterTheParams()
+    {
+        $this->setCacheMethod(Dj_App_Cache::METHOD_PHP_SERIALIZE);
+        Dj_App_Hooks::addFilter('app.cache.method', [ $this, 'filterCacheMethodForOnePlugin' ]);
+
+        try {
+            $plugin_params = [ 'plugin' => 'plugin_on_json', ];
+            $plugin_method = Dj_App_Cache::getCacheMethod($plugin_params);
+            $other_method = Dj_App_Cache::getCacheMethod();
+        } finally {
+            $is_removed = Dj_App_Hooks::removeFilter('app.cache.method', [ $this, 'filterCacheMethodForOnePlugin' ]);
+        }
+
+        $this->assertSame(Dj_App_Cache::METHOD_JSON, $plugin_method);
+        $this->assertSame(Dj_App_Cache::METHOD_PHP_SERIALIZE, $other_method);
+        $this->assertTrue($is_removed, 'the test listener came off');
+    }
+
+    /**
+     * An entry written as JSON on a PHP serialize site comes back through a get() that names no
+     * method. The write is the thing under test, so this test writes a file.
+     */
+    public function testSetWritesOneEntryAsJsonOnAPhpSerializeSite()
+    {
+        $this->setCacheMethod(Dj_App_Cache::METHOD_PHP_SERIALIZE);
+
+        $data = [ 'title' => 'Здравей', ];
+        $cache_params = [ 'plugin' => 'dj-app-cache-test', ];
+        $json_params = $cache_params;
+        $json_params['cache_method'] = Dj_App_Cache::METHOD_JSON;
+
+        $set_res = Dj_App_Cache::set('one_entry_json', $data, $json_params);
+
+        $this->assertTrue($set_res->isSuccess(), "set() failed: {$set_res->msg}");
+
+        $cache_dir = Dj_App_Cache::getCacheDir($cache_params);
+        $read_res = Dj_App_File_Util::read($cache_dir . '/one_entry_json.php');
+
+        $this->assertStringContainsString('// ::dj_end::{"meta":', $read_res->output);
+
+        $cached_data = Dj_App_Cache::get('one_entry_json', $cache_params);
+
+        $this->assertSame($data, $cached_data);
     }
 
     /**
@@ -299,10 +423,11 @@ class Dj_App_Cache_Test extends TestCase
     }
 
     /**
-     * Each method reads only its own files: after a switch, a file in the other method is a miss
-     * the next set() writes over, never a value decoded by the wrong reader.
+     * The file says how it was written: JSON reads on any site, since one entry may be JSON on a
+     * site that isn't, and PHP serialize only on a site set to php_serialize, so a site set to JSON
+     * never runs unserialize().
      */
-    public function testReadTakesOnlyFilesOfTheCurrentMethod()
+    public function testReadPicksTheDecoderFromTheFile()
     {
         $serialize_file = DJEBEL_APP_TEST_DATA_DIR . '/cache/php_serialize.php';
         $json_file = DJEBEL_APP_TEST_DATA_DIR . '/cache/json.php';
@@ -316,7 +441,7 @@ class Dj_App_Cache_Test extends TestCase
 
         $json_read = Dj_App_Cache::read($json_file);
 
-        $this->assertNull($json_read, 'php_serialize leaves a JSON file alone');
+        $this->assertSame($expected_data, $json_read, 'php_serialize also reads a JSON file');
 
         $this->setCacheMethod(Dj_App_Cache::METHOD_JSON);
 

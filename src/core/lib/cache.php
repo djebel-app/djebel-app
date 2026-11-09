@@ -55,7 +55,7 @@ class Dj_App_Cache
      *
      * @param string|array $key Cache key (string or array for namespacing)
      * @param mixed $data Data to cache
-     * @param array $params Optional parameters (ttl, etc)
+     * @param array $params Optional parameters (ttl, cache_method, etc)
      * @return Dj_App_Result
      * @throws Dj_App_Exception when cache_method names no known method
      */
@@ -209,14 +209,16 @@ class Dj_App_Cache
     /**
      * How cache files are encoded: the site's `[app] cache_method`, else the app.core.cache_method
      * env var or constant, else php_serialize; the app.cache.method filter gets the last word.
+     * A cache_method key in $params can ask for JSON for one entry, on any site.
      * Case, spaces and punctuation are forgiven; any other name throws, so a typo can't quietly
      * leave a site on the method it meant to leave.
      * Dj_App_Cache::getCacheMethod();
      *
+     * @param array $params Optional: cache_method, plus whatever the filter's listeners read
      * @return string Dj_App_Cache::METHOD_PHP_SERIALIZE or Dj_App_Cache::METHOD_JSON
      * @throws Dj_App_Exception
      */
-    public static function getCacheMethod()
+    public static function getCacheMethod($params = [])
     {
         $options_obj = Dj_App_Options::getInstance();
         $cache_method = $options_obj->get('app.cache_method');
@@ -225,7 +227,22 @@ class Dj_App_Cache
             $cache_method = Dj_App_Config::cfg('app.core.cache_method');
         }
 
-        $cache_method = Dj_App_Hooks::applyFilter('app.cache.method', $cache_method);
+        // Asking for php_serialize changes nothing, so an entry can't take a site off JSON and make
+        // it run unserialize() on its cache dir. Any other name goes on to the check below.
+        if (!empty($params['cache_method'])) {
+            $entry_method = $params['cache_method'];
+
+            if (is_scalar($entry_method)) {
+                $entry_method = Dj_App_String_Util::formatKey($entry_method);
+            }
+
+            if ($entry_method != Dj_App_Cache::METHOD_PHP_SERIALIZE) {
+                $cache_method = $params['cache_method'];
+            }
+        }
+
+        $ctx = [ 'params' => $params, ];
+        $cache_method = Dj_App_Hooks::applyFilter('app.cache.method', $cache_method, $ctx);
 
         if (empty($cache_method)) {
             return Dj_App_Cache::METHOD_PHP_SERIALIZE;
@@ -248,8 +265,9 @@ class Dj_App_Cache
     }
 
     /**
-     * Read data from cache file, decoded with the site's cache_method. A file in the other method,
-     * a damaged one, or one write() did not make reads as a miss.
+     * Read data from cache file. The file says how it was written: JSON reads on any site, and PHP
+     * serialize only on a site set to php_serialize. A damaged file, or one write() did not make,
+     * reads as a miss.
      * Dj_App_Cache::read();
      *
      * @param string $cache_file Path to cache file
@@ -282,11 +300,19 @@ class Dj_App_Cache
             $cache_content = trim($cache_content);
         }
 
-        $cache_method = Dj_App_Cache::getCacheMethod();
+        // One entry may be JSON on a site that isn't, so the first byte decides the decoder. Only a
+        // site on php_serialize ever reaches unserialize(), and JSON can't build an object anywhere.
+        $first_char = Dj_App_String_Util::getFirstChar($cache_content);
 
-        if ($cache_method == Dj_App_Cache::METHOD_JSON) {
+        if ($first_char == '{') {
             $cached_data = Dj_App_String_Util::jsonDecode($cache_content);
         } else {
+            $cache_method = Dj_App_Cache::getCacheMethod();
+
+            if ($cache_method == Dj_App_Cache::METHOD_JSON) {
+                return null;
+            }
+
             $cached_data = Dj_App_Util::unserialize($cache_content);
         }
 
@@ -330,13 +356,14 @@ class Dj_App_Cache
     }
 
     /**
-     * Write data to cache file, encoded with the site's cache_method. Data the method can't
-     * encode, or a ttl that isn't a number of seconds, is not cached, and the Result says so.
+     * Write data to cache file, encoded with the site's cache_method unless $params asks for JSON.
+     * Data the method can't encode, or a ttl that isn't a number of seconds, is not cached, and the
+     * Result says so.
      * Dj_App_Cache::write();
      *
      * @param string $cache_file Path to cache file
      * @param mixed $data Data to cache
-     * @param array $params Optional parameters (ttl, etc)
+     * @param array $params Optional parameters (ttl, cache_method, etc)
      * @return Dj_App_Result
      * @throws Dj_App_Exception when cache_method names no known method
      */
@@ -368,7 +395,7 @@ class Dj_App_Cache
             'data' => $data,
         ];
 
-        $cache_method = Dj_App_Cache::getCacheMethod();
+        $cache_method = Dj_App_Cache::getCacheMethod($params);
 
         if ($cache_method == Dj_App_Cache::METHOD_JSON) {
             // Objects become arrays first, so both methods give back the same values.

@@ -962,8 +962,8 @@ Key configuration points:
   which is TRUE on staging as well as live; `app.core.assets.filter.use_min` gets the last
   word and runs per asset. Only js/css are probed, and only on a file already found
 - `app.core.cache_method`: how `Dj_App_Cache` encodes its files, `php_serialize` (default) or
-  `json` (`[app] cache_method`); the `app.cache.method` filter gets the last word, and an
-  unknown name throws
+  `json` (`[app] cache_method`); the `app.cache.method` filter gets the last word, an unknown
+  name throws, and one entry can ask for JSON with `cache_method` in `set()`'s params
 - `app.core.shortcodes.full_page_replace`: replace shortcodes in the whole buffer, not
   just from `<body>` (default off)
 - `app.core.shortcodes.process_all`: call the callback for EVERY occurrence instead of

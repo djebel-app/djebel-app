@@ -210,10 +210,25 @@ the method, and a filter gets the last word:
 Dj_App_Hooks::addFilter('app.cache.method', ['My_Plugin', 'filterCacheMethod']);
 ```
 
+A listener's `$ctx['params']` holds what the caller passed to `set()`, so a site can choose per
+plugin. It is empty on a read.
+
 Case, spaces and punctuation are forgiven (`PHP-Serialize` and `Json` both work); any other
 name throws, so a typo fails loudly instead of leaving the site on the method it meant to leave.
-Each method reads only its own files: after a switch, every existing entry reads as a miss once
-and is written again in the new encoding.
+
+One entry can ask for JSON on any site, through the `cache_method` key in `set()`'s params:
+
+```php
+$params = [ 'cache_method' => Dj_App_Cache::METHOD_JSON, ];
+Dj_App_Cache::set($key, $data, $params);
+```
+
+`get()` needs no key, because the file says how it was written. JSON reads on any site. PHP
+serialize reads only on a site set to `php_serialize`, so a site set to JSON never runs
+`unserialize()`, and `php_serialize` in the key changes nothing there.
+
+After a site switches to JSON, its PHP serialize entries read as a miss once and are written
+again as JSON. After a switch back, its JSON entries keep working until they expire.
 
 ## `app.*` — request and error handling
 
