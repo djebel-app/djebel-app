@@ -96,12 +96,6 @@ Pattern: `DJEBEL_APP_TOOL_{TOOL_NAME}_{VARIABLE}`
 
 CLI args always take priority over env vars. Internal PHP constants (embedded in PHAR stubs) also use this prefix: `DJEBEL_APP_TOOL_PKG_PHAR_BUILD_DATE`, `DJEBEL_APP_TOOL_PKG_PHAR_BUILD_GIT_COMMIT`.
 
-### Git Rules
-
-- **NEVER COMMIT — EVER. NO EXCEPTIONS.** Do NOT run `git commit`, `git push`, `git merge`, `git rebase`, submodule pointer bumps, or ANY command that writes git history or mutates a remote. Claude ONLY edits the working tree and **suggests** a commit message in chat; the USER runs every commit/push themselves after reviewing. This holds even if the user said "go ahead" earlier — approval never carries over, and a request to "commit" still means *propose the message and stop*, never execute it.
-- **NEVER** add `Co-Authored-By` or any attribution/signature line to commits
-- Use `git mv` (not plain `mv`) for tracked files
-
 ### Planning docs never go into this repo
 
 djebel-app is open source. PRDs, build prompts and TODO notes are internal planning and are kept
