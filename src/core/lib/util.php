@@ -2615,7 +2615,8 @@ class Dj_App_Util {
 
     /**
      * Safe unserialize: a value holding an object anywhere fails, so no class is ever built from
-     * the data, and decoding reaches no __wakeup, __unserialize, __destruct or autoloader.
+     * the data, and decoding reaches no __wakeup, __unserialize or __destruct. An enum entry still
+     * makes PHP 8.1+ ask a registered autoloader for its class name; the value fails either way.
      * Dj_App_Util::unserialize();
      *
      * @param string $data Serialized data
@@ -2650,7 +2651,7 @@ class Dj_App_Util {
         }
 
         // allowed_classes => false decodes every object as an inert __PHP_Incomplete_Class, so no
-        // constructor, magic method or autoloader runs while decoding.
+        // constructor or magic method runs while decoding.
         $unserialize_opts = [ 'allowed_classes' => false, ];
         $result = @unserialize($data, $unserialize_opts);
 
