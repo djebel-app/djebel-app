@@ -432,14 +432,14 @@ class Dj_App_Request {
 
     /**
      * Checks a request val and compares it to a value or a list of a values separated by comma, ; or |
-     * Every compare is as text and ignores case.
-     * $req_obj->getAndCompare('action', 'lostpassword,lp')
+     * The whole value has to match, as text and ignoring case.
+     * $req_obj->valueMatches('action', 'lostpassword,lp')
      * @param string $key
      * @param string $checked_val
      * @param mixed $default
      * @return bool
      */
-    public function getAndCompare($key = '', $checked_val = '', $default = '') {
+    public function valueMatches($key = '', $checked_val = '', $default = '') {
         $val = $this->get($key, $default);
 
         // ?x[]=1 arrives as an array, which equals no text and would throw in strcasecmp().

@@ -978,33 +978,33 @@ class Dj_App_Request_Test extends TestCase
     }
 
     /**
-     * getAndCompare() tests the request value against a SEPARATED list of accepted
+     * valueMatches() tests the request value against a SEPARATED list of accepted
      * values, trimming each candidate first — so ' live ' written with padding in the
      * list still matches a stored 'live'. The method had no coverage at all.
      */
-    public function testGetAndCompareMatchesSeparatedListIgnoringPadding()
+    public function testValueMatchesSeparatedListIgnoringPadding()
     {
         $req_obj = new Dj_App_Request();
         $req_obj->set('mode', 'live');
 
-        $exact_res = $req_obj->getAndCompare('mode', 'live');
+        $exact_res = $req_obj->valueMatches('mode', 'live');
 
         $this->assertTrue($exact_res);
 
-        $case_res = $req_obj->getAndCompare('mode', 'LIVE');
+        $case_res = $req_obj->valueMatches('mode', 'LIVE');
 
         $this->assertTrue($case_res);
 
         // Each entry is padded; without the trim none of them would match.
-        $padded_res = $req_obj->getAndCompare('mode', ' draft , live , archived ');
+        $padded_res = $req_obj->valueMatches('mode', ' draft , live , archived ');
 
         $this->assertTrue($padded_res);
 
-        $pipe_res = $req_obj->getAndCompare('mode', 'draft | live | archived');
+        $pipe_res = $req_obj->valueMatches('mode', 'draft | live | archived');
 
         $this->assertTrue($pipe_res);
 
-        $absent_res = $req_obj->getAndCompare('mode', 'draft,archived');
+        $absent_res = $req_obj->valueMatches('mode', 'draft,archived');
 
         $this->assertFalse($absent_res);
     }
@@ -1015,27 +1015,27 @@ class Dj_App_Request_Test extends TestCase
      * the ends. A value carrying an embedded null cannot slip past the comparison by
      * looking different from the entry it should have matched.
      */
-    public function testGetAndCompareStripsInnerNullBytes()
+    public function testValueMatchesStripsInnerNullBytes()
     {
         $req_obj = new Dj_App_Request();
         $req_obj->set('mode', 'live');
 
-        $null_byte_res = $req_obj->getAndCompare('mode', "draft,li\0ve");
+        $null_byte_res = $req_obj->valueMatches('mode', "draft,li\0ve");
 
         $this->assertTrue($null_byte_res);
     }
 
-    public function testGetAndCompareEmptyHandling()
+    public function testValueMatchesEmptyHandling()
     {
         $req_obj = new Dj_App_Request();
 
         // Nothing asked for, nothing stored — treated as a match.
-        $both_empty_res = $req_obj->getAndCompare('missing_key', '');
+        $both_empty_res = $req_obj->valueMatches('missing_key', '');
 
         $this->assertTrue($both_empty_res);
 
         // Something expected, nothing stored — not a match.
-        $no_value_res = $req_obj->getAndCompare('missing_key', 'live');
+        $no_value_res = $req_obj->valueMatches('missing_key', 'live');
 
         $this->assertFalse($no_value_res);
     }
@@ -1044,30 +1044,30 @@ class Dj_App_Request_Test extends TestCase
      * Pins a 0 as a value like any other: it matches in a list and alone, and a blank never
      * passes for it, in either direction.
      */
-    public function testGetAndCompareTreatsZeroAsAValue()
+    public function testValueMatchesTreatsZeroAsAValue()
     {
         $req_obj = Dj_App_Request::getInstance();
 
         try {
             $req_obj->set('compare_zero', '0');
 
-            $list_res = $req_obj->getAndCompare('compare_zero', '0,1');
+            $list_res = $req_obj->valueMatches('compare_zero', '0,1');
 
             $this->assertTrue($list_res);
 
-            $single_res = $req_obj->getAndCompare('compare_zero', '0');
+            $single_res = $req_obj->valueMatches('compare_zero', '0');
 
             $this->assertTrue($single_res);
 
-            $other_list_res = $req_obj->getAndCompare('compare_zero', '1,2');
+            $other_list_res = $req_obj->valueMatches('compare_zero', '1,2');
 
             $this->assertFalse($other_list_res);
 
-            $nothing_asked_res = $req_obj->getAndCompare('compare_zero', '');
+            $nothing_asked_res = $req_obj->valueMatches('compare_zero', '');
 
             $this->assertFalse($nothing_asked_res);
 
-            $nothing_sent_res = $req_obj->getAndCompare('missing_key', '0');
+            $nothing_sent_res = $req_obj->valueMatches('missing_key', '0');
 
             $this->assertFalse($nothing_sent_res);
         } finally {
@@ -1078,14 +1078,14 @@ class Dj_App_Request_Test extends TestCase
     /**
      * Pins a plain no for a single accepted value that differs, the most ordinary way to call this.
      */
-    public function testGetAndCompareReturnsFalseForASingleValueThatDiffers()
+    public function testValueMatchesReturnsFalseForASingleValueThatDiffers()
     {
         $req_obj = Dj_App_Request::getInstance();
 
         try {
             $req_obj->set('compare_mode', 'live');
 
-            $differs_res = $req_obj->getAndCompare('compare_mode', 'draft');
+            $differs_res = $req_obj->valueMatches('compare_mode', 'draft');
 
             $this->assertFalse($differs_res);
         } finally {
@@ -1099,20 +1099,20 @@ class Dj_App_Request_Test extends TestCase
      * array gets the same answer. The word Array is what an array reads as once cast to text, so
      * a cast that ran before the check would match it.
      */
-    public function testGetAndCompareRefusesAnArrayValue()
+    public function testValueMatchesRefusesAnArrayValue()
     {
         $req_obj = Dj_App_Request::getInstance();
 
         try {
             $req_obj->set('compare_list_val', [ 'live', ]);
 
-            $array_val_res = $req_obj->getAndCompare('compare_list_val', 'Array');
+            $array_val_res = $req_obj->valueMatches('compare_list_val', 'Array');
 
             $this->assertFalse($array_val_res);
 
             $req_obj->set('compare_state', 'Array');
 
-            $array_list_res = $req_obj->getAndCompare('compare_state', [ 'live', ]);
+            $array_list_res = $req_obj->valueMatches('compare_state', [ 'live', ]);
 
             $this->assertFalse($array_list_res);
         } finally {
@@ -1152,20 +1152,20 @@ class Dj_App_Request_Test extends TestCase
      * Pins list entries compared the way a single value is: as text, without regard for case. As
      * numbers, 0e5 and 0 would be the same value.
      */
-    public function testGetAndCompareComparesListEntriesAsText()
+    public function testValueMatchesComparesListEntriesAsText()
     {
         $req_obj = Dj_App_Request::getInstance();
 
         try {
             $req_obj->set('compare_number_like', '0e5');
 
-            $number_like_res = $req_obj->getAndCompare('compare_number_like', '0,1');
+            $number_like_res = $req_obj->valueMatches('compare_number_like', '0,1');
 
             $this->assertFalse($number_like_res);
 
             $req_obj->set('compare_mode', 'live');
 
-            $case_res = $req_obj->getAndCompare('compare_mode', 'LIVE,draft');
+            $case_res = $req_obj->valueMatches('compare_mode', 'LIVE,draft');
 
             $this->assertTrue($case_res);
         } finally {
