@@ -1337,10 +1337,9 @@ META;
     }
 
     /**
-     * An object deep in the value, past the first bytes the cheap check reads, still fails the
-     * whole value.
+     * An object deep in the value still fails the whole value.
      */
-    public function testUnserializeRejectsAnObjectPastTheFirstBytes()
+    public function testUnserializeRejectsAnObjectDeepInTheValue()
     {
         $padding = str_repeat('x', 100);
         $serialized = 'a:2:{s:7:"padding";s:100:"' . $padding . '";s:4:"item";O:8:"stdClass":0:{}}';
@@ -1348,6 +1347,38 @@ META;
         $result = Dj_App_Util::unserialize($serialized);
 
         $this->assertFalse($result);
+    }
+
+    /**
+     * Pins that an object right at the start of an array fails the whole value, the same as one
+     * further in.
+     */
+    public function testUnserializeRejectsAnObjectNearTheStart()
+    {
+        $result = Dj_App_Util::unserialize('a:1:{i:0;O:8:"stdClass":0:{}}');
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Pins that plain text holding "o:" or "c:" decodes: those letters turn up in ordinary labels,
+     * notes, Windows folder names and array keys.
+     */
+    public function testUnserializeKeepsTextThatLooksLikeAnObjectMarker()
+    {
+        $data_cases = [
+            'Info: hello',
+            [ 'note' => 'abc:def', ],
+            [ 'dir' => 'C:\dir', ],
+            [ 'topic: x' => 1, ],
+        ];
+
+        foreach ($data_cases as $data) {
+            $serialized = serialize($data);
+            $result = Dj_App_Util::unserialize($serialized);
+
+            $this->assertSame($data, $result);
+        }
     }
 
     /**

@@ -2617,6 +2617,8 @@ class Dj_App_Util {
      * Safe unserialize: a value holding an object anywhere fails, so no class is ever built from
      * the data, and decoding reaches no __wakeup, __unserialize or __destruct. An enum entry still
      * makes PHP 8.1+ ask a registered autoloader for its class name; the value fails either way.
+     * Meant for data the site wrote itself: a visitor's input goes through JSON instead, since
+     * PHP's own parser is not built to take hostile data.
      * Dj_App_Util::unserialize();
      *
      * @param string $data Serialized data
@@ -2628,25 +2630,15 @@ class Dj_App_Util {
             return false;
         }
 
-        // Quick check on small buffer
-        $buffer_size = 64;
-        $small_buffer = substr($data, 0, $buffer_size);
-
         // First char must be valid type, second must be ':'
-        $first_char = $small_buffer[0];
+        $first_char = $data[0];
         $valid_types = ['b', 'i', 'd', 's', 'a', 'N']; // bool, int, double, string, array, null
 
         if (!in_array($first_char, $valid_types)) {
             return false;
         }
 
-        if (empty($small_buffer[1]) || $small_buffer[1] != ':') {
-            return false;
-        }
-
-        // A cheap early exit for an object near the start; the walk below is what catches one
-        // anywhere else.
-        if ((stripos($small_buffer, 'O:') !== false) || (stripos($small_buffer, 'C:') !== false)) {
+        if (empty($data[1]) || $data[1] != ':') {
             return false;
         }
 

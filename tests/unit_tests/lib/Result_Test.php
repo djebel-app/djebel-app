@@ -311,7 +311,11 @@ class Dj_App_Result_Test extends TestCase {
         $this->assertStringNotContainsString('expected_system_keys_regex', $dumped);
         $this->assertStringNotContainsString('expected_system_keys_regex', $exported);
         $this->assertStringNotContainsString('expected_system_keys_regex', $printed);
-        $this->assertStringNotContainsString('private', $dumped);
+
+        // The two ways a dump marks a private member, plain PHP and Xdebug. Xdebug opens the dump
+        // with the file name, so the bare word would also match a checkout under a "private" dir.
+        $this->assertStringNotContainsString(':private]', $dumped);
+        $this->assertStringNotContainsString('private $', $dumped);
     }
 
     /**

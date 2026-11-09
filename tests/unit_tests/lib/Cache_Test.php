@@ -260,8 +260,8 @@ class Dj_App_Cache_Test extends TestCase
     }
 
     /**
-     * A cache file holding an object past its first bytes reads as a miss, and the object's class
-     * never wakes up: its __wakeup throws, so a wake would fail this test with that exception.
+     * A cache file holding an object in its data reads as a miss, and the object's class never
+     * wakes up: its __wakeup throws, so a wake would fail this test with that exception.
      */
     public function testReadRefusesAnObjectInTheData()
     {
