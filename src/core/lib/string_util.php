@@ -581,15 +581,17 @@ class Dj_App_String_Util
      * @param int $flags  json_encode() bitmask. Defaults to
      *                    self::APP_DEFAULT_JSON_ENCODE_FLAGS (pretty + legible
      *                    unicode/slashes). Pass 0 for a compact wire body.
-     * @return string
+     * @return string|false false for a value JSON can't hold at all, such as INF or NAN
      */
     public static function jsonEncode( $thing, $flags = self::APP_DEFAULT_JSON_ENCODE_FLAGS ) {
         $res = json_encode( $thing, $flags );
 
-        // With php7+ encoding can/will fail if contents are not utf8 encoded.
-        if ( empty( $res ) ) {
-            $thing = Dj_App_String_Util::encodeUTF8( $thing );
-            $res = json_encode( $thing, $flags );
+        // With php7+ encoding can/will fail if contents are not utf8 encoded. The retry replaces
+        // only the bad bytes, so valid text and value types come back as they went in. Strict:
+        // encoding the number 0 gives "0", which empty() would read as a failure.
+        if ( $res === false ) {
+            $retry_flags = $flags | JSON_INVALID_UTF8_SUBSTITUTE;
+            $res = json_encode( $thing, $retry_flags );
         }
 
         return $res;
@@ -704,8 +706,7 @@ class Dj_App_String_Util
             }
         } elseif (is_scalar($d)) {
             // utf8_encode() is DEPRECATED as of PHP 8.2 and REMOVED in PHP 9, where
-            // calling it is a fatal — so this recovery path (the one that stops
-            // jsonEncode returning an empty body) would break the day the host upgrades.
+            // calling it is a fatal, so relying on it would break the day the host upgrades.
             //
             // mbstring's equivalent is preferred wherever it exists: it is not
             // deprecated, and it does the SAME conversion — utf8_encode is defined as

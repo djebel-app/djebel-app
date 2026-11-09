@@ -1742,10 +1742,8 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertFalse($result_true);
     }
 
-    // encodeUTF8 is the recovery path jsonEncode() falls back to when json_encode()
-    // returns false on non-UTF8 input. It used utf8_encode(), which PHP 8.2 deprecated
-    // and PHP 9 REMOVES — so these pin the conversion itself, independently of which
-    // function performs it.
+    // encodeUTF8 used utf8_encode(), which PHP 8.2 deprecated and PHP 9 REMOVES — so
+    // these pin the conversion itself, independently of which function performs it.
 
     public function testEncodeUtf8ConvertsLatin1BytesToValidUtf8()
     {
@@ -1789,19 +1787,92 @@ class Dj_App_String_Util_Test extends TestCase {
         $this->assertSame('café', $encoded->name);
     }
 
-    public function testEncodeUtf8MakesJsonEncodeSucceedOnLatin1Input()
+    /**
+     * Pins that a byte raw json_encode() refuses still gets an answer, since a caller would echo
+     * the false as an empty body.
+     */
+    public function testJsonEncodeSucceedsOnLatin1Input()
     {
         $latin1_data = ['name' => "caf\xE9"];
 
-        // THE REASON THIS FUNCTION EXISTS: raw json_encode() cannot represent these
-        // bytes and returns false, which a caller then echoes as an empty body.
         $this->assertFalse(json_encode($latin1_data));
 
         $recovered_json = Dj_App_String_Util::jsonEncode($latin1_data);
         $recovered_data = json_decode($recovered_json, true);
 
         $this->assertNotEmpty($recovered_json);
-        $this->assertSame('café', $recovered_data['name']);
+        $this->assertSame("caf\u{FFFD}", $recovered_data['name']);
+    }
+
+    /**
+     * Pins what one bad byte costs: that byte alone, while the valid text and the value types
+     * around it come back as they went in.
+     */
+    public function testJsonEncodeReplacesOnlyTheBadByte()
+    {
+        $data = [
+            'title' => 'Здравей',
+            'count' => 5,
+            'rating' => 1.5,
+            'is_on' => true,
+            'note' => "caf\xE9",
+        ];
+
+        $json = Dj_App_String_Util::jsonEncode($data);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('Здравей', $decoded['title']);
+        $this->assertSame(5, $decoded['count']);
+        $this->assertSame(1.5, $decoded['rating']);
+        $this->assertTrue($decoded['is_on']);
+        $this->assertSame("caf\u{FFFD}", $decoded['note']);
+    }
+
+    /**
+     * Pins a bad byte in a key, the case a value-only clean-up would leave as an empty result.
+     */
+    public function testJsonEncodeKeepsAKeyHoldingABadByte()
+    {
+        $data = [ "caf\xE9" => 'Здравей', ];
+
+        $json = Dj_App_String_Util::jsonEncode($data);
+        $decoded = json_decode($json, true);
+
+        $this->assertSame('Здравей', $decoded["caf\u{FFFD}"]);
+    }
+
+    /**
+     * Pins that a zero is an answer: its encoded form reads as empty, and retrying it would turn
+     * the number into a string.
+     */
+    public function testJsonEncodeKeepsAZero()
+    {
+        $json = Dj_App_String_Util::jsonEncode(0);
+
+        $this->assertSame('0', $json);
+    }
+
+    /**
+     * Pins that a caller asking for a refusal gets one, instead of a replaced byte.
+     */
+    public function testJsonEncodeThrowsWhenTheCallerAsksForIt()
+    {
+        $this->expectException(JsonException::class);
+
+        $data = [ 'note' => "caf\xE9", ];
+        Dj_App_String_Util::jsonEncode($data, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Pins that a value JSON can't hold at all is reported as a failure, not turned into text.
+     */
+    public function testJsonEncodeReturnsFalseForAValueJsonCannotHold()
+    {
+        $data = [ 'rating' => INF, ];
+
+        $json = Dj_App_String_Util::jsonEncode($data);
+
+        $this->assertFalse($json);
     }
 
     public function testMatchesPattern()
