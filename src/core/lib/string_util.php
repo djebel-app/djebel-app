@@ -689,43 +689,6 @@ class Dj_App_String_Util
     }
 
     /**
-     * This is needed when doing JSON encode as decoding may not work with php 7+
-     * Dj_App_String_Util::encodeUTF8();
-     * @param mixed $d
-     * @return mixed
-     * @see http://stackoverflow.com/questions/19361282/why-would-json-encode-returns-an-empty-string
-     */
-    public static function encodeUTF8($d) {
-        if (is_array($d)) {
-            foreach ($d as $k => $v) {
-                $d[$k] = Dj_App_String_Util::encodeUTF8($v);
-            }
-        } elseif (is_object($d)) {
-            foreach ($d as $k => $v) {
-                $d->$k = Dj_App_String_Util::encodeUTF8($v);
-            }
-        } elseif (is_scalar($d)) {
-            // utf8_encode() is DEPRECATED as of PHP 8.2 and REMOVED in PHP 9, where
-            // calling it is a fatal, so relying on it would break the day the host upgrades.
-            //
-            // mbstring's equivalent is preferred wherever it exists: it is not
-            // deprecated, and it does the SAME conversion — utf8_encode is defined as
-            // ISO-8859-1 -> UTF-8, which is exactly what is named here. It also stops
-            // the deprecation notice polluting logs on 8.2+ today.
-            //
-            // utf8_encode remains the fallback for a PHP 8 build without mbstring, and
-            // is guarded so it is never even looked up on 9+.
-            if (function_exists('mb_convert_encoding')) {
-                $d = mb_convert_encoding($d, 'UTF-8', 'ISO-8859-1');
-            } elseif (PHP_VERSION_ID < 90000 && function_exists('utf8_encode')) {
-                $d = utf8_encode($d);
-            }
-        }
-
-        return $d;
-    }
-
-    /**
      * Get the first character of a string
      * Dj_App_String_Util::getFirstChar();
      * @param string $str
