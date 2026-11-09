@@ -39,9 +39,8 @@ $process_all = $options_obj->isEnabled('app.shortcodes.process_all', $process_al
 `1` / `true` / `yes` / `on` / `enabled`. The `$default` matters: it distinguishes an
 ABSENT key from an explicit `0`.
 
-Only three core keys are bridged today — `app.load_lib_loader`, `app.load_libs` and
-`app.shortcodes.process_all`. Everything else in the `app.core.*` tables below is
-env/constant only.
+The *app.ini* column of the `app.core.*` table below names every core key bridged today; a
+key with no entry there is env/constant only.
 
 ## How each tier resolves
 
@@ -123,6 +122,7 @@ Env/constant only unless the *app.ini* column names a key.
 | `app.core.shortcodes.process_all` | `false` | `[app] shortcodes.process_all` | Call the callback for EVERY occurrence. See the warning below. |
 | `app.core.assets.load` | `true` | — | Asset queue toggle (`Dj_App_Assets`). Off = plugin `register()` calls have nowhere to go, so no asset tags are emitted. |
 | `app.core.assets.use_min` | `Dj_App_Env::isLive()` | `[app] core.assets.use_min` | Serve `name.min.js` / `name.min.css` when one sits beside the file a plugin named. See below. |
+| `app.core.cache_method` | `php_serialize` | `[app] cache_method` | How `Dj_App_Cache` encodes its files: `php_serialize` or `json`. See below. |
 | `app.core.output.render_generator` | `true` | — | Emit the generator meta tag. |
 | `app.core.process_missing_static_files` | `false` | — | Let the app handle requests for missing static files. |
 | `app.core.log.file` | *(unset)* | — | Log file location. |
@@ -185,6 +185,35 @@ Dj_App_Assets::register([
     'skip_min' => 1,
 ]);
 ```
+
+### `cache_method` — how cache files are encoded
+
+`Dj_App_Cache` writes each entry as a PHP file that exits on its first line, followed by the
+data in one of two encodings:
+
+| | `php_serialize` (default) | `json` |
+|---|---|---|
+| An object inside a file | decoded as an inert placeholder, and the whole file is refused | cannot exist: JSON has no classes |
+| Reading | faster | slower: a read takes nearly twice as long, measured on a blog cache |
+| The data after the `<?php exit;` header | PHP's own format | plain JSON, which any JSON tool reads once that header is cut off |
+| A value JSON cannot hold as written: text that is not valid UTF-8, INF, NAN | kept as written | that entry is not cached: the page builds it every time, and the log says why |
+
+```ini
+[app]
+cache_method = json
+```
+
+When `app.ini` says nothing, the env var or constant `DJEBEL_APP_CORE_CACHE_METHOD` supplies
+the method, and a filter gets the last word:
+
+```php
+Dj_App_Hooks::addFilter('app.cache.method', ['My_Plugin', 'filterCacheMethod']);
+```
+
+Case, spaces and punctuation are forgiven (`PHP-Serialize` and `Json` both work); any other
+name throws, so a typo fails loudly instead of leaving the site on the method it meant to leave.
+Each method reads only its own files: after a switch, every existing entry reads as a miss once
+and is written again in the new encoding.
 
 ## `app.*` — request and error handling
 
