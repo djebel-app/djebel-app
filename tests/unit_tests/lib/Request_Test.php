@@ -350,13 +350,13 @@ class Dj_App_Request_Test extends TestCase
         $req_obj->set('message', 'Hello <b>World</b>!');
         
         // Test INT type forcing
-        $this->assertEquals(42, $req_obj->get('count', '', Dj_App_Request::INT));
-        $this->assertEquals(19, $req_obj->get('price', '', Dj_App_Request::INT)); // intval('19.99') = 19
-        
+        $this->assertSame(42, $req_obj->get('count', '', Dj_App_Request::INT));
+        $this->assertSame(19, $req_obj->get('price', '', Dj_App_Request::INT)); // intval('19.99') = 19
+
         // Test FLOAT type forcing
-        $this->assertEquals(19.99, $req_obj->get('price', '', Dj_App_Request::FLOAT));
-        $this->assertEquals(42.0, $req_obj->get('count', '', Dj_App_Request::FLOAT));
-        
+        $this->assertSame(19.99, $req_obj->get('price', '', Dj_App_Request::FLOAT));
+        $this->assertSame(42.0, $req_obj->get('count', '', Dj_App_Request::FLOAT));
+
         // Test STRIP_ALL_TAGS - skip this test as it requires WordPress functions
         // $this->assertEquals('Hello World!', $req_obj->get('message', '', Dj_App_Request::STRIP_ALL_TAGS));
     }
@@ -1038,6 +1038,140 @@ class Dj_App_Request_Test extends TestCase
         $no_value_res = $req_obj->getAndCompare('missing_key', 'live');
 
         $this->assertFalse($no_value_res);
+    }
+
+    /**
+     * Pins a 0 as a value like any other: it matches in a list and alone, and a blank never
+     * passes for it, in either direction.
+     */
+    public function testGetAndCompareTreatsZeroAsAValue()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $req_obj->set('compare_zero', '0');
+
+            $list_res = $req_obj->getAndCompare('compare_zero', '0,1');
+
+            $this->assertTrue($list_res);
+
+            $single_res = $req_obj->getAndCompare('compare_zero', '0');
+
+            $this->assertTrue($single_res);
+
+            $other_list_res = $req_obj->getAndCompare('compare_zero', '1,2');
+
+            $this->assertFalse($other_list_res);
+
+            $nothing_asked_res = $req_obj->getAndCompare('compare_zero', '');
+
+            $this->assertFalse($nothing_asked_res);
+
+            $nothing_sent_res = $req_obj->getAndCompare('missing_key', '0');
+
+            $this->assertFalse($nothing_sent_res);
+        } finally {
+            $req_obj->set('compare_zero', null);
+        }
+    }
+
+    /**
+     * Pins a plain no for a single accepted value that differs, the most ordinary way to call this.
+     */
+    public function testGetAndCompareReturnsFalseForASingleValueThatDiffers()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $req_obj->set('compare_mode', 'live');
+
+            $differs_res = $req_obj->getAndCompare('compare_mode', 'draft');
+
+            $this->assertFalse($differs_res);
+        } finally {
+            $req_obj->set('compare_mode', null);
+        }
+    }
+
+    /**
+     * Pins a plain no for a request value that isn't text: ?mode[]=live arrives as an array, and
+     * a visitor must not be able to turn that into an error or a match. A list handed in as an
+     * array gets the same answer. The word Array is what an array reads as once cast to text, so
+     * a cast that ran before the check would match it.
+     */
+    public function testGetAndCompareRefusesAnArrayValue()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $req_obj->set('compare_list_val', [ 'live', ]);
+
+            $array_val_res = $req_obj->getAndCompare('compare_list_val', 'Array');
+
+            $this->assertFalse($array_val_res);
+
+            $req_obj->set('compare_state', 'Array');
+
+            $array_list_res = $req_obj->getAndCompare('compare_state', [ 'live', ]);
+
+            $this->assertFalse($array_list_res);
+        } finally {
+            $req_obj->set('compare_list_val', null);
+            $req_obj->set('compare_state', null);
+        }
+    }
+
+    /**
+     * Pins the cast on a multi-key read, which takes its own route through get(): a number comes
+     * back as a number whether a key held it or none did, the same as for a single key.
+     */
+    public function testGetCastsTheValueOfAMultiKeyRead()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $req_obj->set('multi_key_count', '42');
+
+            $found_res = $req_obj->get('missing_key|multi_key_count', '', Dj_App_Request::INT);
+
+            $this->assertSame(42, $found_res);
+
+            $float_res = $req_obj->get('missing_key|multi_key_count', '', Dj_App_Request::FLOAT);
+
+            $this->assertSame(42.0, $float_res);
+
+            $nothing_found_res = $req_obj->get('missing_key|other_key', '', Dj_App_Request::INT);
+
+            $this->assertSame(0, $nothing_found_res);
+        } finally {
+            $req_obj->set('multi_key_count', null);
+        }
+    }
+
+    /**
+     * Pins list entries compared the way a single value is: as text, without regard for case. As
+     * numbers, 0e5 and 0 would be the same value.
+     */
+    public function testGetAndCompareComparesListEntriesAsText()
+    {
+        $req_obj = Dj_App_Request::getInstance();
+
+        try {
+            $req_obj->set('compare_number_like', '0e5');
+
+            $number_like_res = $req_obj->getAndCompare('compare_number_like', '0,1');
+
+            $this->assertFalse($number_like_res);
+
+            $req_obj->set('compare_mode', 'live');
+
+            $case_res = $req_obj->getAndCompare('compare_mode', 'LIVE,draft');
+
+            $this->assertTrue($case_res);
+        } finally {
+            $req_obj->set('compare_number_like', null);
+            $req_obj->set('compare_mode', null);
+        }
     }
 
     /**

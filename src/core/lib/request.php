@@ -432,23 +432,29 @@ class Dj_App_Request {
 
     /**
      * Checks a request val and compares it to a value or a list of a values separated by comma, ; or |
+     * Every compare is as text and ignores case.
      * $req_obj->getAndCompare('action', 'lostpassword,lp')
      * @param string $key
-     * @param mixed $checked_val
+     * @param string $checked_val
      * @param mixed $default
      * @return bool
      */
     public function getAndCompare($key = '', $checked_val = '', $default = '') {
         $val = $this->get($key, $default);
 
-        // Both empty
-        if (empty($checked_val) && empty($val)) {
-            return true;
+        // ?x[]=1 arrives as an array, which equals no text and would throw in strcasecmp().
+        if (is_array($val) || is_array($checked_val)) {
+            return false;
         }
 
-        // different. no need to check other cases
-        if (!empty($checked_val) && empty($val)) {
-            return false;
+        $val = (string) $val;
+        $checked_val = (string) $checked_val;
+
+        // Only a blank means nothing here: ?x=0 sent a value, and empty('0') would call it blank.
+        if ($val === '' || $checked_val === '') {
+            $are_both_blank = $val === $checked_val;
+
+            return $are_both_blank;
         }
 
         if (strcasecmp($val, $checked_val) == 0) {
@@ -457,13 +463,18 @@ class Dj_App_Request {
 
         $sep = $this->getSep($checked_val);
 
+        // One accepted value, which the compare above already refused.
+        if (empty($sep)) {
+            return false;
+        }
+
         $vals = explode($sep, $checked_val);
         $vals = Dj_App_String_Util::trim($vals);
-        $vals = array_filter($vals);
-        $vals = array_unique($vals);
 
-        if (in_array($val, $vals)) {
-            return true;
+        foreach ($vals as $loop_val) {
+            if (strcasecmp($val, $loop_val) == 0) {
+                return true;
+            }
         }
 
         return false;
@@ -508,6 +519,7 @@ class Dj_App_Request {
 
         $key = Dj_App_String_Util::trim($key);
         $sep = $this->getSep($key);
+        $val = $default;
 
         // ->get('contact_form_msg|msg|message')
         if (!empty($sep)) { // checking for multiple keys
@@ -524,17 +536,11 @@ class Dj_App_Request {
 
                 // A missing or blank key comes back as '', so a '0' counts as found.
                 if ($loop_val != '') {
-                    return $loop_val;
+                    $val = $loop_val;
+                    break;
                 }
             }
-
-            // nothing found for the multiple keys so don't check below.
-            return $default;
-        }
-
-        $val = $default;
-
-        if (isset($this->data[$key])) {
+        } elseif (isset($this->data[$key])) {
             $req_val = $this->data[$key];
 
             // A zero is a value the visitor sent (?enabled=0 means off); only a blank field takes the default.
@@ -542,6 +548,9 @@ class Dj_App_Request {
                 $val = $req_val;
             }
         }
+
+        // Ahead of the casts: the trim hands back text, so after them a number would be a string again.
+        $val = Dj_App_String_Util::trim($val);
 
         if ( $force_type & self::INT ) {
             $val = intval($val);
@@ -558,8 +567,6 @@ class Dj_App_Request {
                 $val = "";
             }
         }
-
-        $val = Dj_App_String_Util::trim($val);
 
         if (is_array($default)) { // smart cast to array if the default val is array.
             $val = $val == '' ? $default : (array) $val;
