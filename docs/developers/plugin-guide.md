@@ -70,10 +70,11 @@ The `<descriptor>` names the element by its **role**, never by an abbreviation o
 
 ## Official plugins and everyone else's
 
-The `djebel-` prefix is reserved for **official** plugins — the ones approved by the author
-of the framework. Every other plugin, whether it stays private to its owner's sites or is
-shared with other people, never takes a `djebel-` name: it carries its **owner's prefix**
-in the same place, through the same tiers. A `djebel-` name then always means "official".
+The `djebel-` prefix is for **official** plugins ONLY — the ones the djebel maintainers
+publish. Every other plugin never takes a `djebel-` name, whether it stays private to its
+owner's sites, is written for one site, or is shared with other people: it carries its
+**owner's prefix** in the same place, through the same tiers. A `djebel-` name then always
+means "official".
 
 The official ones each live in their own GitHub organization:
 
@@ -103,6 +104,8 @@ plugin code is ever committed into the site's own repo.
 
 - Decide the home by *is it distributable?*, not *who needed it first*. A plugin first built
   because one site needed it is still distributable if it's generic — give it its own repo.
+  A repo of its own does not make a plugin official: it keeps its owner's prefix unless the
+  djebel maintainers publish it.
 - **Fix once, pull everywhere:** edit + commit + push from inside any site's submodule
   checkout (the commit lands in the **plugin** repo); every other site then runs
   `git submodule update --remote <plugin>` and bumps its pinned pointer.

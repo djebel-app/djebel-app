@@ -46,8 +46,8 @@ Name the element by its role, never by an abbreviation:
 
 ## Official themes and everyone else's
 
-The `djebel-` prefix is reserved for **official** themes, approved by the author of the
-framework; they live at https://github.com/djebel-app-themes/. Any other theme never takes a `djebel-` name — it carries its owner's prefix the
+The `djebel-` prefix is for **official** themes ONLY — the ones the djebel maintainers
+publish; they live at https://github.com/djebel-app-themes/. Any other theme never takes a `djebel-` name — it carries its owner's prefix the
 same way a non-official plugin does: dir, `text_domain` and CSS prefix `<owner>-<name>`,
 with no `theme` in the name. (See the official plugins section in
 [plugin-guide.md](plugin-guide.md).)
