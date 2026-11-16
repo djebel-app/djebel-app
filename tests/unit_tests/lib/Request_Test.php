@@ -1344,9 +1344,76 @@ class Dj_App_Request_Test extends TestCase
         $this->assertInstanceOf(stdClass::class, $decoded->data);
     }
 
+    /**
+     * Stops a redirect at its filter and carries out the address it was about to send. The CLI
+     * keeps no headers, so the Location a redirect sets cannot be read back any other way.
+     */
+    public static function throwRedirectUrl($url, $ctx = [])
+    {
+        throw new Dj_App_Exception('dj_app_redirect_intercepted', [ 'url' => $url, ]);
+    }
+
+    /**
+     * Pins redirect()'s params array: the query params join the address, and force decides
+     * whether to redirect but never shows up in it.
+     */
+    public function testRedirectAddsItsParamsButNeverTheForceOption()
+    {
+        Dj_App_Hooks::addFilter('app.request.redirect_url', ['Dj_App_Request_Test', 'throwRedirectUrl']);
+
+        $redirect_url = '';
+
+        try {
+            // redirect() skips a GET to the page it is already on, so the current page differs
+            $_SERVER['REQUEST_URI'] = '/app';
+
+            $redirect_params = [
+                'next' => '/send/msg?c=CA1234AB',
+                'force' => Dj_App_Request::REDIRECT_FORCE,
+            ];
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->redirect('/login', $redirect_params);
+        } catch (Dj_App_Exception $e) {
+            $exc_data = $e->getData();
+            $redirect_url = $exc_data['url'];
+        } finally {
+            $filter_removed = Dj_App_Hooks::removeFilter('app.request.redirect_url', ['Dj_App_Request_Test', 'throwRedirectUrl']);
+        }
+
+        $this->assertNotEmpty($filter_removed);
+        $this->assertEquals('/login?next=%2Fsend%2Fmsg%3Fc%3DCA1234AB', $redirect_url);
+    }
+
+    /**
+     * Pins the older call shape: a force flag passed where the params array now goes still
+     * redirects, and adds nothing to the address.
+     */
+    public function testRedirectStillTakesTheForceFlagInTheParamsSlot()
+    {
+        Dj_App_Hooks::addFilter('app.request.redirect_url', ['Dj_App_Request_Test', 'throwRedirectUrl']);
+
+        $redirect_url = '';
+
+        try {
+            // redirect() skips a GET to the page it is already on, so the current page differs
+            $_SERVER['REQUEST_URI'] = '/app';
+
+            $req_obj = Dj_App_Request::getInstance();
+            $req_obj->redirect('/login', Dj_App_Request::REDIRECT_FORCE);
+        } catch (Dj_App_Exception $e) {
+            $exc_data = $e->getData();
+            $redirect_url = $exc_data['url'];
+        } finally {
+            $filter_removed = Dj_App_Hooks::removeFilter('app.request.redirect_url', ['Dj_App_Request_Test', 'throwRedirectUrl']);
+        }
+
+        $this->assertNotEmpty($filter_removed);
+        $this->assertEquals('/login', $redirect_url);
+    }
+
     public function testIsOriginAllowedAcceptsTheSiteHostAndItsSubdomains()
     {
-        $_SERVER['HTTPS'] = 'on';
         $req_obj = Dj_App_Request::getInstance();
 
         $allowed_origins = [
@@ -1372,7 +1439,6 @@ class Dj_App_Request_Test extends TestCase
      */
     public function testIsOriginAllowedRefusesLookalikeOrigins()
     {
-        $_SERVER['HTTPS'] = 'on';
         $req_obj = Dj_App_Request::getInstance();
 
         $refused_origins = [
@@ -1403,8 +1469,6 @@ class Dj_App_Request_Test extends TestCase
     {
         $req_obj = Dj_App_Request::getInstance();
 
-        $_SERVER['HTTPS'] = 'on';
-
         $http_origin_params = [ 'origin' => 'http://example.com', 'host' => 'example.com', ];
         $http_on_https = $req_obj->isOriginAllowed($http_origin_params);
 
@@ -1424,7 +1488,6 @@ class Dj_App_Request_Test extends TestCase
 
     public function testIsOriginAllowedRefusesWhenThereIsNoHost()
     {
-        $_SERVER['HTTPS'] = 'on';
         $req_obj = Dj_App_Request::getInstance();
 
         $origin_params = [ 'origin' => 'https://example.com', 'host' => '', ];

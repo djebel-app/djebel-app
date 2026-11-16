@@ -774,6 +774,8 @@ class Dj_App_Request {
     /**
      * Do a redirect without asking too many questions or doing too many regular redirect loop checks. Use wisely.
      * Redirects and exits. Outputs HTML code if there was some output
+     * $params go into the address as query params:
+     * $req_obj->redirectNow('/login', [ 'next' => '/app', ]); // -> /login?next=%2Fapp
      * @param string $url
      * @param array $params
      * @return void
@@ -791,6 +793,10 @@ class Dj_App_Request {
         // Don't do anything for ajax requests
         if (defined('DOING_AJAX') && DOING_AJAX) {
             return;
+        }
+
+        if (!empty($params) && is_array($params)) {
+            $url = static::addQueryParam($params, $url);
         }
 
         $loading_text = "Loading ...";
@@ -831,10 +837,16 @@ CLEAR_AND_REDIRECT_HTML;
 
     /**
      * Smart redirect method. Sends header redirect or HTTP meta redirect.
+     * $params are the query params for the address, plus the force option, which never goes into it:
+     * $req_obj->redirect('/login', [ 'next' => '/app', ]); // -> /login?next=%2Fapp
+     * $req_obj->redirect('/login', [ 'force' => Dj_App_Request::REDIRECT_FORCE, ]);
+     * The older call with the force flag in that slot still works:
+     * $req_obj->redirect('/login', Dj_App_Request::REDIRECT_FORCE);
      * @param string $url
+     * @param array|int $params
      * @return void
      */
-    public function redirect($url = '', $force = self::REDIRECT_DEFAULT) {
+    public function redirect($url = '', $params = []) {
         if (defined('WP_CLI') || empty($url)) {
             // don't do anything if WP-CLI is running.
             return;
@@ -849,6 +861,10 @@ CLEAR_AND_REDIRECT_HTML;
             return;
         }
 
+        // Smart params: an older caller passes its force flag in this slot, which becomes the params array.
+        $redirect_params = is_array($params) ? $params : [ 'force' => $params, ];
+        $force = empty($redirect_params['force']) ? self::REDIRECT_DEFAULT : $redirect_params['force'];
+
         $local_ips = [ '::1', '127.0.0.1' ];
 
         if ($force == self::REDIRECT_DEFAULT
@@ -857,6 +873,15 @@ CLEAR_AND_REDIRECT_HTML;
                 && $_SERVER['REMOTE_ADDR'] == $_SERVER['SERVER_ADDR'])
         ) { // internal req or dev machine
             return;
+        }
+
+        // force decides whether to redirect at all, so it never goes into the address. The params
+        // join the address before the filter, so a listener sees what will actually be sent.
+        $query_params = $redirect_params;
+        unset($query_params['force']);
+
+        if (!empty($query_params)) {
+            $url = static::addQueryParam($query_params, $url);
         }
 
         $url = Dj_App_Hooks::applyFilter( 'app.request.redirect_url', $url );

@@ -1,7 +1,7 @@
 <?php
 
 // Load WP and everything
-$_SERVER['https'] = 'on';
+$_SERVER['HTTPS'] = 'on';
 $_SERVER['PROTOCOL'] = 'https';
 $_SERVER['GATEWAY_INTERFACE'] = 'CGI/1.1';
 $_SERVER['SERVER_SOFTWARE'] = 'Apache';
