@@ -106,6 +106,11 @@ plugin code is ever committed into the site's own repo.
   because one site needed it is still distributable if it's generic — give it its own repo.
   A repo of its own does not make a plugin official: it keeps its owner's prefix unless the
   djebel maintainers publish it.
+- **A new plugin or lib starts in the site that needs it,** never in a checkout of its own: its
+  repo is cloned over `https://` into the folder the submodule will hold
+  (`.ht_djebel/app/lib/<lib>` for a lib), its first commit pushed from there, and the folder then
+  registered with `git submodule add` under the **ssh** address (`git@github.com:<org>/<repo>.git`),
+  so a server deploying the site pulls it with its deploy key.
 - **Fix once, pull everywhere:** edit + commit + push from inside any site's submodule
   checkout (the commit lands in the **plugin** repo); every other site then runs
   `git submodule update --remote <plugin>` and bumps its pinned pointer.
