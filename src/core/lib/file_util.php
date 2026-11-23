@@ -516,14 +516,17 @@ class Dj_App_File_Util {
             // The umask above is what makes the DEPTH correct: the recursive create masks
             // $perm on every level, and the chmod below only ever reaches the last one.
             if (!is_dir($dir)) {
-                $res = mkdir($dir, $perm, true);
+                $is_created = mkdir($dir, $perm, true);
 
-                if (!$res) {
+                // Another request can make the dir between the check above and mkdir(), which then
+                // fails. The dir the caller asked for is there all the same, so that is success;
+                // it is not this call's dir, so it gets no chmod either.
+                if ($is_created) {
+                    $chmod_res = chmod($dir, $perm); // jic
+                    $res_obj->chmod_res = $chmod_res;
+                } elseif (!is_dir($dir)) {
                     throw new Dj_App_File_Util_Exception("Couldn't create dir", ['dir' => $dir]);
                 }
-
-                $chmod_res = chmod($dir, $perm); // jic
-                $res_obj->chmod_res = $chmod_res;
             }
 
             $res_obj->status = true;

@@ -304,6 +304,59 @@ class Dj_App_File_Util_Test extends TestCase {
         $this->assertEquals(0755, $perms);
     }
 
+    /**
+     * Pins what a caller asks of mkdir(): the folder exists afterwards. Several processes making
+     * one new folder at the same moment all get success, though only one of them created it; a
+     * caller that lost the race between the existence check and PHP's mkdir() used to be told
+     * it failed, and its write was lost.
+     */
+    public function testMkdirAtOnceFromSeveralProcessesAllSucceed()
+    {
+        $bootstrap_file = dirname(__DIR__, 2) . '/bootstrap.php';
+        $child_file = $this->test_dir . '/make_dir_child.php';
+        $child_code = "<?php\nrequire \$argv[1];\n\nwhile (!is_file(\$argv[2])) {\n    usleep(200);\n}\n\n\$res_obj = Dj_App_File_Util::mkdir(\$argv[3]);\n\nexit(\$res_obj->status ? 0 : 1);\n";
+        $write_res_obj = Dj_App_File_Util::write($child_file, $child_code);
+
+        $this->assertTrue($write_res_obj->isSuccess(), 'the child script was written');
+
+        $quiet_streams = [
+            1 => [ 'file', '/dev/null', 'w', ],
+            2 => [ 'file', '/dev/null', 'w', ],
+        ];
+
+        $failed_cnt = 0;
+
+        for ($round_num = 1; $round_num <= 10; $round_num++) {
+            $go_file = $this->test_dir . '/go_' . $round_num;
+            $shared_dir = $this->test_dir . '/race_' . $round_num . '/a/b';
+            $procs = [];
+
+            for ($child_num = 0; $child_num < 8; $child_num++) {
+                $child_cmd = [ PHP_BINARY, $child_file, $bootstrap_file, $go_file, $shared_dir, ];
+                $proc = proc_open($child_cmd, $quiet_streams, $pipes);
+
+                $this->assertIsResource($proc, 'a child process started');
+
+                $procs[] = $proc;
+            }
+
+            // Every child is booted and waiting by now, so they all reach mkdir() together.
+            usleep(400000);
+
+            $is_touched = touch($go_file);
+
+            $this->assertTrue($is_touched, 'the start file was made');
+
+            foreach ($procs as $proc) {
+                if (proc_close($proc) != 0) {
+                    $failed_cnt++;
+                }
+            }
+        }
+
+        $this->assertSame(0, $failed_cnt, 'every process making the same new folder gets success');
+    }
+
     public function testNormalizePathBackslashes()
     {
         $path = 'C:\\Users\\test\\file.txt';
