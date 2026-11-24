@@ -1,12 +1,30 @@
 <?php
 /**
- * Simple file-based cache utility
+ * The cache. Entries live in APCu, memory every PHP process of the server shares, when it is
+ * enabled for the running PHP, and in files otherwise, such as on a command line where APCu is
+ * off. Callers never choose: the app.cache.backend filter is where another store, such as Valkey,
+ * takes over once it is set up.
  * Dj_App_Cache
  */
 class Dj_App_Cache
 {
     const METHOD_PHP_SERIALIZE = 'php_serialize';
     const METHOD_JSON = 'json';
+
+    const BACKEND_FILE = 'file';
+    const BACKEND_APCU = 'apcu';
+
+    // APCu memory is shared by every site the server runs, so each key starts with this and a
+    // hash of its own cache dir: one app's entries never meet another's, and removeAll() can find
+    // a dir's entries by that prefix alone.
+    const MEMORY_KEY_PREFIX = 'dj_cache:';
+
+    const DEFAULT_TTL = 14400;
+
+    const CODE_BAD_TTL = 'app.core.cache.bad_ttl';
+    const CODE_ENCODE_FAILED = 'app.core.cache.encode_failed';
+    const CODE_STORE_FAILED = 'app.core.cache.store_failed';
+    const CODE_INCREMENT_FAILED = 'app.core.cache.increment_failed';
 
     // Compact, with Cyrillic and URLs kept as written and 1.0 kept a float, so a JSON cache file
     // decodes to the values a PHP serialize one does. A value JSON can't hold as written, such as
@@ -42,8 +60,20 @@ class Dj_App_Cache
 
         $cache_file = Dj_App_Cache::getCacheFile($key, $params);
         $cache_file = Dj_App_Hooks::applyFilter('app.cache.get.file', $cache_file, $ctx);
+        $backend = Dj_App_Cache::getBackend($params);
 
-        $result = Dj_App_Cache::read($cache_file);
+        if ($backend == Dj_App_Cache::BACKEND_APCU) {
+            $memory_key = Dj_App_Cache::getMemoryKey($cache_file);
+            $is_found = false;
+            $result = apcu_fetch($memory_key, $is_found);
+
+            if (empty($is_found)) {
+                $result = null;
+            }
+        } else {
+            $result = Dj_App_Cache::read($cache_file);
+        }
+
         $result = Dj_App_Hooks::applyFilter('app.cache.get.data', $result, $ctx);
 
         return $result;
@@ -67,9 +97,219 @@ class Dj_App_Cache
         $cache_file = Dj_App_Hooks::applyFilter('app.cache.set.file', $cache_file, $ctx);
 
         $data = Dj_App_Hooks::applyFilter('app.cache.set.data', $data, $ctx);
-        $result = Dj_App_Cache::write($cache_file, $data, $params);
+        $backend = Dj_App_Cache::getBackend($params);
+
+        if ($backend == Dj_App_Cache::BACKEND_APCU) {
+            $result = Dj_App_Cache::writeMemory($cache_file, $data, $params);
+        } else {
+            $result = Dj_App_Cache::write($cache_file, $data, $params);
+        }
 
         return $result;
+    }
+
+    /**
+     * Adds one to a counter kept under a key, atomically, and reports the new count, so requests
+     * arriving together each count. A key that holds nothing starts at 0. The ttl counts from the
+     * counter's first increment in APCu, and from its latest on the file backend, which rewrites
+     * the entry under a lock.
+     * Dj_App_Cache::increment();
+     *
+     * @param string|array $key Cache key (string or array for namespacing)
+     * @param array $params Optional parameters (ttl, plugin)
+     * @return Dj_App_Result count
+     * @throws Dj_App_Exception when cache_method names no known method
+     */
+    public static function increment($key, $params = [])
+    {
+        $res_obj = new Dj_App_Result();
+        $res_obj->count = 0;
+
+        $ttl = isset($params['ttl']) ? $params['ttl'] : Dj_App_Cache::DEFAULT_TTL;
+
+        if (!is_numeric($ttl)) {
+            $res_obj->msg = 'The cache ttl must be a number of seconds';
+            $res_obj->code(Dj_App_Cache::CODE_BAD_TTL);
+
+            return $res_obj;
+        }
+
+        $cache_file = Dj_App_Cache::getCacheFile($key, $params);
+        $backend = Dj_App_Cache::getBackend($params);
+
+        if ($backend == Dj_App_Cache::BACKEND_APCU) {
+            $memory_key = Dj_App_Cache::getMemoryKey($cache_file);
+
+            // Creates the counter with its ttl only when it is not there yet; the increment below
+            // is APCu's own, so two requests never read the same count.
+            apcu_add($memory_key, 0, $ttl);
+
+            $is_incremented = false;
+            $count = apcu_inc($memory_key, 1, $is_incremented);
+
+            if (empty($is_incremented)) {
+                $res_obj->msg = 'The counter could not be incremented';
+                $res_obj->code(Dj_App_Cache::CODE_INCREMENT_FAILED);
+
+                return $res_obj;
+            }
+
+            $res_obj->count = $count;
+            $res_obj->status(true);
+
+            return $res_obj;
+        }
+
+        $lock_params = [ 'file' => $cache_file, ];
+        $lock_res_obj = Dj_App_File_Util::acquireLock($lock_params);
+
+        if ($lock_res_obj->isError()) {
+            $res_obj->msg = $lock_res_obj->msg;
+            $res_obj->code($lock_res_obj->code);
+
+            return $res_obj;
+        }
+
+        $release_res_obj = null;
+
+        try {
+            $stored_count = Dj_App_Cache::read($cache_file);
+            $count = (int) $stored_count;
+            $count++;
+
+            $write_params = [ 'ttl' => $ttl, ];
+            $write_res_obj = Dj_App_Cache::write($cache_file, $count, $write_params);
+        } finally {
+            $release_res_obj = Dj_App_File_Util::releaseLock($lock_res_obj);
+        }
+
+        // The count is written either way, and a lock that would not let go is dropped when the
+        // process ends; the log says it happened.
+        if ($release_res_obj->isError()) {
+            $log_data = [ 'msg' => 'A cache counter lock could not be released', 'cache_file' => $cache_file, ];
+
+            Dj_App_Log::error($log_data, __METHOD__);
+        }
+
+        if ($write_res_obj->isError()) {
+            $res_obj->msg = $write_res_obj->msg;
+            $res_obj->code($write_res_obj->code);
+
+            return $res_obj;
+        }
+
+        $res_obj->count = $count;
+        $res_obj->status(true);
+
+        return $res_obj;
+    }
+
+    /**
+     * Where entries live: APCu when it is enabled for the running PHP, files otherwise. The
+     * app.cache.backend filter gets the last word; a name it hands back that no backend answers
+     * to falls back to files, so a mistyped setting never loses the cache.
+     * Dj_App_Cache::getBackend();
+     *
+     * @param array $params the entry's params, passed to the filter
+     * @return string a BACKEND_* value
+     */
+    public static function getBackend($params = [])
+    {
+        $is_apcu_on = function_exists('apcu_enabled') && apcu_enabled();
+
+        if ($is_apcu_on) {
+            $backend = Dj_App_Cache::BACKEND_APCU;
+        } else {
+            $backend = Dj_App_Cache::BACKEND_FILE;
+        }
+
+        $ctx = [ 'params' => $params, ];
+        $backend = Dj_App_Hooks::applyFilter('app.cache.backend', $backend, $ctx);
+
+        if ($backend == Dj_App_Cache::BACKEND_APCU && $is_apcu_on) {
+            return Dj_App_Cache::BACKEND_APCU;
+        }
+
+        return Dj_App_Cache::BACKEND_FILE;
+    }
+
+    /**
+     * The APCu key of the entry a cache file would hold: the prefix, a hash of the file's dir and
+     * the file's name, so keys stay apart per app and per plugin dir.
+     * Dj_App_Cache::getMemoryKey();
+     *
+     * @param string $cache_file
+     * @return string
+     */
+    public static function getMemoryKey($cache_file)
+    {
+        $cache_dir = dirname($cache_file);
+        $file_name = basename($cache_file);
+        $dir_prefix = Dj_App_Cache::getMemoryDirPrefix($cache_dir);
+        $memory_key = $dir_prefix . $file_name;
+
+        return $memory_key;
+    }
+
+    /**
+     * The start every APCu key of one cache dir shares.
+     * Dj_App_Cache::getMemoryDirPrefix();
+     *
+     * @param string $cache_dir
+     * @return string
+     */
+    public static function getMemoryDirPrefix($cache_dir)
+    {
+        $dir_hash = sha1($cache_dir);
+        $dir_prefix = Dj_App_Cache::MEMORY_KEY_PREFIX . $dir_hash . ':';
+
+        return $dir_prefix;
+    }
+
+    /**
+     * Stores an entry in APCu with its ttl. Empty data or an entry switched off is not stored,
+     * as with files.
+     * Dj_App_Cache::writeMemory();
+     *
+     * @param string $cache_file the file the entry would be on the file backend, which names it
+     * @param mixed $data
+     * @param array $params ttl, enabled
+     * @return Dj_App_Result
+     */
+    public static function writeMemory($cache_file, $data, $params = [])
+    {
+        $res_obj = new Dj_App_Result();
+
+        if (empty($data)) {
+            return $res_obj;
+        }
+
+        if (isset($params['enabled']) && empty($params['enabled'])) {
+            return $res_obj;
+        }
+
+        $ttl = isset($params['ttl']) ? $params['ttl'] : Dj_App_Cache::DEFAULT_TTL;
+
+        if (!is_numeric($ttl)) {
+            $res_obj->msg = 'The cache ttl must be a number of seconds';
+            $res_obj->code(Dj_App_Cache::CODE_BAD_TTL);
+
+            return $res_obj;
+        }
+
+        $memory_key = Dj_App_Cache::getMemoryKey($cache_file);
+        $is_stored = apcu_store($memory_key, $data, $ttl);
+
+        if (empty($is_stored)) {
+            $res_obj->msg = 'The entry could not be stored in memory';
+            $res_obj->code(Dj_App_Cache::CODE_STORE_FAILED);
+
+            return $res_obj;
+        }
+
+        $res_obj->status(true);
+
+        return $res_obj;
     }
 
     /**
@@ -87,13 +327,21 @@ class Dj_App_Cache
         $cache_file = Dj_App_Cache::getCacheFile($key, $params);
         $cache_file = Dj_App_Hooks::applyFilter('app.cache.remove.file', $cache_file, $ctx);
 
+        // Both places: an entry made while APCu was off, or on a command line, sits in a file,
+        // and one made by the web server in memory.
+        if (function_exists('apcu_enabled') && apcu_enabled()) {
+            $memory_key = Dj_App_Cache::getMemoryKey($cache_file);
+            apcu_delete($memory_key);
+        }
+
         $result = Dj_App_Cache::delete($cache_file);
 
         return $result;
     }
 
     /**
-     * Delete all cache files in a directory (e.g., all plugin cache)
+     * Delete all cache entries of a directory (e.g., all plugin cache): its files, and its entries
+     * in APCu where this PHP can reach them.
      * Dj_App_Cache::removeAll();
      *
      * @param array $params Parameters (plugin, etc)
@@ -107,16 +355,17 @@ class Dj_App_Cache
             return false;
         }
 
-        if (!is_dir($cache_dir)) {
-            return true;
-        }
-
         $ctx = ['params' => $params];
         Dj_App_Hooks::doAction('app.cache.pre_remove_all', $ctx);
 
-        $scan_result = scandir($cache_dir);
-        $exclude_items = [ '.', '..', ];
-        $files = array_diff($scan_result, $exclude_items);
+        // A dir with no files on disk can still have entries in memory: APCu writes none.
+        $files = [];
+
+        if (is_dir($cache_dir)) {
+            $scan_result = scandir($cache_dir);
+            $exclude_items = [ '.', '..', ];
+            $files = array_diff($scan_result, $exclude_items);
+        }
 
         $deleted_count = 0;
 
@@ -138,6 +387,28 @@ class Dj_App_Cache
             if ($delete_result) {
                 $deleted_count++;
             }
+        }
+
+        // The web server's entries in memory go too, where this PHP can reach APCu. A command line
+        // with APCu off cannot: those entries stay until their ttl or a server restart, and the
+        // log says so, since a clear that leaves them looks like it worked.
+        $is_apcu_on = function_exists('apcu_enabled') && apcu_enabled();
+
+        if ($is_apcu_on) {
+            $dir_prefix = Dj_App_Cache::getMemoryDirPrefix($cache_dir);
+            $prefix_pattern = '/^' . preg_quote($dir_prefix, '/') . '/';
+            $memory_iterator = new APCUIterator($prefix_pattern, APC_ITER_KEY);
+            $is_memory_cleared = apcu_delete($memory_iterator);
+
+            if (empty($is_memory_cleared)) {
+                $log_data = [ 'msg' => 'Cache entries in memory could not all be removed', 'cache_dir' => $cache_dir, ];
+
+                Dj_App_Log::error($log_data, __METHOD__);
+            }
+        } elseif (extension_loaded('apcu')) {
+            $log_data = [ 'msg' => 'APCu is off for this PHP, so the web server\'s cache entries in memory stay until they expire', 'cache_dir' => $cache_dir, ];
+
+            Dj_App_Log::warn($log_data, __METHOD__);
         }
 
         Dj_App_Hooks::doAction('app.cache.post_remove_all', $ctx);
@@ -380,10 +651,12 @@ class Dj_App_Cache
         }
 
         // Structure with meta and data sections
-        $ttl = isset($params['ttl']) ? $params['ttl'] : 4 * 60 * 60; // default 4 hours
+        $ttl = isset($params['ttl']) ? $params['ttl'] : Dj_App_Cache::DEFAULT_TTL;
 
         if (!is_numeric($ttl)) {
             $res_obj->msg = 'The cache ttl must be a number of seconds';
+            $res_obj->code(Dj_App_Cache::CODE_BAD_TTL);
+
             return $res_obj;
         }
 
@@ -413,11 +686,13 @@ class Dj_App_Cache
 
         if ($encoded_data === false) {
             $res_obj->msg = "Can't encode data";
+            $res_obj->code(Dj_App_Cache::CODE_ENCODE_FAILED);
 
             // Logged too: data that can't be encoded is built again on every request, and nothing
             // else says why.
             $log_data = [
                 'msg' => 'Cache data could not be encoded',
+                'code' => Dj_App_Cache::CODE_ENCODE_FAILED,
                 'cache_method' => $cache_method,
                 'cache_file' => $cache_file,
                 'error_detail' => $res_obj->error_detail,

@@ -242,6 +242,9 @@ class Dj_App_Cache_Test extends TestCase
      */
     public function testSetWritesOneEntryAsJsonOnAPhpSerializeSite()
     {
+        $file_listener = [ $this, 'filterBackendToFile', ];
+        Dj_App_Hooks::addFilter('app.cache.backend', $file_listener);
+
         $this->setCacheMethod(Dj_App_Cache::METHOD_PHP_SERIALIZE);
 
         $data = [ 'title' => 'Здравей', ];
@@ -261,6 +264,10 @@ class Dj_App_Cache_Test extends TestCase
         $cached_data = Dj_App_Cache::get('one_entry_json', $cache_params);
 
         $this->assertSame($data, $cached_data);
+
+        $is_listener_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $file_listener);
+
+        $this->assertTrue($is_listener_removed, 'the file-backend listener is removed');
     }
 
     /**
@@ -271,6 +278,9 @@ class Dj_App_Cache_Test extends TestCase
      */
     public function testSetGetRoundTripsInBothMethods()
     {
+        $file_listener = [ $this, 'filterBackendToFile', ];
+        Dj_App_Hooks::addFilter('app.cache.backend', $file_listener);
+
         $data = [
             'title' => 'Здравей, свят',
             'url' => '/blog/hello-dj-abc123def456',
@@ -305,6 +315,10 @@ class Dj_App_Cache_Test extends TestCase
 
             $this->assertSame($data, $cached_data, "{$cache_method} round trip");
         }
+
+        $is_listener_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $file_listener);
+
+        $this->assertTrue($is_listener_removed, 'the file-backend listener is removed');
     }
 
     /**
@@ -316,6 +330,9 @@ class Dj_App_Cache_Test extends TestCase
      */
     public function testJsonCacheRefusesAValueItCannotHold()
     {
+        $file_listener = [ $this, 'filterBackendToFile', ];
+        Dj_App_Hooks::addFilter('app.cache.backend', $file_listener);
+
         $this->setCacheMethod(Dj_App_Cache::METHOD_JSON);
 
         $data_cases = [
@@ -331,13 +348,17 @@ class Dj_App_Cache_Test extends TestCase
             $cache_key = $case_name . '_' . uniqid();
             $set_res = Dj_App_Cache::set($cache_key, $data, $cache_params);
 
-            $this->assertTrue($set_res->isError(), "set() reports the {$case_name} case");
+            $this->assertSame(Dj_App_Cache::CODE_ENCODE_FAILED, $set_res->code, "set() reports the {$case_name} case by its code");
             $this->assertNotEmpty($set_res->error_detail, "the {$case_name} case says why");
 
             $cached_data = Dj_App_Cache::get($cache_key, $cache_params);
 
             $this->assertNull($cached_data, "get() finds nothing for the {$case_name} case");
         }
+
+        $is_listener_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $file_listener);
+
+        $this->assertTrue($is_listener_removed, 'the file-backend listener is removed');
     }
 
     /**
@@ -347,6 +368,9 @@ class Dj_App_Cache_Test extends TestCase
      */
     public function testWriteLogsDataItCannotEncode()
     {
+        $file_listener = [ $this, 'filterBackendToFile', ];
+        Dj_App_Hooks::addFilter('app.cache.backend', $file_listener);
+
         $this->setCacheMethod(Dj_App_Cache::METHOD_JSON);
 
         $log_file = Dj_App_Log::file();
@@ -356,12 +380,18 @@ class Dj_App_Cache_Test extends TestCase
         $cache_params = [ 'plugin' => 'dj-app-cache-test', ];
         $set_res = Dj_App_Cache::set('cannot_encode_' . uniqid(), $data, $cache_params);
 
-        $this->assertTrue($set_res->isError(), 'set() reports the value it cannot encode');
+        $this->assertSame(Dj_App_Cache::CODE_ENCODE_FAILED, $set_res->code, 'set() reports the value it cannot encode by its code');
+        $this->assertNotEmpty($set_res->error_detail, 'set() carries the reason');
 
         $read_res = Dj_App_File_Util::readPartially($log_file, 4096, $log_size_before);
+        $code_entry = 'code=' . Dj_App_Cache::CODE_ENCODE_FAILED;
 
-        $this->assertStringContainsString('Cache data could not be encoded', $read_res->output);
-        $this->assertStringContainsString('Inf and NaN cannot be JSON encoded', $read_res->output);
+        $this->assertStringContainsString($code_entry, $read_res->output, 'the log line carries the code');
+        $this->assertStringContainsString('error_detail=', $read_res->output, 'the log line carries the reason');
+
+        $is_listener_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $file_listener);
+
+        $this->assertTrue($is_listener_removed, 'the file-backend listener is removed');
     }
 
     /**
@@ -376,7 +406,7 @@ class Dj_App_Cache_Test extends TestCase
 
         $set_res = Dj_App_Cache::set($cache_key, $data, $cache_params);
 
-        $this->assertTrue($set_res->isError(), 'set() reports a ttl that is not a number');
+        $this->assertSame(Dj_App_Cache::CODE_BAD_TTL, $set_res->code, 'set() reports a ttl that is not a number by its code');
 
         $cached_data = Dj_App_Cache::get($cache_key, $cache_params);
 
@@ -452,6 +482,192 @@ class Dj_App_Cache_Test extends TestCase
         $serialize_read = Dj_App_Cache::read($serialize_file);
 
         $this->assertNull($serialize_read, 'json leaves a PHP serialize file alone');
+    }
+
+    /**
+     * The listener the concurrency test registers.
+     *
+     * @return string
+     */
+    public function filterBackendToFile()
+    {
+        return Dj_App_Cache::BACKEND_FILE;
+    }
+
+    /**
+     * The listener the fallback test registers.
+     *
+     * @return string
+     */
+    public function filterBackendToApcu()
+    {
+        return Dj_App_Cache::BACKEND_APCU;
+    }
+
+    /**
+     * The listener the fallback test registers: a store nobody set up.
+     *
+     * @return string
+     */
+    public function filterBackendToUnknown()
+    {
+        return 'valkey_not_set_up';
+    }
+
+    /**
+     * Pins the counter's contract on whichever backend this PHP has: nothing stored counts from 0,
+     * each increment reports the new count, and get() reads the same number back.
+     */
+    public function testIncrementCountsUpFromNothing()
+    {
+        $key = 'increment_test_' . uniqid();
+        $params = [ 'plugin' => 'cache_test', 'ttl' => 60, ];
+
+        $first_res_obj = Dj_App_Cache::increment($key, $params);
+
+        $this->assertTrue($first_res_obj->isSuccess(), 'the first increment works');
+        $this->assertSame(1, $first_res_obj->count, 'a counter starts at 1');
+
+        $second_res_obj = Dj_App_Cache::increment($key, $params);
+
+        $this->assertSame(2, $second_res_obj->count, 'the next increment adds one');
+
+        $stored_count = Dj_App_Cache::get($key, $params);
+
+        $this->assertEquals(2, $stored_count, 'get() reads the count back');
+
+        $is_removed = Dj_App_Cache::remove($key, $params);
+
+        $this->assertTrue($is_removed, 'the counter is removed');
+    }
+
+    /**
+     * Pins the file backend's lock: 8 processes adding to one counter at once lose no count. Each
+     * child runs with APCu off, so all of them count in the same file even where APCu is on.
+     */
+    public function testIncrementFromSeveralProcessesCountsEveryOne()
+    {
+        $filter_listener = [ $this, 'filterBackendToFile', ];
+        Dj_App_Hooks::addFilter('app.cache.backend', $filter_listener);
+
+        $is_filter_removed = false;
+
+        try {
+            $key = 'increment_race_' . uniqid();
+            $params = [ 'plugin' => 'cache_test', 'ttl' => 60, ];
+            $bootstrap_file = dirname(__DIR__, 2) . '/bootstrap.php';
+            $child_dir = sys_get_temp_dir() . '/djebel_cache_test_' . uniqid();
+            $child_file = $child_dir . '/increment_child.php';
+            $child_code = "<?php\nrequire \$argv[1];\n\n\$params = [ 'plugin' => 'cache_test', 'ttl' => 60, ];\n\nfor (\$i = 0; \$i < 25; \$i++) {\n    \$res_obj = Dj_App_Cache::increment(\$argv[2], \$params);\n\n    if (\$res_obj->isError()) {\n        exit(1);\n    }\n}\n\nexit(0);\n";
+            $write_res_obj = Dj_App_File_Util::write($child_file, $child_code);
+
+            $this->assertTrue($write_res_obj->isSuccess(), 'the child script was written');
+
+            $quiet_streams = [
+                1 => [ 'file', '/dev/null', 'w', ],
+                2 => [ 'file', '/dev/null', 'w', ],
+            ];
+
+            $procs = [];
+
+            for ($child_num = 0; $child_num < 8; $child_num++) {
+                $child_cmd = [ PHP_BINARY, '-d', 'apc.enable_cli=0', $child_file, $bootstrap_file, $key, ];
+                $proc = proc_open($child_cmd, $quiet_streams, $pipes);
+
+                $this->assertIsResource($proc, 'a child process started');
+
+                $procs[] = $proc;
+            }
+
+            $failed_cnt = 0;
+
+            foreach ($procs as $proc) {
+                if (proc_close($proc) != 0) {
+                    $failed_cnt++;
+                }
+            }
+
+            $this->assertSame(0, $failed_cnt, 'every child counted all its hits');
+
+            $stored_count = Dj_App_Cache::get($key, $params);
+
+            $this->assertEquals(200, $stored_count, '8 processes adding 25 each count 200');
+
+            $is_removed = Dj_App_Cache::remove($key, $params);
+
+            $this->assertTrue($is_removed, 'the counter is removed');
+        } finally {
+            $is_filter_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $filter_listener);
+        }
+
+        $this->assertTrue($is_filter_removed, 'the backend listener is removed');
+    }
+
+    /**
+     * Pins the fallback: a backend name nothing answers to, or APCu where this PHP has it off,
+     * keeps the cache in files rather than losing it.
+     */
+    public function testBackendFallsBackToFiles()
+    {
+        $is_apcu_on = function_exists('apcu_enabled') && apcu_enabled();
+        $unknown_listener = [ $this, 'filterBackendToUnknown', ];
+        $apcu_listener = [ $this, 'filterBackendToApcu', ];
+
+        Dj_App_Hooks::addFilter('app.cache.backend', $unknown_listener);
+        $unknown_backend = Dj_App_Cache::getBackend();
+        $is_unknown_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $unknown_listener);
+
+        $this->assertSame(Dj_App_Cache::BACKEND_FILE, $unknown_backend, 'an unknown backend means files');
+        $this->assertTrue($is_unknown_removed, 'the unknown-backend listener is removed');
+
+        Dj_App_Hooks::addFilter('app.cache.backend', $apcu_listener);
+        $apcu_backend = Dj_App_Cache::getBackend();
+        $is_apcu_removed = Dj_App_Hooks::removeFilter('app.cache.backend', $apcu_listener);
+
+        $this->assertTrue($is_apcu_removed, 'the APCu listener is removed');
+
+        if ($is_apcu_on) {
+            $this->assertSame(Dj_App_Cache::BACKEND_APCU, $apcu_backend, 'APCu is used where it is on');
+        } else {
+            $this->assertSame(Dj_App_Cache::BACKEND_FILE, $apcu_backend, 'APCu asked for where it is off means files');
+        }
+    }
+
+    /**
+     * Pins APCu's keys and removeAll(): one plugin dir's entries are cleared, and another's stay.
+     * Runs only where APCu is on, such as `php -d apc.enable_cli=1`.
+     */
+    public function testRemoveAllClearsOnlyItsOwnDirInMemory()
+    {
+        $is_apcu_on = function_exists('apcu_enabled') && apcu_enabled();
+
+        if (empty($is_apcu_on)) {
+            $this->markTestSkipped('APCu is off for this PHP');
+        }
+
+        $key = 'memory_test_' . uniqid();
+        $plugin_a_params = [ 'plugin' => 'cache_test_a', ];
+        $plugin_b_params = [ 'plugin' => 'cache_test_b', ];
+
+        $set_a_res_obj = Dj_App_Cache::set($key, 'value a', $plugin_a_params);
+
+        $this->assertTrue($set_a_res_obj->isSuccess(), 'plugin a\'s entry is stored');
+
+        $set_b_res_obj = Dj_App_Cache::set($key, 'value b', $plugin_b_params);
+
+        $this->assertTrue($set_b_res_obj->isSuccess(), 'plugin b\'s entry is stored');
+        $this->assertSame('value a', Dj_App_Cache::get($key, $plugin_a_params), 'plugin a reads its own entry');
+        $this->assertSame('value b', Dj_App_Cache::get($key, $plugin_b_params), 'the same key in plugin b is its own entry');
+
+        $is_cleared = Dj_App_Cache::removeAll($plugin_a_params);
+
+        $this->assertTrue($is_cleared, 'removeAll reports success');
+        $this->assertNull(Dj_App_Cache::get($key, $plugin_a_params), 'plugin a\'s entry is gone');
+        $this->assertSame('value b', Dj_App_Cache::get($key, $plugin_b_params), 'plugin b\'s entry stays');
+
+        $is_b_removed = Dj_App_Cache::remove($key, $plugin_b_params);
+
+        $this->assertTrue($is_b_removed, 'plugin b\'s entry is removed');
     }
 }
 
