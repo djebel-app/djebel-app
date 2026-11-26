@@ -9,6 +9,9 @@ class Dj_App_Shortcode_Test extends TestCase
     // Counts renderTestCounter() calls so a test can tell one invocation from two.
     private $counter_calls = 0;
 
+    // The registry as the suite had it, core's shortcodes included, so tearDown puts it back.
+    private $saved_shortcodes = [];
+
     public function setUp(): void
     {
         $this->counter_calls = 0;
@@ -21,6 +24,7 @@ class Dj_App_Shortcode_Test extends TestCase
         }
 
         $this->shortcode = Dj_App_Shortcode::getInstance();
+        $this->saved_shortcodes = $this->shortcode->getShortcodes();
 
         // Add test shortcodes for testing
         $this->shortcode->addShortcode('test_simple', [$this, 'renderTestSimple']);
@@ -30,10 +34,9 @@ class Dj_App_Shortcode_Test extends TestCase
         $this->shortcode->addShortcode('test_counter', [$this, 'renderTestCounter']);
     }
     
-    public function tearDown(): void 
+    public function tearDown(): void
     {
-        // Clean up shortcodes
-        $this->shortcode->setShortcodes([]);
+        $this->shortcode->setShortcodes($this->saved_shortcodes);
     }
     
     // Test callback methods

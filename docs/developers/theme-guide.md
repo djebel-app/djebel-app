@@ -176,6 +176,39 @@ public function filterHtmlLang($buff, $ctx = [])
 }
 ```
 
+## Error pages
+
+A plugin or a theme that finds the address names nothing it can show marks the page as an error:
+
+```php
+$page_obj = Dj_App_Page::getInstance();
+
+$error_params = [
+    'code' => 404,
+];
+
+$page_obj->setError($error_params);
+```
+
+`code` is any HTTP error code from 400 to 599. `title` and `msg` are optional text for the visitor;
+without them the visitor reads a default for the code. The response answers with the code, and
+`getError()` returns what was set.
+
+Core marks a 404 by itself when no plugin content, page file or template serves the address. The
+theme's `index.php` serves only the home page: it is already rendering, so it never counts as the
+page for another address.
+
+What the visitor sees, first match wins:
+
+1. Content a plugin set with `setContent()`, under the error's code.
+2. The theme's own page for the code: `pages/404.php` for a 404, `pages/503.php` for a 503, inside
+   the theme's layout. The `app.themes.error_page_file` filter can name another file; its context
+   carries `code`.
+3. Djebel's own page, when the theme has none. It replaces the whole theme page, so the page the
+   address would normally get never goes out under an error code.
+
+A theme needs no error page at all; djebel's page is the default.
+
 ## Legacy themes (migrate later)
 
 The `clear` theme's `text_domain` is already on the Tier 2 form (`djebel-theme-clear`). Still

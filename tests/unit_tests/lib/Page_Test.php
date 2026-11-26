@@ -119,7 +119,8 @@ class Dj_App_Page_Test extends TestCase {
         $this->assertEquals('hook test value', $this->page_obj->hook_test);
 
         // Clean up
-        Dj_App_Hooks::removeFilter('app.page.filter.pre_set_property', [$this, 'captureSetHookData']);
+        $is_removed = Dj_App_Hooks::removeFilter('app.page.filter.pre_set_property', [$this, 'captureSetHookData']);
+        $this->assertTrue($is_removed, 'the set listener was removed');
     }
 
     /**
@@ -137,7 +138,8 @@ class Dj_App_Page_Test extends TestCase {
         $this->assertEquals('Modified: Original Title', $this->page_obj->meta_title);
 
         // Clean up
-        Dj_App_Hooks::removeFilter('app.page.filter.pre_set_property_meta_title', [$this, 'modifyMetaTitleHook']);
+        $is_removed = Dj_App_Hooks::removeFilter('app.page.filter.pre_set_property_meta_title', [$this, 'modifyMetaTitleHook']);
+        $this->assertTrue($is_removed, 'the meta title listener was removed');
     }
 
     /**
@@ -157,7 +159,8 @@ class Dj_App_Page_Test extends TestCase {
         $this->assertFalse(isset($this->page_obj->unset_test));
 
         // Clean up
-        Dj_App_Hooks::removeAction('app.page.action.pre_unset_property', [$this, 'captureUnsetHookData']);
+        $is_removed = Dj_App_Hooks::removeAction('app.page.action.pre_unset_property', [$this, 'captureUnsetHookData']);
+        $this->assertTrue($is_removed, 'the unset listener was removed');
     }
 
     /**
@@ -176,7 +179,8 @@ class Dj_App_Page_Test extends TestCase {
         $this->assertFalse(isset($this->page_obj->special_prop));
 
         // Clean up
-        Dj_App_Hooks::removeAction('app.page.action.pre_unset_property_special_prop', [$this, 'captureSpecificUnsetHook']);
+        $is_removed = Dj_App_Hooks::removeAction('app.page.action.pre_unset_property_special_prop', [$this, 'captureSpecificUnsetHook']);
+        $this->assertTrue($is_removed, 'the special unset listener was removed');
     }
 
     /**
@@ -239,6 +243,108 @@ class Dj_App_Page_Test extends TestCase {
     }
 
     /**
+     * Pins that marking a page as an error makes the response answer with that code, and that the
+     * visitor gets text for it even when the caller gave none.
+     */
+    public function testSetErrorAnswersWithTheCode() {
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode(418);
+
+        $error_params = [
+            'code' => 410,
+        ];
+
+        $set_res = $this->page_obj->setError($error_params);
+        $error = $this->page_obj->getError();
+        $response_code = $req_obj->getResponseCode();
+
+        $this->assertTrue($set_res);
+        $this->assertEquals(410, $error['code']);
+        $this->assertNotEmpty($error['title'], 'a default title for the code');
+        $this->assertNotEmpty($error['msg'], 'a default message for the code');
+        $this->assertEquals(410, $response_code, 'the response answers with the error code');
+    }
+
+    /**
+     * Pins that a 404 with no text of its own reads as a missing page.
+     */
+    public function testSetErrorDefaultsTheNotFoundText() {
+        $error_params = [
+            'code' => 404,
+        ];
+
+        $this->page_obj->setError($error_params);
+        $error = $this->page_obj->getError();
+
+        $this->assertEquals('Page not found', $error['title']);
+        $this->assertEquals('The requested page can not be found.', $error['msg']);
+    }
+
+    /**
+     * Pins that the text a caller gives is what the visitor reads, in place of the default.
+     */
+    public function testSetErrorKeepsTheGivenText() {
+        $error_params = [
+            'code' => 404,
+            'title' => 'No such post',
+            'msg' => 'That post was moved.',
+        ];
+
+        $this->page_obj->setError($error_params);
+        $error = $this->page_obj->getError();
+
+        $this->assertEquals('No such post', $error['title']);
+        $this->assertEquals('That post was moved.', $error['msg']);
+    }
+
+    /**
+     * Pins that a code that is not an error code is refused before anything changes: a page
+     * marked with a 200 or a redirect code would tell the theme it is an error page.
+     */
+    public function testSetErrorRefusesANonErrorCode() {
+        $bad_codes = [ 0, 200, 302, 600, ];
+
+        foreach ($bad_codes as $bad_code) {
+            $exception_obj = null;
+
+            $error_params = [
+                'code' => $bad_code,
+            ];
+
+            try {
+                $this->page_obj->setError($error_params);
+            } catch (Dj_App_Exception $e) {
+                $exception_obj = $e;
+            }
+
+            $this->assertNotNull($exception_obj, "code $bad_code is refused");
+
+            $exception_data = $exception_obj->getData();
+            $error = $this->page_obj->getError();
+
+            $this->assertEquals('core.page.set_error.invalid_code', $exception_data['code']);
+            $this->assertEmpty($error, "code $bad_code leaves the page without an error");
+        }
+    }
+
+    /**
+     * Pins that clear() drops the error with the rest of the page, so one render's error never
+     * reaches the next one in the same process.
+     */
+    public function testClearDropsTheError() {
+        $error_params = [
+            'code' => 500,
+        ];
+
+        $this->page_obj->setError($error_params);
+        $this->page_obj->clear();
+
+        $error = $this->page_obj->getError();
+
+        $this->assertEmpty($error);
+    }
+
+    /**
      * Hook callback methods for testing
      */
     public function captureSetHookData($val, $ctx) {
@@ -250,7 +356,9 @@ class Dj_App_Page_Test extends TestCase {
 
     public function modifyMetaTitleHook($val, $ctx) {
         self::$hook_test_data['specific_called'] = true;
-        return 'Modified: ' . $val;
+        $modified_val = 'Modified: ' . $val;
+
+        return $modified_val;
     }
 
     public function captureUnsetHookData($ctx) {

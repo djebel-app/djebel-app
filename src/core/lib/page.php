@@ -121,7 +121,9 @@ class Dj_App_Page {
         // Check if it exists in options as a fallback
         $options_obj = Dj_App_Options::getInstance();
         $val = $options_obj->get($key);
-        return !empty($val);
+        $is_set = !empty($val);
+
+        return $is_set;
     }
 
     /**
@@ -394,6 +396,7 @@ class Dj_App_Page {
     {
         $this->data = [];
         $this->has_content = false;
+        $this->error = [];
     }
 
     /**
@@ -424,6 +427,65 @@ class Dj_App_Page {
         $val = empty($meta[$key]) ? '' : $meta[$key];
 
         return $val;
+    }
+
+    private $error = [];
+
+    /**
+     * Marks the page as an error page. The response answers with the code, and the theme shows its
+     * own page for the code, or djebel's page when it has none, in place of the page this address
+     * would normally get. Content a plugin set still shows, under the error's code.
+     * @param array $params code: the HTTP error code, 400 to 599. title, msg: optional text for the
+     *                      visitor; without them the visitor reads a default for the code.
+     * @return bool true once the error is set
+     * @throws Dj_App_Exception when the code is not an error code
+     */
+    public function setError($params = [])
+    {
+        $code = empty($params['code']) ? 0 : (int) $params['code'];
+
+        if ($code < 400 || $code > 599) {
+            $exception_data = [
+                'code' => 'core.page.set_error.invalid_code',
+                'error_code' => $code,
+            ];
+
+            throw new Dj_App_Exception('Invalid page error code', $exception_data);
+        }
+
+        $is_not_found = $code == 404;
+        $title = empty($params['title']) ? '' : $params['title'];
+        $msg = empty($params['msg']) ? '' : $params['msg'];
+
+        if (empty($title)) {
+            $title = $is_not_found ? 'Page not found' : 'Error ' . $code;
+        }
+
+        if (empty($msg)) {
+            $msg = $is_not_found ? 'The requested page can not be found.' : 'This page can not be shown right now.';
+        }
+
+        $this->error = [
+            'code' => $code,
+            'title' => $title,
+            'msg' => $msg,
+        ];
+
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode($code);
+
+        return true;
+    }
+
+    /**
+     * The error setError() stored: code, title and msg, or an empty array for a page with none.
+     * @return array
+     */
+    public function getError()
+    {
+        $error = $this->error;
+
+        return $error;
     }
 }
 

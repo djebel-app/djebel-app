@@ -309,6 +309,8 @@ class Dj_App_HTML {
 	/**
 	 * Renders a page with content - ONE method for all cases
 	 * Dj_App_HTML::renderPage($content, $title, $options);
+	 * Sends the page and ends the request, unless $options['return'] asks for the HTML back.
+	 * @return string the page's HTML when $options['return'] is set; otherwise it never returns
 	 */
 	public static function renderPage($content, $title = '', $options = []) {
         // Smart params: the 2nd arg may carry the options array instead of a title.
@@ -503,6 +505,12 @@ class Dj_App_HTML {
 		<?php
 		$buff = ob_get_clean();
 		$buff = trim($buff);
+
+        // A caller that hands the page on, such as a theme load answering an error, gets the HTML
+        // back and keeps its own output path, which runs the injection and sends the response.
+        if (!empty($options['return'])) {
+            return $buff;
+        }
 
         // This renderer is terminal — it never reaches the app.page.full_content filter that
         // normally drives the injection — so the seams are run here instead. A seam the theme

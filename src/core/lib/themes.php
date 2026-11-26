@@ -40,7 +40,10 @@ class Dj_App_Themes {
      * @param string $key Property key
      */
     public function __isset($key) {
-        return !is_null($this->__get($key));
+        $val = $this->__get($key);
+        $is_set = !is_null($val);
+
+        return $is_set;
     }
 
     /**
@@ -55,7 +58,7 @@ class Dj_App_Themes {
 
     /**
      * Get current theme based on config and filters
-     * Checks app.ini for 'theme' or 'theme_id' in [site], [theme] sections
+     * Checks the site config for 'theme' or 'theme_id' in its [site] and [theme] sections
      *
      * @param array $ctx Context with page info for conditional theme switching
      * @return string
@@ -85,7 +88,8 @@ class Dj_App_Themes {
      * @param array $inp_params Optional. 'theme' forces a theme id instead of resolving one.
      * @return Dj_App_Result what the load settled on, under `theme_info`: theme, theme_dir,
      *                       theme_url, functions_loaded, header_loaded, footer_loaded and
-     *                       render_mode (the header/footer sandwich, or the theme's main file).
+     *                       render_mode (the header/footer sandwich, the theme's main file, or
+     *                       error_page when djebel's own page answered the page's error).
      */
     public function loadTheme($inp_params = [])
     {
@@ -112,12 +116,16 @@ class Dj_App_Themes {
             $ctx['page'] = $page_obj->page;
             $ctx['full_page'] = $page_obj->full_page;
 
-            $site_section = Dj_App_Options::getInstance()->site;
+            $site_section = $options_obj->site;
             $current_theme = empty($inp_params['theme']) ? $this->getCurrentTheme($ctx) : $inp_params['theme'];
             $current_theme = $this->formatId($current_theme);
             $this->current_theme = $current_theme;
             $theme_info['theme'] = $current_theme;
-            $theme_load_main_file = !isset($site_section['theme_load_main_file']) || !empty($site_section['theme_load_main_file']) ? true : false;
+            $theme_load_main_file = true;
+
+            if (isset($site_section['theme_load_main_file'])) {
+                $theme_load_main_file = !empty($site_section['theme_load_main_file']);
+            }
 
             $themes_dir = $this->getThemesDir();
             $current_theme_dir = $themes_dir . '/' . $current_theme;
@@ -219,7 +227,26 @@ class Dj_App_Themes {
             }
 
             $full_page_content = Dj_App_Hooks::applyFilter('app.page.full_content', $full_page_content);
-            $full_page_content = trim($full_page_content);
+            $error = $page_obj->getError();
+
+            // Nothing took the error: no plugin content and no theme page for it. The theme's
+            // normal page for this address must not go out under an error code, so djebel's own
+            // page answers instead, and the theme's render is thrown away. Checked after the filter,
+            // since a theme's [djebel_page_content] renders the page there: before it, a missing
+            // page is not known yet.
+            if (!empty($error) && !$page_obj->hasContent()) {
+                $error_msg_esc = Dj_App_HTML::encodeEntities($error['msg']);
+
+                $render_options = [
+                    'status_code' => $error['code'],
+                    'return' => 1,
+                ];
+
+                $full_page_content = Dj_App_HTML::renderPage($error_msg_esc, $error['title'], $render_options);
+                $theme_info['render_mode'] = 'error_page';
+            }
+
+            $full_page_content = Dj_App_String_Util::trim($full_page_content);
 
             $req_obj->setContent($full_page_content);
             $res_obj->status(true);
@@ -291,6 +318,18 @@ class Dj_App_Themes {
 
         $ctx['pages_dir'] = $pages_dir;
         $ctx['theme_dir'] = $current_theme_dir;
+
+        $error = $page_obj->getError();
+
+        // A page marked as an error shows only the theme's page for that error, never the page
+        // this address would normally get: a blog template for a missing post would answer
+        // "found" with an empty listing.
+        if (!empty($error)) {
+            $this->renderErrorPageContent($ctx);
+
+            return;
+        }
+
         $single_page = !empty($options_obj->get('theme.single_page')) || !is_dir($pages_dir);
         $single_page = Dj_App_Hooks::applyFilter('app.themes.single_page', $single_page, $ctx);
 
@@ -302,7 +341,7 @@ class Dj_App_Themes {
         $page = $page_obj->full_page;
         $page = empty($page) ? '' : $page; // this can be product or product/prod1
 
-        $site_section = Dj_App_Options::getInstance()->site;
+        $site_section = $options_obj->site;
         $default_page = 'home';
 
         if (empty($page)) {
@@ -350,22 +389,20 @@ class Dj_App_Themes {
         if (empty($file) || !file_exists($file)) {
             // test if this is a dir so access e.g. /bg/
             $dir = $current_theme_dir . "/pages/$page_fmt";
-            $page_not_found_file = $pages_dir . "/404.php";
-            $page_not_found_file = Dj_App_Hooks::applyFilter( 'app.themes.page_not_found_file', $page_not_found_file, $ctx );
 
             if (is_dir($dir)) {
                 $page = empty($site_section['front_page']) ? $default_page : $site_section['front_page'];
                 $page_fmt = $page_obj->formatFullPageSlug($page);
                 $file = $dir . "/$page_fmt.php";
-
-                if (!file_exists($file)) {
-                    $file = $page_not_found_file;
-                }
             }
 
             if (!file_exists($file)) {
-                // Fallback to templates system (traverses path hierarchy, falls back to index.php)
-                $template_result = $this->findTemplate($page_fmt, $ctx);
+                // Fallback to templates system (traverses path hierarchy). The theme's index.php
+                // counts only for the home page: it is already rendering, so including it again
+                // shows an empty page that answers "found" for any address.
+                $template_ctx = $ctx;
+                $template_ctx['index_fallback'] = $page_obj->isHomePage();
+                $template_result = $this->findTemplate($page_fmt, $template_ctx);
 
                 if (!empty($template_result['file'])) {
                     $file = $template_result['file'];
@@ -381,34 +418,98 @@ class Dj_App_Themes {
 
                 $file = Dj_App_Hooks::applyFilter('app.core.theme.page_file_not_found', '', $not_found_ctx);
 
+                // Marked, not ended here: the theme is mid-render, so ending the request now would
+                // send its half-built page with djebel's page behind it.
                 if (empty($file) || !file_exists($file)) {
-                    Dj_App_Util::die( "The requested page can not be found", "Page not found", [ 'code' => 404, 'file' => $file, ] );
+                    $error_params = [
+                        'code' => 404,
+                    ];
+
+                    $page_obj->setError($error_params);
+                    $this->renderErrorPageContent($ctx);
+
+                    return;
                 }
             }
         }
 
-        // Let's make the loaded content from that specific page filterable
         $local_ctx = $ctx;
         $local_ctx['page'] = $page;
-        $local_ctx['file'] = $file;
 
-        // Determine file extension
+        $buff = $this->renderPageFile($file, $local_ctx);
+
+        echo $buff;
+    }
+
+    /**
+     * Renders one page file and makes the result filterable: PHP runs, any other file is read as
+     * it is, and app.page.content gets the result, so a plugin such as markdown can convert it.
+     * @param string $file
+     * @param array $ctx the render context; file and ext are added
+     * @return string
+     */
+    public function renderPageFile($file, $ctx = [])
+    {
         $ext = Dj_App_File_Util::getExt($file);
-        $local_ctx['ext'] = $ext;
 
-        // Load content based on file type
+        $ctx['file'] = $file;
+        $ctx['ext'] = $ext;
+
         if ($ext == 'php') {
             ob_start();
             include_once $file;
             $buff = ob_get_clean();
         } else {
             $buff = file_get_contents($file);
+
+            // An unreadable file renders as an empty body, never as the filters' false.
+            if ($buff === false) {
+                $buff = '';
+            }
         }
 
-        // Delegate processing to plugins (e.g., markdown conversion)
-        $buff = Dj_App_Hooks::applyFilter('app.page.content', $buff, $local_ctx);
+        $buff = Dj_App_Hooks::applyFilter('app.page.content', $buff, $ctx);
+
+        return $buff;
+    }
+
+    /**
+     * Renders the theme's own page for the page's error: `pages/{code}.php`, or the file the
+     * app.themes.error_page_file filter names. It becomes the page content, which is how the theme
+     * load knows to keep it. With no such file nothing is rendered, and the theme load answers
+     * with djebel's own page instead.
+     * @param array $ctx the render context; pages_dir is required
+     * @return bool true when the theme had a page for the error
+     */
+    public function renderErrorPageContent($ctx = [])
+    {
+        if (empty($ctx['pages_dir'])) {
+            return false;
+        }
+
+        $page_obj = Dj_App_Page::getInstance();
+        $error = $page_obj->getError();
+
+        if (empty($error)) {
+            return false;
+        }
+
+        $error_ctx = $ctx;
+        $error_ctx['code'] = $error['code'];
+
+        $error_page_file = $ctx['pages_dir'] . '/' . $error['code'] . '.php';
+        $error_page_file = Dj_App_Hooks::applyFilter('app.themes.error_page_file', $error_page_file, $error_ctx);
+
+        if (empty($error_page_file) || !file_exists($error_page_file)) {
+            return false;
+        }
+
+        $buff = $this->renderPageFile($error_page_file, $error_ctx);
+        $page_obj->setContent($buff);
 
         echo $buff;
+
+        return true;
     }
 
     private $template_cache = [];
@@ -420,7 +521,7 @@ class Dj_App_Themes {
      *   1. {templates_dir}/{page_fmt}.php (exact match)
      *   2. {templates_dir}/{parent}.php (traverse up path hierarchy)
      *   3. {templates_dir}/home.php (for home page)
-     *   4. {theme_dir}/index.php (fallback)
+     *   4. {theme_dir}/index.php (fallback, unless $ctx['index_fallback'] turns it off)
      *
      * Example: page_fmt = "services/web-monitoring/wordpress"
      *   Checks: services/web-monitoring/wordpress.php
@@ -429,7 +530,8 @@ class Dj_App_Themes {
      *           index.php (fallback)
      *
      * @param string $page_fmt Page path (e.g., "contact" or "docs/intro"), empty for home
-     * @param array $ctx Context with theme_dir key
+     * @param array $ctx Context with theme_dir key, and index_fallback: false for a caller asking
+     *                   whether the page has a template of its own (default true)
      * @return array ['file' => path, 'ext' => extension] or empty array if none found
      */
     public function findTemplate($page_fmt, $ctx = [])
@@ -440,7 +542,14 @@ class Dj_App_Themes {
             return [];
         }
 
-        $cache_key = $theme_dir . '|' . $page_fmt;
+        $use_index_fallback = true;
+
+        if (isset($ctx['index_fallback'])) {
+            $use_index_fallback = !empty($ctx['index_fallback']);
+        }
+
+        $fallback_key = $use_index_fallback ? 'index' : 'no_index';
+        $cache_key = $theme_dir . '|' . $page_fmt . '|' . $fallback_key;
 
         if (isset($this->template_cache[$cache_key])) {
             return $this->template_cache[$cache_key];
@@ -453,7 +562,7 @@ class Dj_App_Themes {
         if (!is_dir($templates_dir)) {
             $result = [];
 
-            if (file_exists($theme_index)) {
+            if ($use_index_fallback && file_exists($theme_index)) {
                 $result = [
                     'file' => $theme_index,
                     'ext' => 'php',
@@ -505,10 +614,14 @@ class Dj_App_Themes {
         }
 
         // Fallback to theme index.php (required file - always exists)
-        $result = [
-            'file' => $theme_index,
-            'ext' => 'php',
-        ];
+        $result = [];
+
+        if ($use_index_fallback) {
+            $result = [
+                'file' => $theme_index,
+                'ext' => 'php',
+            ];
+        }
 
         $this->template_cache[$cache_key] = $result;
 

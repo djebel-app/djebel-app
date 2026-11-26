@@ -7,6 +7,9 @@ class Dj_App_Themes_Test extends TestCase {
     // The dir the themes-dir filter answers with, so each test renders its own fixture.
     public static $themes_dir = '';
 
+    // The address the full-page filter answers with; the CLI request itself has none.
+    public static $full_page = '';
+
     private $backup_load_functions = false;
     private $backup_load_header = false;
     private $backup_load_footer = false;
@@ -24,13 +27,30 @@ class Dj_App_Themes_Test extends TestCase {
 
         $this->clearThemeConfigMemo();
 
+        $page_obj = Dj_App_Page::getInstance();
+        $page_obj->clear();
+
+        $themes_obj = Dj_App_Themes::getInstance();
+
         Dj_App_Hooks::addFilter('app.themes.themes_dir', ['Dj_App_Themes_Test', 'filterThemesDir']);
+        Dj_App_Hooks::addFilter('app.core.request.page.get.full_page', ['Dj_App_Themes_Test', 'filterFullPage']);
+        Dj_App_Hooks::addAction('app.page.content.render', [$themes_obj, 'renderPageContent']);
     }
 
     protected function tearDown(): void
     {
         $is_themes_dir_filter_removed = Dj_App_Hooks::removeFilter('app.themes.themes_dir', ['Dj_App_Themes_Test', 'filterThemesDir']);
         $this->assertTrue($is_themes_dir_filter_removed, 'the themes dir filter was removed');
+
+        $is_full_page_filter_removed = Dj_App_Hooks::removeFilter('app.core.request.page.get.full_page', ['Dj_App_Themes_Test', 'filterFullPage']);
+        $this->assertTrue($is_full_page_filter_removed, 'the full page filter was removed');
+
+        $themes_obj = Dj_App_Themes::getInstance();
+        $is_render_action_removed = Dj_App_Hooks::removeAction('app.page.content.render', [$themes_obj, 'renderPageContent']);
+        $this->assertTrue($is_render_action_removed, 'the content render listener was removed');
+
+        $page_obj = Dj_App_Page::getInstance();
+        $page_obj->clear();
 
         // false means the variable was absent, and null is how set() removes one.
         $load_functions = $this->backup_load_functions === false ? null : $this->backup_load_functions;
@@ -48,11 +68,213 @@ class Dj_App_Themes_Test extends TestCase {
         $req_obj->setContent($this->backup_content);
 
         Dj_App_Themes_Test::$themes_dir = '';
+        Dj_App_Themes_Test::$full_page = '';
     }
 
     public static function filterThemesDir($cur_val, $ctx = [])
     {
         return Dj_App_Themes_Test::$themes_dir;
+    }
+
+    public static function filterFullPage($cur_val, $ctx = [])
+    {
+        return Dj_App_Themes_Test::$full_page;
+    }
+
+    /**
+     * Pins that an address no page serves answers 404 with djebel's own page when the theme has
+     * no page for the error. It used to answer 200 with the theme's layout around an empty body,
+     * because the theme's index.php counted as the page.
+     */
+    public function testLoadThemeAnswersAMissingPageWithDjebelsPage()
+    {
+        Dj_App_Themes_Test::$full_page = 'no-such-page';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode(418);
+
+        $theme_files = [
+            'index.php' => "<?php echo 'THEME LAYOUT'; Dj_App_Hooks::doAction('app.page.content.render'); ?>\n",
+            'pages/about.php' => "<?php echo 'ABOUT PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+        $content = $req_obj->getContent();
+        $response_code = $req_obj->getResponseCode();
+
+        $this->assertEquals(404, $response_code);
+        $this->assertEquals('error_page', $theme_info['render_mode']);
+        $this->assertStringContainsString('djebel-app-error-container', $content, "djebel's own page answered");
+        $this->assertStringContainsString('The requested page can not be found.', $content);
+        $this->assertStringNotContainsString('THEME LAYOUT', $content, "the theme's render was thrown away");
+    }
+
+    /**
+     * Pins the same answer for a theme that pulls its body in with [djebel_page_content]. That
+     * shortcode renders the page while the finished page is filtered, so the 404 is found only
+     * then, and the theme's layout used to go out around an empty body under the 404.
+     */
+    public function testLoadThemeAnswersAMissingPageWithDjebelsPageForAShortcodeTheme()
+    {
+        Dj_App_Themes_Test::$full_page = 'no-such-page';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode(418);
+
+        $theme_files = [
+            'index.php' => "THEME LAYOUT [djebel_page_content]\n",
+            'pages/about.php' => "<?php echo 'ABOUT PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+        $content = $req_obj->getContent();
+        $response_code = $req_obj->getResponseCode();
+
+        $this->assertEquals(404, $response_code);
+        $this->assertEquals('error_page', $theme_info['render_mode']);
+        $this->assertStringContainsString('djebel-app-error-container', $content, "djebel's own page answered");
+        $this->assertStringNotContainsString('THEME LAYOUT', $content, "the theme's render was thrown away");
+    }
+
+    /**
+     * Pins that a shortcode theme with its own page for the error shows it inside its layout.
+     */
+    public function testLoadThemeShowsTheErrorPageOfAShortcodeTheme()
+    {
+        Dj_App_Themes_Test::$full_page = 'no-such-page';
+
+        $theme_files = [
+            'index.php' => "THEME LAYOUT [djebel_page_content]\n",
+            'pages/404.php' => "<?php echo 'THEME NOT FOUND PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+
+        $req_obj = Dj_App_Request::getInstance();
+        $content = $req_obj->getContent();
+
+        $this->assertEquals('main_file', $theme_info['render_mode']);
+        $this->assertStringContainsString('THEME LAYOUT', $content);
+        $this->assertStringContainsString('THEME NOT FOUND PAGE', $content);
+        $this->assertStringNotContainsString('djebel-app-error-container', $content);
+    }
+
+    /**
+     * Pins that a theme with its own page for the error shows it, inside its layout and under the
+     * error's code; djebel's page is only for a theme that has none.
+     */
+    public function testLoadThemeShowsTheThemesOwnErrorPage()
+    {
+        Dj_App_Themes_Test::$full_page = 'no-such-page';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode(418);
+
+        $theme_files = [
+            'index.php' => "<?php echo 'THEME LAYOUT'; Dj_App_Hooks::doAction('app.page.content.render'); ?>\n",
+            'pages/404.php' => "<?php echo 'THEME NOT FOUND PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+        $content = $req_obj->getContent();
+        $response_code = $req_obj->getResponseCode();
+
+        $this->assertEquals(404, $response_code);
+        $this->assertEquals('main_file', $theme_info['render_mode']);
+        $this->assertStringContainsString('THEME LAYOUT', $content);
+        $this->assertStringContainsString('THEME NOT FOUND PAGE', $content);
+        $this->assertStringNotContainsString('djebel-app-error-container', $content);
+    }
+
+    /**
+     * Pins that an error a plugin set before the theme loads replaces the page the address would
+     * normally get. A missing blog post used to render the blog's page with a 200.
+     */
+    public function testLoadThemeAnswersAPluginErrorWithDjebelsPage()
+    {
+        Dj_App_Themes_Test::$full_page = 'blog';
+
+        $req_obj = Dj_App_Request::getInstance();
+        $req_obj->setResponseCode(418);
+
+        $page_obj = Dj_App_Page::getInstance();
+
+        $error_params = [
+            'code' => 503,
+        ];
+
+        $page_obj->setError($error_params);
+
+        $theme_files = [
+            'index.php' => "<?php echo 'THEME LAYOUT'; Dj_App_Hooks::doAction('app.page.content.render'); ?>\n",
+            'pages/blog.php' => "<?php echo 'BLOG PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+        $content = $req_obj->getContent();
+        $response_code = $req_obj->getResponseCode();
+
+        $this->assertEquals(503, $response_code);
+        $this->assertEquals('error_page', $theme_info['render_mode']);
+        $this->assertStringContainsString('djebel-app-error-container', $content);
+        $this->assertStringNotContainsString('BLOG PAGE', $content, 'the page for the address never rendered');
+        $this->assertStringNotContainsString('THEME LAYOUT', $content);
+    }
+
+    /**
+     * Pins that an error a plugin set shows the theme's page for that code in place of the page the
+     * address would normally get, so a theme's own error design reaches plugin errors too.
+     */
+    public function testLoadThemeShowsTheThemesPageForAPluginError()
+    {
+        Dj_App_Themes_Test::$full_page = 'blog';
+
+        $page_obj = Dj_App_Page::getInstance();
+
+        $error_params = [
+            'code' => 503,
+        ];
+
+        $page_obj->setError($error_params);
+
+        $theme_files = [
+            'index.php' => "<?php echo 'THEME LAYOUT'; Dj_App_Hooks::doAction('app.page.content.render'); ?>\n",
+            'pages/blog.php' => "<?php echo 'BLOG PAGE'; ?>\n",
+            'pages/503.php' => "<?php echo 'THEME UNAVAILABLE PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+
+        $req_obj = Dj_App_Request::getInstance();
+        $content = $req_obj->getContent();
+
+        $this->assertEquals('main_file', $theme_info['render_mode']);
+        $this->assertStringContainsString('THEME UNAVAILABLE PAGE', $content);
+        $this->assertStringNotContainsString('BLOG PAGE', $content);
+    }
+
+    /**
+     * Pins that the home page still renders through the theme's main file when the theme has no
+     * page for it: only other addresses lost the index.php fallback.
+     */
+    public function testLoadThemeKeepsTheHomePageWithoutAPageFile()
+    {
+        $theme_files = [
+            'index.php' => "<?php echo 'THEME LAYOUT'; Dj_App_Hooks::doAction('app.page.content.render'); ?>\n",
+            'pages/about.php' => "<?php echo 'ABOUT PAGE'; ?>\n",
+        ];
+
+        $theme_info = $this->loadFixtureTheme($theme_files);
+
+        $req_obj = Dj_App_Request::getInstance();
+        $content = $req_obj->getContent();
+
+        $page_obj = Dj_App_Page::getInstance();
+        $error = $page_obj->getError();
+
+        $this->assertEmpty($error, 'the home page is not an error');
+        $this->assertEquals('main_file', $theme_info['render_mode']);
+        $this->assertStringContainsString('THEME LAYOUT', $content);
     }
 
     /**
