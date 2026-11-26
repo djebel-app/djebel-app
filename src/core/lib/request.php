@@ -909,7 +909,10 @@ CLEAR_AND_REDIRECT_HTML;
             return $req_url;
         }
 
-        $req_url = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL);
+        // $_SERVER, not filter_input(INPUT_SERVER): the latter answers NULL under CGI, FastCGI and
+        // the CLI, which made every URL read as '/' there. The same sanitizer runs on it.
+        $req_url = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
+        $req_url = filter_var($req_url, FILTER_SANITIZE_URL);
         $req_url = empty($req_url) ? '/' : $req_url;
 
         return $req_url;
@@ -1487,7 +1490,8 @@ CLEAR_AND_REDIRECT_HTML;
         $keys = (array) $key;
 
         if (empty($url)) {
-            $url = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_URL) ?? '';
+            $req_obj = static::getInstance();
+            $url = $req_obj->getRequestUrl();
         }
 
         $url = strip_tags( $url );

@@ -138,6 +138,36 @@ class Dj_App_Bootstrap_Test extends TestCase {
     }
 
     /**
+     * Pins that the request URI reaches the bootstrap from the server variables, which CGI,
+     * FastCGI and the CLI fill while filter_input() sees nothing there: a deep URL gives its
+     * segments, and a static file's URL is the 404 on a page while headless leaves it alone.
+     */
+    public function testRequestUriReachesTheBootstrap()
+    {
+        $boot_env = [
+            'REQUEST_URI' => '/about/team',
+        ];
+
+        $boot_res = $this->runBoot($boot_env);
+        $report = $boot_res['report'];
+
+        $this->assertNotEmpty($report, "the boot returned to its caller: {$boot_res['errors']}");
+        $this->assertContains('about', $report['segments'], 'the URL gave its first segment');
+        $this->assertContains('team', $report['segments'], 'the URL gave its second segment');
+
+        $boot_env['REQUEST_URI'] = '/logo.jpg';
+        $boot_res = $this->runBoot($boot_env);
+
+        $this->assertEmpty($boot_res['report'], 'a page stopped at the static-file 404');
+        $this->assertStringContainsString('Page Not Found (404)', $boot_res['output'], 'a page answered the static file with the 404');
+
+        $boot_env['DJEBEL_APP_CORE_HEADLESS'] = '1';
+        $boot_res = $this->runBoot($boot_env);
+
+        $this->assertNotEmpty($boot_res['report'], 'headless left the static file URL to its caller');
+    }
+
+    /**
      * Pins that an error in headless never answers with a page: plain text with the ref, and
      * JSON with the ref for an AJAX call.
      */
