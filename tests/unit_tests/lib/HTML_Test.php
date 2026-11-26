@@ -566,7 +566,7 @@ class Dj_App_HTML_Test extends TestCase {
 
     public function testEscAttrRealWorld()
     {
-        $user_input = $_GET['name'] ?? 'John <script>alert("XSS")</script>';
+        $user_input = 'John <script>alert("XSS")</script>';
         $name = dj_esc_attr($user_input);
 
         $html = "<input name='username' value='$name' />";
