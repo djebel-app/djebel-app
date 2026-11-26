@@ -17,6 +17,9 @@ and exposes hooks so *other* plugins can extend it — it never absorbs adjacent
 The test: if a responsibility could be peeled off and the plugin still does its core job, it
 doesn't belong inside the plugin — it's an add-on.
 
+Code another plugin or a CLI tool could reuse is not a plugin's job either: it goes into a lib
+(`lib-guide.md`), and the plugin calls it.
+
 ## Naming Conventions (MANDATORY)
 
 A plugin's name appears in several places, and the prefix it carries depends on **where** it
@@ -157,6 +160,26 @@ Dj_App_Hooks::addAction('app.core.init', [$obj, 'init']);
 ```
 
 Register the plugin's own hooks/shortcodes inside `init()`.
+
+### Headless: a caller with no page
+
+An API or a worker can boot djebel with `app.core.headless` on (`config.md`): plugins load and
+nothing is served. `app.core.init` fires there as on a page, so a plugin sets itself up as usual;
+its shortcodes and page filters simply never run, since no page is drawn. Right after it,
+`app.core.headless.init` fires for a plugin written for headless:
+
+```php
+$obj = Djebel_Plugin_Example::getInstance();
+Dj_App_Hooks::addAction('app.core.headless.init', [$obj, 'checkRequest']);
+```
+
+A plugin that must act, or stay quiet, only in headless asks `Dj_App_Env::isHeadless()` from its
+`init()`. On a djebel older than this mode the method is missing, so a plugin that may run there
+checks `method_exists('Dj_App_Env', 'isHeadless')` first.
+
+With no theme, a plugin that has to answer first, a limiter refusing a request say, answers with
+`Dj_App_Request::json()`, which sends the Result and exits. A crash in headless prints no box; it
+is logged with its ref.
 
 ## Reading config
 
