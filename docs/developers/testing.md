@@ -17,7 +17,7 @@ djebel-app dir and it runs the framework's own suite.
 ## An addon ships test files ONLY
 
 Never add a `tests/bootstrap.php` to a plugin, theme or lib. `tools/testing/bootstrap.php`
-does the setup once — framework headless, then the addon — and the runner wires it up.
+does the setup once — framework with run off, then the addon — and the runner wires it up.
 
 This is not a style preference. Before it existed there were **four byte-identical
 40-line bootstraps** copy-pasted across libs, each differing only in its final `require`,

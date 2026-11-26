@@ -2,7 +2,7 @@
 /**
  * Shared bootstrap for PLUGIN, THEME and LIB test suites.
  *
- * Loads the framework (headless — every core lib loads, nothing serves), then the
+ * Loads the framework (run off — every core lib loads, nothing serves), then the
  * entry files named by DJEBEL_TEST_FILES. An addon ships only its test files:
  * the setup lives here, written once, instead of a copy inside every addon.
  *

@@ -106,6 +106,43 @@ class Dj_App_Env_Test extends TestCase
     }
 
     /**
+     * Pins that the headless switch is read as an on/off word, and that an empty value or a word
+     * it does not know keeps it off: a plugin written for headless must never act on a page
+     * because of a typo.
+     */
+    public function testIsHeadlessReadsOnOffWords()
+    {
+        $headless_cases = [
+            [ 'word' => '1', 'is_headless' => true, ],
+            [ 'word' => 'yes', 'is_headless' => true, ],
+            [ 'word' => 'on', 'is_headless' => true, ],
+            [ 'word' => '0', 'is_headless' => false, ],
+            [ 'word' => 'no', 'is_headless' => false, ],
+            [ 'word' => 'false', 'is_headless' => false, ],
+            [ 'word' => '', 'is_headless' => false, ],
+            [ 'word' => 'unknown_word', 'is_headless' => false, ],
+        ];
+
+        try {
+            $backup_headless = getenv('DJEBEL_APP_CORE_HEADLESS');
+
+            foreach ($headless_cases as $headless_case) {
+                Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $headless_case['word']);
+
+                // cfg() remembers a value under the raw key, so each case is read afresh.
+                Dj_App_Config::cfg('app.core.headless', '', [ 'override' => 1, ]);
+
+                $is_headless = Dj_App_Env::isHeadless();
+                $this->assertSame($headless_case['is_headless'], $is_headless, "headless='{$headless_case['word']}'");
+            }
+        } finally {
+            $restore_headless = $backup_headless === false ? null : $backup_headless;
+            Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $restore_headless);
+            Dj_App_Config::cfg('app.core.headless', '', [ 'override' => 1, ]);
+        }
+    }
+
+    /**
      * @param string $cur_val
      * @param array $ctx
      * @return string

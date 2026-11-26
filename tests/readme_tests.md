@@ -6,7 +6,7 @@ One command runs everything — the framework and any addon (plugin, theme or li
 php tools/testing/run.php [addon-dir ...] [options]
 ```
 
-It prepares the framework headless, loads the addon, finds its test dir, and hands the
+It prepares the framework with run off, loads the addon, finds its test dir, and hands the
 rest to PHPUnit. **An addon ships test files only** — no bootstrap, no plumbing, nothing
 to keep in sync.
 
@@ -116,19 +116,19 @@ cd tests
 ./vendor/bin/phpunit --filter Truncate unit_tests/lib/String_Util_Test.php
 ```
 
-## Headless mode
+## Run off
 
 `Dj_App_Config::cfg('a.b.c')` resolves an env var, trying `a.b.c`, then `A_B_C`, then
 `DJEBEL_A_B_C`. So the run/serve gate is settable from the environment with no code change:
 
 | Env var | Effect |
 |---|---|
-| `DJEBEL_APP_CORE_RUN=0` | load every class, serve nothing |
-| `DJEBEL_APP_CORE_HEADLESS=1` | same gate, read as `app.core.headless` |
+| `DJEBEL_APP_CORE_RUN=0` | load every core class, no plugin, serve nothing |
+| `DJEBEL_APP_CORE_HEADLESS=1` | load the plugins too and serve nothing (an API's mode); run off wins over it |
 | `DJEBEL_APP_CORE_LOAD_LIBS=1` | eager-load the libs (needed by the lib suite) |
 
 The framework test bootstrap already sets the first and the third, and `tools/testing/bootstrap.php`
-requires it — so addon suites are headless without doing anything.
+requires it — so addon suites run with run off without doing anything.
 
 Any new toggle follows the same convention: read it with
 `Dj_App_Config::cfg('app.core.my_flag')` and it is settable as `DJEBEL_APP_CORE_MY_FLAG`

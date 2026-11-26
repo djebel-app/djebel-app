@@ -1,0 +1,20 @@
+<?php
+/*
+plugin_name: Init Throw Fixture
+*/
+
+// Throws from headless's init action, so the bootstrap tests see what djebel's error answer
+// looks like in headless.
+Dj_App_Hooks::addAction('app.core.headless.init', ['Dj_App_Test_Init_Throw_Fixture', 'throwOnInit']);
+
+class Dj_App_Test_Init_Throw_Fixture {
+    /**
+     * Fails the request the way a broken plugin would.
+     * @param array $ctx
+     * @return void
+     * @throws Dj_App_Exception
+     */
+    public static function throwOnInit($ctx = []) {
+        throw new Dj_App_Exception('init throw fixture');
+    }
+}

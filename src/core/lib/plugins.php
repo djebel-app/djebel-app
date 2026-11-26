@@ -51,7 +51,8 @@ class Dj_App_Plugins {
     /**
      * Loads regular or system plugins from a folder.
      * Dj_App_Plugins::loadPlugins();
-     * @param array $params Associative array with 'dir' and optional context params
+     * @param array $params Associative array with 'dir' and optional context params; `is_headless`
+     *                      means the caller serves no page, so a crash prints no box
      * @return Dj_App_Result what this run did, each under its own key: `plugins` (the ones that
      *                       loaded, meta keyed by file), `skipped_plugins` and `crashed_plugins`
      *                       (id, file and the reason, one entry each), `plugin_load_times`.
@@ -218,7 +219,6 @@ class Dj_App_Plugins {
                     // would put in config. Every plugin's main file carries the same name, so
                     // that name on its own identifies nothing.
                     $plugin_id = Dj_App_Util::getField('plugin_id', $plugin_meta_info);
-                    $plugin_id_esc = dj_esc_html($plugin_id);
                     $crash_msg = $e->getMessage();
 
                     $crashed_plugins[] = [
@@ -227,7 +227,15 @@ class Dj_App_Plugins {
                         'reason' => $crash_msg,
                         'logged' => $is_logged,
                     ];
+                } finally {
+                    $load_time = Dj_App_Util::microtime($plugin_file);
+                    $plugin_load_times[$plugin_file] = $load_time;
+                }
 
+                // A caller with no page (is_headless) gets no box: the crash is logged and on
+                // the Result, and a box would land in that caller's own output.
+                if ($plugin_crashed && empty($params['is_headless'])) {
+                    $plugin_id_esc = dj_esc_html($plugin_id);
                     $is_debug = Dj_App_Config::cfg('app.debug', false);
 
                     if (empty($is_debug)) {
@@ -253,9 +261,6 @@ class Dj_App_Plugins {
                     // The whole line goes THROUGH msg(), not beside it — the prefix used to be
                     // echoed as bare text next to the box, leaving half the sentence unstyled.
                     echo Dj_App_Util::msg($error_msg);
-                } finally {
-                    $load_time = Dj_App_Util::microtime($plugin_file);
-                    $plugin_load_times[$plugin_file] = $load_time;
                 }
                 
                 // The config decides what happens AFTER a crash — that is the whole question

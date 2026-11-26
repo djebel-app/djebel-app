@@ -101,9 +101,15 @@ if ($eager_load_libs) {
     Dj_App_Lib::loadLib($load_libs);
 }
 
-// should we run?
+// should we run? Run off wins, so headless is read only when run is on. Both are on/off words: an
+// unset run comes back as the bool true and needs no parse, and an empty one stays off.
 $run_app = Dj_App_Config::cfg('app.core.run', true);
-$headless = Dj_App_Config::cfg('app.core.headless', false);
+$run_app = $run_app === true || (!empty($run_app) && !Dj_App_Util::isDisabled($run_app));
+$headless = false;
+
+if ($run_app) {
+    $headless = Dj_App_Env::isHeadless();
+}
 
 // @todo should this be a plugin or a core feature?
 $app_load_shortcodes = Dj_App_Config::cfg('app.core.shortcodes.load', true);
@@ -117,10 +123,10 @@ if ($app_load_shortcodes) {
 
 // Assets exist to reach a rendered page, so the default follows whether there will BE one — a
 // consumer that loads the framework as a library never renders and should not pay for a queue
-// nothing reads. A suite runs headless by design and still has to exercise them, so it is the
-// one headless caller that loads them — and that check comes second, so an ordinary request
+// nothing reads. A suite runs with run off by design and still has to exercise them, so it is the
+// one caller without a page that loads them — and that check comes second, so an ordinary request
 // settles on two memory reads and never calls it. Either way `app.core.assets.load` overrides.
-$app_load_assets_default = (!empty($run_app) && empty($headless)) || Dj_App_Env::isInRunningUnitTests();
+$app_load_assets_default = ($run_app && !$headless) || Dj_App_Env::isInRunningUnitTests();
 $app_load_assets = Dj_App_Config::cfg('app.core.assets.load', $app_load_assets_default);
 
 if ($app_load_assets) {
@@ -131,9 +137,9 @@ if ($app_load_assets) {
 }
 
 // we return after the shortcodes are loaded as there could be plugins that rely on it.
-// In headless mode the shutdown phase is still handled by the shutdown function
+// With run off the shutdown phase is still handled by the shutdown function
 // registered above (Dj_App_Hooks::runShutdownHooks) — no explicit drain needed here.
-if (empty($run_app) || $headless) {
+if (!$run_app) {
     return;
 }
 
@@ -142,8 +148,9 @@ $boostrap_obj->installHooks();
 
 $req_obj = Dj_App_Request::getInstance();
 
-// if we're called about .css, .js that means it's missing but we don't need to handle them
-$app_process_missing_files = Dj_App_Config::cfg('app.core.process_missing_static_files', false);
+// if we're called about .css, .js that means it's missing but we don't need to handle them.
+// Headless serves no page and its URL is the caller's: an API route may end in .jpg.
+$app_process_missing_files = empty($headless) ? Dj_App_Config::cfg('app.core.process_missing_static_files', false) : true;
 
 if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
     // Early 404 check for static assets (images, CSS, JS) to avoid unnecessary processing
@@ -171,7 +178,14 @@ $sys_plugins_dir = Dj_App_Plugins::getSysPluginsDir();
 
 if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
     Dj_App_Hooks::doAction( 'app.core.system_plugins.pre_load' );
-    Dj_App_Plugins::loadPlugins(['dir' => $sys_plugins_dir, 'is_system' => true]);
+
+    $sys_load_params = [
+        'dir' => $sys_plugins_dir,
+        'is_system' => true,
+        'is_headless' => $headless,
+    ];
+
+    $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($sys_load_params);
     Dj_App_Hooks::doAction( 'app.core.system_plugins.loaded' );
 }
 
@@ -210,10 +224,25 @@ if (!empty($plugin_dirs)) {
     Dj_App_Hooks::doAction( 'app.core.plugins.before_load_plugins', $ctx );
 
     foreach ($plugin_dirs as $plugin_dir) {
-        $plugin_load_res_obj = Dj_App_Plugins::loadPlugins(['dir' => $plugin_dir]);
+        $load_params = [
+            'dir' => $plugin_dir,
+            'is_headless' => $headless,
+        ];
+
+        $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($load_params);
     }
 
     Dj_App_Hooks::doAction( 'app.core.plugins.loaded', $ctx );
+}
+
+// Headless serves no page: plugins set themselves up on app.core.init as on a page, then act on
+// headless's own action, and nothing is buffered, themed or printed. The shutdown phase is still
+// handled by the shutdown function registered above (Dj_App_Hooks::runShutdownHooks).
+if ($headless) {
+    Dj_App_Hooks::doAction( 'app.core.init' );
+    Dj_App_Hooks::doAction( 'app.core.headless.init' );
+
+    return;
 }
 
 try {
@@ -583,7 +612,8 @@ class Dj_App_Bootstrap {
 
     /**
      * The 500 page shared by every request-ending failure. Drains partial output first so
-     * the page renders alone, and never lets its own rendering fail silently.
+     * the page renders alone, and never lets its own rendering fail silently. In headless
+     * there is no page: the 500 goes out as JSON for an AJAX call, as plain text otherwise.
      * Dj_App_Bootstrap::renderErrorPage($params);
      * @param array $params exception (Throwable|null), message, file, line, log_ok
      * @return bool
@@ -602,16 +632,46 @@ class Dj_App_Bootstrap {
         // The raw message can leak internals (SQL, dirs) — the public page shows a
         // generic line; the real message is in the log and on the dev page.
         $display_msg = empty($is_dev) ? 'Something went wrong.' : $params['message'];
+        $echo_prefix = empty($exception) ? 'Djebel Fatal Error: ' : 'Djebel Error: ';
+
+        // Every visitor gets a ref to quote when reporting the failure. Whether the entry
+        // was written stays off the public page: a visitor comparing two different pages
+        // learns only how the site is configured.
+        $req_id = Dj_App_Util::reqId();
+
+        // Headless serves no page, so an API or a worker never gets one inside its answer.
+        if (Dj_App_Env::isHeadless()) {
+            $req_obj = Dj_App_Request::getInstance();
+
+            if ($req_obj->isAjax()) {
+                $res_obj = new Dj_App_Result();
+                $res_obj->msg($display_msg);
+                $res_obj->req_id = $req_id;
+
+                $json_params = [
+                    'http_code' => 500,
+                ];
+
+                $req_obj->json($res_obj, $json_params);
+            } else {
+                if (!headers_sent()) {
+                    http_response_code(500);
+                    header('Content-Type: text/plain; charset=UTF-8');
+                }
+
+                $error_text = sprintf("%s%s (ref: %s)\n", $echo_prefix, $display_msg, $req_id);
+                echo $error_text;
+            }
+
+            return true;
+        }
+
         $display_msg_esc = dj_esc_html($display_msg);
         $title_esc = dj_esc_html($title);
 
         $content = sprintf("<h1 class='djebel-app-error-title'>%s</h1>\n", $title_esc);
         $content .= sprintf("<div class='djebel-app-error-message'>%s</div>\n", $display_msg_esc);
 
-        // Every visitor gets a ref to quote when reporting the failure. Whether the entry
-        // was written stays off the public page: a visitor comparing two different pages
-        // learns only how the site is configured.
-        $req_id = Dj_App_Util::reqId();
         $req_id_esc = dj_esc_html($req_id);
 
         $content .= sprintf("<div class='djebel-app-error-message'>Ref: %s</div>\n", $req_id_esc);
@@ -663,7 +723,6 @@ class Dj_App_Bootstrap {
         $content .= "<div class='djebel-app-back-link'><a href='javascript:history.back()'>← Go Back</a></div>\n";
 
         $page_title = empty($exception) ? 'Fatal Error - ' . Dj_App::NAME : 'Error - DjebelApp';
-        $echo_prefix = empty($exception) ? 'Djebel Fatal Error: ' : 'Djebel Error: ';
 
         $options = [
             'status_code' => 500,

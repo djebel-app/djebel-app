@@ -104,8 +104,8 @@ Env/constant only unless the *app.ini* column names a key.
 
 | Key | Default | app.ini | What it does |
 |---|---|---|---|
-| `app.core.run` | `true` | — | Master switch. Off = load the framework without serving a request (how the test suite boots it). |
-| `app.core.headless` | `false` | — | Skip theme/page output. |
+| `app.core.run` | `true` | — | Master switch. Off = core only: the framework loads, no plugin loads, nothing is served (how the test suite and the tools boot it). Off wins over headless. |
+| `app.core.headless` | `false` | — | On = plugins load and nothing is served, for an API or a worker that boots djebel. See below. |
 | `app.core.options.load` | `true` | — | Load `app.ini` at all. |
 | `app.core.conf_dir` | *(detected)* | — | Where `app.ini` and `.env` live. |
 | `app.core.private_dir_name` | `.ht_djebel` | — | Name of the private dir scanned for upward from the script dir. |
@@ -130,6 +130,39 @@ Env/constant only unless the *app.ini* column names a key.
 The plugin system itself has **no config key** — it is gated only by the
 `app.core.plugins.load_plugins` filter (default `true`), so turning it off means
 hooking that filter, not setting a value.
+
+### `run` and `headless` — three ways to boot
+
+| `app.core.run` | `app.core.headless` | Loads | Serves |
+|---|---|---|---|
+| off | either | core libs, `app.ini`, libs, shortcodes | nothing: tests, CLI tools |
+| on | on | the above, then every plugin folder | nothing of its own: an API, a worker |
+| on | off | everything | the page |
+
+Both are on/off words. Run is off for `0`, `false`, `no`, `off`, `disabled` or an empty value;
+headless is on for `1`, `true`, `yes`, `on`, `enabled`. A word neither knows keeps each switch's
+default, and headless is read only when run is on.
+
+In headless the plugins load through the same rules as on a page (`active`, `load_if_url`, the PHP
+version), and then:
+
+- `app.core.init` fires as on a page, then `app.core.headless.init` for plugins written for
+  headless. A plugin asks `Dj_App_Env::isHeadless()` when it must act, or stay quiet, only there.
+- The static-file 404 is skipped: the URL belongs to the caller, and an API route may end in `.jpg`.
+- Nothing is buffered, themed or printed. A plugin that crashes is logged with its ref and prints no
+  box. The shutdown hooks still run.
+- An error that ends the request answers with a 500 and never a page: a failed Result with the ref
+  under `data.req_id` for an AJAX call, one line of plain text with the ref otherwise.
+- A server-wide shared plugins folder loads too; a caller that wants none of it sets
+  `app.sys.plugins.shared_plugins_dir` to an empty value.
+
+Both are env or constant only, set by the caller's entry script, never from a site's `app.ini`:
+
+```php
+putenv('DJEBEL_APP_CORE_HEADLESS=1');
+```
+
+A constant counts as `0` or `1`; one defined as `false` is ignored and the default applies.
 
 ### ⚠ `shortcodes.process_all` is a performance trade
 

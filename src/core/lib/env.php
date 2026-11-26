@@ -136,6 +136,20 @@ class Dj_App_Env {
     }
 
     /**
+     * Returns true when djebel was booted headless: plugins load and nothing is served, for an
+     * API or a worker. Reads the app.core.headless switch as an on/off word (1, true, yes, on,
+     * enabled); a word it does not know answers false. It does not look at app.core.run.
+     * Dj_App_Env::isHeadless();
+     * @return bool
+     */
+    public static function isHeadless() {
+        $headless = Dj_App_Config::cfg('app.core.headless', false);
+        $is_headless = !empty($headless) && Dj_App_Util::isEnabled($headless);
+
+        return $is_headless;
+    }
+
+    /**
      * Returns true if the script runs as a web request.
      * Dj_App_Env::isWebRequest();
      * @return bool

@@ -139,6 +139,30 @@ class Dj_App_Plugins_Test extends TestCase {
     }
 
     /**
+     * Pins that a caller with no page gets no box, while the crash still reaches the Result.
+     */
+    public function testLoadPluginsInHeadlessPrintsNoCrashBox()
+    {
+        $log_file = Dj_App_File_Util::generateTempFile();
+
+        Dj_App_Env::set('DJEBEL_APP_DEBUG', 0);
+
+        $crash_params = [
+            'crash_msg' => 'headless crash detail',
+            'log_file' => $log_file,
+            'is_headless' => true,
+        ];
+
+        $crash_res = $this->loadCrashingPlugin($crash_params);
+
+        $this->assertEmpty($crash_res['crash_box'], 'headless printed no box');
+        $this->assertCount(1, $crash_res['load_res_obj']->crashed_plugins, 'the crash still reached the Result');
+
+        $delete_res = Dj_App_File_Util::delete($log_file);
+        $this->assertFalse($delete_res->isError(), 'the log fixture was removed');
+    }
+
+    /**
      * Pins that a plugin the run refused is reported as an entry naming it and the reason, so a
      * caller can answer "what did not load, and why" without parsing strings.
      */
@@ -225,7 +249,7 @@ class Dj_App_Plugins_Test extends TestCase {
 
     /**
      * Loads a plugins dir holding one plugin that throws.
-     * @param array $params crash_msg, log_file (where the app error log is pointed)
+     * @param array $params crash_msg, log_file (where the app error log is pointed), is_headless
      * @return array crash_box (what the box printed), load_res_obj (the loader's Result)
      */
     private function loadCrashingPlugin($params)
@@ -249,8 +273,11 @@ class Dj_App_Plugins_Test extends TestCase {
 
         Dj_App_Env::set('DJEBEL_APP_ERROR_LOG_FILE', $params['log_file']);
 
+        $is_headless = !empty($params['is_headless']);
+
         $load_params = [
             'dir' => $plugins_dir,
+            'is_headless' => $is_headless,
         ];
 
         try {
@@ -271,7 +298,10 @@ class Dj_App_Plugins_Test extends TestCase {
         }
 
         $this->assertTrue($load_res_obj->isSuccess(), 'the loader carried on past the crash');
-        $this->assertStringContainsString('Plugin [crash-fixture] crashed:', $crash_box, 'the crash box was printed');
+
+        if (!$is_headless) {
+            $this->assertStringContainsString('Plugin [crash-fixture] crashed:', $crash_box, 'the crash box was printed');
+        }
 
         $rmdir_res = Dj_App_File_Util::rmdir($plugins_dir);
         $this->assertFalse($rmdir_res->isError(), 'the plugins fixture was removed');

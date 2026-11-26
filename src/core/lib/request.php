@@ -80,7 +80,7 @@ class Dj_App_Request {
         $this->parseRequest();
 
         // we want to wait until the system plugins have been loaded to parse request
-        Dj_App_Hooks::addAction( 'app.core.plugins.system_loaded', [ $this, 'hookActionsAfterSystemPluginLoaded'] );
+        Dj_App_Hooks::addAction( 'app.core.system_plugins.loaded', [ $this, 'hookActionsAfterSystemPluginLoaded'] );
     }
 
     public function hookActionsAfterSystemPluginLoaded()

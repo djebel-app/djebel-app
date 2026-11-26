@@ -950,7 +950,11 @@ The system uses a cascading configuration approach:
 
 Key configuration points:
 - `app.debug`: Debug mode toggle
-- `app.core.plugins.load_plugins`: Plugin system toggle
+- `app.core.run`: off = core only, no plugin and no page (tests, tools); off wins over headless
+- `app.core.headless`: on = plugins load and nothing is served (an API, a worker);
+  `app.core.init` fires, then `app.core.headless.init`; code asks `Dj_App_Env::isHeadless()`
+  (`docs/developers/config.md`)
+- the `app.core.plugins.load_plugins` filter: plugin system toggle; a filter only, no config key
 - `app.core.load_lib_loader`: make the on-demand lib loader (`Dj_App_Lib`) available (`[app] load_lib_loader`)
 - `app.core.load_libs`: eager-load libs at bootstrap — `1`/`true`/`*` = every lib, or a list of ids/globs like `orbisius*` (`[app] load_libs`)
 - `app.core.theme.load_theme`: Theme system toggle
