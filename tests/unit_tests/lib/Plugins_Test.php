@@ -6,11 +6,15 @@ class Dj_App_Plugins_Test extends TestCase {
 
     private $backup_debug = false;
     private $backup_error_log_file = false;
+    private $backup_options_data = [];
 
     protected function setUp(): void
     {
         $this->backup_debug = getenv('DJEBEL_APP_DEBUG');
         $this->backup_error_log_file = getenv('DJEBEL_APP_ERROR_LOG_FILE');
+
+        $options_obj = Dj_App_Options::getInstance();
+        $this->backup_options_data = $options_obj->load();
 
         // cfg() memoizes resolved values under the RAW dotted key — drop those so each test
         // resolves fresh through the conventional env keys it sets.
@@ -29,6 +33,71 @@ class Dj_App_Plugins_Test extends TestCase {
 
         Dj_App_Config::cfg('app.debug', '', [ 'override' => 1, ]);
         Dj_App_Config::cfg('app.error_log_file', '', [ 'override' => 1, ]);
+
+        $options_obj = Dj_App_Options::getInstance();
+        $options_obj->setData($this->backup_options_data);
+
+        // Set only by the switched-off test; nothing sets them before it.
+        Dj_App_Env::set('DJEBEL_APP_PLUGINS_III_JJJ_LOAD_IF_URL', null);
+        Dj_App_Env::set('DJEBEL_APP_PLUGINS_CCC_DDD_LOAD_IF_URL', null);
+    }
+
+    /**
+     * Pins that the [plugins] settings of a dashed id switch it off, by `active = 0` and by a
+     * `load_if_url` this request does not match; that an empty part in the list matches nothing;
+     * that the environment form names a dashed id too; and that the settings win over it.
+     */
+    public function testGetSwitchedOffPluginsReadsDashedIds()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $settings_file = DJEBEL_APP_TEST_DATA_DIR . '/plugins/switched_off.ini';
+        $settings_data = $options_obj->parseIniFile($settings_file);
+        $options_obj->setData($settings_data);
+
+        $env_vars = [
+            'DJEBEL_APP_PLUGINS_III_JJJ_LOAD_IF_URL' => '/nowhere',
+            'DJEBEL_APP_PLUGINS_CCC_DDD_LOAD_IF_URL' => '/',
+        ];
+
+        Dj_App_Env::set($env_vars);
+
+        $switched_off_plugins = Dj_App_Plugins::getSwitchedOffPlugins();
+
+        $this->assertEquals('active = 0', $switched_off_plugins['aaa_bbb'], 'a dashed id is switched off by active = 0');
+        $this->assertArrayHasKey('ccc_ddd', $switched_off_plugins, 'a dashed id is left off by its load_if_url, the settings winning over the environment');
+        $this->assertArrayHasKey('eee', $switched_off_plugins, 'an empty part in the list matches nothing');
+        $this->assertArrayHasKey('iii_jjj', $switched_off_plugins, 'the environment form names a dashed id');
+        $this->assertArrayNotHasKey('fff', $switched_off_plugins, 'a list holding the request path loads the plugin');
+        $this->assertArrayNotHasKey('ggg_hhh', $switched_off_plugins, 'active = 1 loads the plugin');
+    }
+
+    /**
+     * Pins that the loader skips a plugin the list names, by its folder id or by the id its
+     * header names, reports it with the reason, and loads the rest.
+     */
+    public function testLoadPluginsSkipsSwitchedOffPlugins()
+    {
+        $switched_off_plugins = [
+            'aaa_bbb' => 'active = 0',
+            'kkk_lll' => 'load_if_url does not match this request',
+        ];
+
+        $load_params = [
+            'dir' => DJEBEL_APP_TEST_DATA_DIR . '/plugins/switched_off',
+            'switched_off_plugins' => $switched_off_plugins,
+        ];
+
+        $load_res_obj = Dj_App_Plugins::loadPlugins($load_params);
+        $skipped_reasons = [];
+
+        foreach ($load_res_obj->skipped_plugins as $skipped_plugin) {
+            $skipped_reasons[$skipped_plugin['plugin_id']] = $skipped_plugin['reason'];
+        }
+
+        $this->assertEquals('active = 0', $skipped_reasons['aaa-bbb'], 'the folder id was skipped with its reason');
+        $this->assertEquals('load_if_url does not match this request', $skipped_reasons['kkk-lll'], 'the header id was skipped with its reason');
+        $this->assertFalse(class_exists('Dj_App_Test_Switched_Off_Dashed', false), 'a plugin left off is never included');
+        $this->assertTrue(class_exists('Dj_App_Test_Switched_On', false), 'the plugin nothing left off loaded');
     }
 
     /**

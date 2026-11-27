@@ -4,6 +4,91 @@
  *
  */
 class Dj_App_Plugins {
+    const ENV_LOAD_IF_URL_PREFIX = 'DJEBEL_APP_PLUGINS_';
+    const ENV_LOAD_IF_URL_SUFFIX = '_LOAD_IF_URL';
+
+    /**
+     * Lists the plugins this request leaves off, each with its reason: `active = 0`, or a
+     * `load_if_url` the request path does not match. It reads the [plugins] settings once, and
+     * for a plugin with no `load_if_url` there, DJEBEL_APP_PLUGINS_<ID>_LOAD_IF_URL from the
+     * environment (the id uppercased, dashes as underscores). The keys are an id's options key,
+     * its dashes as underscores. The app.core.plugins.switched_off filter gets the last word.
+     * Dj_App_Plugins::getSwitchedOffPlugins();
+     * @return array options key => reason
+     */
+    public static function getSwitchedOffPlugins()
+    {
+        $options_obj = Dj_App_Options::getInstance();
+        $plugins_options = $options_obj->get('plugins');
+        $plugins_options = empty($plugins_options) ? [] : (array) $plugins_options;
+
+        $env_vars = getenv();
+        $env_prefix_len = strlen(Dj_App_Plugins::ENV_LOAD_IF_URL_PREFIX);
+        $env_suffix_len = strlen(Dj_App_Plugins::ENV_LOAD_IF_URL_SUFFIX);
+
+        foreach ($env_vars as $env_name => $env_val) {
+            if (strpos($env_name, Dj_App_Plugins::ENV_LOAD_IF_URL_PREFIX) !== 0) {
+                continue;
+            }
+
+            if (substr($env_name, -$env_suffix_len) != Dj_App_Plugins::ENV_LOAD_IF_URL_SUFFIX) {
+                continue;
+            }
+
+            $options_key = substr($env_name, $env_prefix_len, -$env_suffix_len);
+            $options_key = strtolower($options_key);
+
+            // The [plugins] settings win over the environment.
+            if (empty($options_key) || !empty($plugins_options[$options_key]['load_if_url'])) {
+                continue;
+            }
+
+            $plugins_options[$options_key]['load_if_url'] = $env_val;
+        }
+
+        $switched_off_plugins = [];
+        $req_obj = null;
+        $req_path = '';
+
+        foreach ($plugins_options as $options_key => $plugin_options) {
+            if (empty($plugin_options) || !is_array($plugin_options)) {
+                continue;
+            }
+
+            if (isset($plugin_options['active']) && empty($plugin_options['active'])) {
+                $switched_off_plugins[$options_key] = 'active = 0';
+                continue;
+            }
+
+            if (empty($plugin_options['load_if_url'])) {
+                continue;
+            }
+
+            // A list nobody can match against keeps the plugin off rather than on everywhere.
+            if (!is_scalar($plugin_options['load_if_url'])) {
+                $switched_off_plugins[$options_key] = 'load_if_url is not text';
+                continue;
+            }
+
+            // The path without its query string: matched against the full URI, ?x=/faq on any
+            // page would switch a plugin on.
+            if (is_null($req_obj)) {
+                $req_obj = Dj_App_Request::getInstance();
+                $req_path = $req_obj->getCleanRequestUrl();
+            }
+
+            if (!$req_obj->requestUrlMatches($plugin_options['load_if_url'], $req_path)) {
+                $switched_off_plugins[$options_key] = 'load_if_url does not match this request';
+            }
+        }
+
+        if (Dj_App_Hooks::hasFilter('app.core.plugins.switched_off')) {
+            $switched_off_plugins = Dj_App_Hooks::applyFilter('app.core.plugins.switched_off', $switched_off_plugins);
+        }
+
+        return $switched_off_plugins;
+    }
+
     /**
      * @return string
      */
@@ -52,7 +137,9 @@ class Dj_App_Plugins {
      * Loads regular or system plugins from a folder.
      * Dj_App_Plugins::loadPlugins();
      * @param array $params Associative array with 'dir' and optional context params; `is_headless`
-     *                      means the caller serves no page, so a crash prints no box
+     *                      means the caller serves no page, so a crash prints no box;
+     *                      `switched_off_plugins` is the list getSwitchedOffPlugins() returns, and
+     *                      a plugin in it is skipped with its reason
      * @return Dj_App_Result what this run did, each under its own key: `plugins` (the ones that
      *                       loaded, meta keyed by file), `skipped_plugins` and `crashed_plugins`
      *                       (id, file and the reason, one entry each), `plugin_load_times`.
@@ -74,9 +161,7 @@ class Dj_App_Plugins {
         // parsing it out of strings.
         $skipped_plugins = [];
         $crashed_plugins = [];
-        $options_obj = Dj_App_Options::getInstance();
-        $plugins_options = $options_obj->get('plugins');
-        $plugins_options = empty($plugins_options) ? [] : (array) $plugins_options;
+        $switched_off_plugins = empty($params['switched_off_plugins']) ? [] : $params['switched_off_plugins'];
 
         try {
             if (!is_dir($dir)) {
@@ -99,18 +184,25 @@ class Dj_App_Plugins {
                 $plugin_dir_name = basename($plugin_dir);
                 $plugin_id = Dj_App_Plugins::formatId($plugin_dir_name);
                 $ctx['plugin_id'] = $plugin_id;
-                $plugins_options = Dj_App_Hooks::applyFilter( 'app.plugin.options', $plugins_options, $ctx );
-
-                // is this deactivated?
-                // non-public plugins can still be deactivated via config
-                if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
-                    continue;
-                }
-
-                // @todo check for a prefix(es) for plugins $options_obj; /contact form plugins must run on /contact page onnly
 
                 $plugin_file = $plugin_dir . '/plugin.php';
                 $plugin_file_rel = Dj_App_Plugins::getRelFile($plugin_file);
+
+                // Checked before the file is read, so a plugin left off costs no read. The list is
+                // keyed by options key, an id's dashes as underscores.
+                if (!empty($switched_off_plugins)) {
+                    $options_key = str_replace('-', '_', $plugin_id);
+
+                    if (!empty($switched_off_plugins[$options_key])) {
+                        $skipped_plugins[] = [
+                            'plugin_id' => $plugin_id,
+                            'plugin_file' => $plugin_file_rel,
+                            'reason' => $switched_off_plugins[$options_key],
+                        ];
+
+                        continue;
+                    }
+                }
 
                 if (!file_exists($plugin_file)) {
                     // @todo log error
@@ -154,9 +246,19 @@ class Dj_App_Plugins {
                 if (!empty($extr_res_obj->plugin_id)) {
                     $plugin_id = Dj_App_Plugins::formatId($extr_res_obj->plugin_id);
 
-                    // check for activeness using internal plugin id
-                    if (isset($plugins_options[$plugin_id]['active']) && empty($plugins_options[$plugin_id]['active'])) {
-                        continue;
+                    // The id the header names can be left off too.
+                    if (!empty($switched_off_plugins)) {
+                        $options_key = str_replace('-', '_', $plugin_id);
+
+                        if (!empty($switched_off_plugins[$options_key])) {
+                            $skipped_plugins[] = [
+                                'plugin_id' => $plugin_id,
+                                'plugin_file' => $plugin_file_rel,
+                                'reason' => $switched_off_plugins[$options_key],
+                            ];
+
+                            continue;
+                        }
                     }
                 }
 
@@ -186,8 +288,8 @@ class Dj_App_Plugins {
                 $plugin_meta_info = $extr_res_obj->meta_info;
                 $plugin_meta_info['plugin_file'] = $plugin_file;
 
-                // Carried so the load loop names a plugin the same way the activation check
-                // and the options filter do, instead of deriving a second id of its own.
+                // Carried so the load loop names a plugin the same way the switched-off check
+                // does, instead of deriving a second id of its own.
                 $plugin_meta_info['plugin_id'] = $plugin_id;
 
                 $plugins[$plugin_file] = $plugin_meta_info;
@@ -214,10 +316,10 @@ class Dj_App_Plugins {
                     // the raw message only on a dev/debug setup.
                     $is_logged = Dj_App_Log::logAppError($e);
 
-                    // The id resolved during discovery — the same string the activation check
-                    // and the options filter use, so what the box names is what a site owner
-                    // would put in config. Every plugin's main file carries the same name, so
-                    // that name on its own identifies nothing.
+                    // The id resolved during discovery — the same string the switched-off check
+                    // uses, so what the box names is what a site owner would put in config.
+                    // Every plugin's main file carries the same name, so that name on its own
+                    // identifies nothing.
                     $plugin_id = Dj_App_Util::getField('plugin_id', $plugin_meta_info);
                     $crash_msg = $e->getMessage();
 

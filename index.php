@@ -172,6 +172,9 @@ if (!Dj_App_Util::isEnabled($app_process_missing_files)) {
     }
 }
 
+// Decided once for every plugin folder below, not once per plugin.
+$switched_off_plugins = Dj_App_Plugins::getSwitchedOffPlugins();
+
 // Loading system plugins
 $sys_plugins_dir = Dj_App_Plugins::getSysPluginsDir();
 
@@ -182,6 +185,7 @@ if (!empty($sys_plugins_dir) && is_dir($sys_plugins_dir)) {
         'dir' => $sys_plugins_dir,
         'is_system' => true,
         'is_headless' => $headless,
+        'switched_off_plugins' => $switched_off_plugins,
     ];
 
     $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($sys_load_params);
@@ -226,6 +230,7 @@ if (!empty($plugin_dirs)) {
         $load_params = [
             'dir' => $plugin_dir,
             'is_headless' => $headless,
+            'switched_off_plugins' => $switched_off_plugins,
         ];
 
         $plugin_load_res_obj = Dj_App_Plugins::loadPlugins($load_params);
@@ -756,53 +761,6 @@ class Dj_App_Bootstrap {
 
         // run this again in case new headers were added by the functions.php
         Dj_App_Hooks::addAction( 'app.core.theme.functions_loaded', [ $req_obj, 'outputHeaders'] );
-
-        // Conditional plugin loading filter
-        Dj_App_Hooks::addFilter( 'app.plugin.options', [ $this, 'filterConditionalPlugins' ], 10, 2 );
-    }
-
-    /**
-     * Filter for conditional plugin loading based on URL patterns
-     * @param array $plugins_options
-     * @param array $ctx
-     * @return array
-     */
-    public function filterConditionalPlugins($plugins_options, $ctx)
-    {
-        $req_obj = Dj_App_Request::getInstance();
-        $current_url = $req_obj->getCleanRequestUrl();
-
-        if (empty($ctx['plugin_id']) || empty($current_url)) {
-            return $plugins_options;
-        }
-
-        $plugin_id = $ctx['plugin_id'];
-
-        if (!empty($plugins_options[$plugin_id]['load_if_url'])) {
-            $load_if_url = $plugins_options[$plugin_id]['load_if_url'];
-        } else {
-            $load_if_url = Dj_App_Config::cfg("plugins.{$plugin_id}.load_if_url");
-        }
-
-        if (empty($load_if_url)) {
-            return $plugins_options;
-        }
-
-        $patterns = explode('|', $load_if_url);
-        $patterns = Dj_App_String_Util::trim($patterns);
-        $matched = false;
-
-        // If the url matches we'll load it otherwise no.
-        foreach ($patterns as $pattern) {
-            if (strpos($current_url, $pattern) !== false) {
-                $matched = true;
-                break;
-            }
-        }
-
-        $plugins_options[$plugin_id]['active'] = $matched ? true : false;
-
-        return $plugins_options;
     }
 
     /**

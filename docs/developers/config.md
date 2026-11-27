@@ -373,11 +373,18 @@ is a `djebel-clear` key, not a core one. Only the rows above are read by the cor
 ## `[plugins]` — plugin settings
 
 Plugin keys are `plugins.<plugin-slug>.<setting>` and belong to the plugin that reads
-them; see [plugin-guide.md](plugin-guide.md). One core-level key applies to any plugin:
+them; see [plugin-guide.md](plugin-guide.md). Two core-level keys apply to any plugin, a dashed
+id included (`djebel-faq.active = 0`):
 
 | Key | What it does |
 |---|---|
-| `plugins.<id>.load_if_url` | Load the plugin only when the request URL matches — the cheapest way to keep a plugin off every other page. Also readable via `cfg()`. |
+| `plugins.<id>.active` | `0` keeps the plugin off. |
+| `plugins.<id>.load_if_url` | Load the plugin only when the request path, without its query string, contains one of the listed paths, `\|`-separated, case-insensitive; an empty part matches nothing. The cheapest way to keep a plugin off every other page. With none set here, `DJEBEL_APP_PLUGINS_<ID>_LOAD_IF_URL` in the environment sets it (the id uppercased, dashes as underscores). |
+
+Which plugins a request leaves off is decided once, before the first plugin folder loads, and
+each one is reported in the loader's `skipped_plugins` with its reason. The
+`app.core.plugins.switched_off` filter gets the last word on that list (options key → reason,
+an id's dashes as underscores); code that hooks it runs before any plugin loads.
 
 ## `[assets]` — site-declared assets
 
@@ -394,7 +401,7 @@ login_css.load_if_url = /login|/register
 
 | Key | What it does |
 |---|---|
-| `<id>.load_if_url` | Render the asset only on a request whose site-relative path contains one of the listed paths, `\|`-separated, case-insensitive. Decided when the page renders, so it follows whatever the request looks like by then. Absent means every page. Same word and the same substring test as `plugins.<id>.load_if_url`; that one is case-sensitive and matches the full request path, web path included. |
+| `<id>.load_if_url` | Render the asset only on a request whose site-relative path contains one of the listed paths, `\|`-separated, case-insensitive. Decided when the page renders, so it follows whatever the request looks like by then. Absent means every page. Same word and the same substring test as `plugins.<id>.load_if_url`; that one matches the request path with the web path included. |
 
 ## `[page_nav]` — navigation
 

@@ -13,6 +13,7 @@ $fixture_classes = [
     'Dj_App_Test_Regular_Fixture',
     'Dj_App_Test_Private_Fixture',
     'Dj_App_Test_Url_Fixture',
+    'Dj_App_Test_Dashed_Fixture',
 ];
 
 $loaded_classes = [];

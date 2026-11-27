@@ -18,8 +18,9 @@ class Dj_App_Bootstrap_Test extends TestCase {
 
     /**
      * Pins what an API or a worker gets: every plugin folder loads, the URL rule still keeps a
-     * plugin off, the request parse reaches a system plugin, app.core.init fires and headless's
-     * own action after it, and nothing is printed, not even for a plugin that crashes.
+     * plugin off, a dashed one included, the request parse reaches a system plugin, app.core.init
+     * fires and headless's own action after it, and nothing is printed, not even for a plugin that
+     * crashes.
      */
     public function testHeadlessLoadsPluginsAndPrintsNothing()
     {
@@ -31,7 +32,7 @@ class Dj_App_Bootstrap_Test extends TestCase {
         $report = $boot_res['report'];
 
         $this->assertNotEmpty($report, 'the boot returned to its caller');
-        $this->assertEquals(self::FIXTURE_CLASSES, $report['loaded_classes'], 'system, regular and private plugins loaded; the URL rule kept one off');
+        $this->assertEquals(self::FIXTURE_CLASSES, $report['loaded_classes'], 'system, regular and private plugins loaded; the URL rule kept two off, one of them dashed');
         $this->assertTrue($report['core_init_fired'], 'headless fired app.core.init');
         $this->assertTrue($report['headless_init_fired'], 'headless fired its own action');
         $this->assertContains('sys_fixture_parsed', $report['segments'], 'the request was parsed again after system plugins loaded');
@@ -224,7 +225,8 @@ class Dj_App_Bootstrap_Test extends TestCase {
             'DJEBEL_APP_CONTENT_DIR' => $data_dir . '/content',
             'DJEBEL_APP_PRIVATE_DIR' => $data_dir . '/private',
             'DJEBEL_APP_ERROR_LOGGING' => '0',
-            'DJEBEL_PLUGINS_URL_FIXTURE_LOAD_IF_URL' => '/nowhere',
+            'DJEBEL_APP_PLUGINS_URL_FIXTURE_LOAD_IF_URL' => '/nowhere',
+            'DJEBEL_APP_PLUGINS_DASHED_FIXTURE_LOAD_IF_URL' => '/nowhere',
         ];
 
         $child_env = array_replace($child_env, $boot_env);
