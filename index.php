@@ -123,9 +123,9 @@ if ($app_load_shortcodes) {
 
 // Assets exist to reach a rendered page, so the default follows whether there will BE one — a
 // consumer that loads the framework as a library never renders and should not pay for a queue
-// nothing reads. A suite runs with run off by design and still has to exercise them, so it is the
-// one caller without a page that loads them — and that check comes second, so an ordinary request
-// settles on two memory reads and never calls it. Either way `app.core.assets.load` overrides.
+// nothing reads. A unit-test run is the one caller without a page that loads them, since its
+// tests exercise them — and that check comes second, so an ordinary request settles on two
+// memory reads and never calls it. Either way `app.core.assets.load` overrides.
 $app_load_assets_default = ($run_app && !$headless) || Dj_App_Env::isInRunningUnitTests();
 $app_load_assets = Dj_App_Config::cfg('app.core.assets.load', $app_load_assets_default);
 
@@ -137,8 +137,7 @@ if ($app_load_assets) {
 }
 
 // we return after the shortcodes are loaded as there could be plugins that rely on it.
-// With run off the shutdown phase is still handled by the shutdown function
-// registered above (Dj_App_Hooks::runShutdownHooks) — no explicit drain needed here.
+// No drain here: the shutdown functions registered above still run after this return.
 if (!$run_app) {
     return;
 }
@@ -235,9 +234,7 @@ if (!empty($plugin_dirs)) {
     Dj_App_Hooks::doAction( 'app.core.plugins.loaded', $ctx );
 }
 
-// Headless serves no page: plugins set themselves up on app.core.init as on a page, then act on
-// headless's own action, and nothing is buffered, themed or printed. The shutdown phase is still
-// handled by the shutdown function registered above (Dj_App_Hooks::runShutdownHooks).
+// Headless serves no page, so it returns here, before the buffer, the theme and any output.
 if ($headless) {
     Dj_App_Hooks::doAction( 'app.core.init' );
     Dj_App_Hooks::doAction( 'app.core.headless.init' );
@@ -308,8 +305,11 @@ try {
 
         $req_obj->setContent($content);
     }
-} finally {
+
+    // Here, not in the finally: the finally also runs on an exception, where this send would go
+    // out empty with a 200 ahead of the error page.
     $req_obj->outputContent();
+} finally {
     $exec_time = Dj_App_Util::microtime( 'dj_app_timer' ); // move this to shutdown
 }
 

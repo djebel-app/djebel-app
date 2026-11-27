@@ -1,9 +1,9 @@
 <?php
 
-// Boots djebel from the dir given as the first argument, the way an API or a site would, then
-// prints one report line after a marker: which fixture plugins loaded, which init action fired,
-// and the request's segments. Whatever the boot itself printed comes before the marker. A boot
-// that exits (the static-file 404) never reaches the report.
+// Boots djebel from the dir given as the first argument, then prints one report line after a
+// marker: which fixture plugins loaded, which init action fired, and the request's segments.
+// Whatever the boot itself printed comes before the marker. A boot that exits never reaches the
+// report.
 $djebel_dir = $argv[1];
 
 require $djebel_dir . '/index.php';

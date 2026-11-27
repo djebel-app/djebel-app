@@ -9,11 +9,13 @@ class Dj_App_Env_Test extends TestCase
 {
     private $backup_djebel_env = false;
     private $backup_app_env = false;
+    private $backup_core_headless = false;
 
     protected function setUp(): void
     {
         $this->backup_djebel_env = getenv('DJEBEL_APP_ENV');
         $this->backup_app_env = getenv('APP_ENV');
+        $this->backup_core_headless = getenv('DJEBEL_APP_CORE_HEADLESS');
 
         // Cleared through the framework, not putenv: the resolved environment is remembered
         // for the request, and only this path drops it. A raw putenv would leave the previous
@@ -33,6 +35,12 @@ class Dj_App_Env_Test extends TestCase
 
         $app_env = $this->backup_app_env === false ? null : $this->backup_app_env;
         Dj_App_Env::set('APP_ENV', $app_env);
+
+        $core_headless = $this->backup_core_headless === false ? null : $this->backup_core_headless;
+        Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $core_headless);
+
+        $cfg_attribs = [ 'override' => 1, ];
+        Dj_App_Config::cfg('app.core.headless', '', $cfg_attribs);
     }
 
     /**
@@ -123,22 +131,16 @@ class Dj_App_Env_Test extends TestCase
             [ 'word' => 'unknown_word', 'is_headless' => false, ],
         ];
 
-        try {
-            $backup_headless = getenv('DJEBEL_APP_CORE_HEADLESS');
+        $cfg_attribs = [ 'override' => 1, ];
 
-            foreach ($headless_cases as $headless_case) {
-                Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $headless_case['word']);
+        foreach ($headless_cases as $headless_case) {
+            Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $headless_case['word']);
 
-                // cfg() remembers a value under the raw key, so each case is read afresh.
-                Dj_App_Config::cfg('app.core.headless', '', [ 'override' => 1, ]);
+            // Clears the value the previous case left, so each case is read afresh.
+            Dj_App_Config::cfg('app.core.headless', '', $cfg_attribs);
 
-                $is_headless = Dj_App_Env::isHeadless();
-                $this->assertSame($headless_case['is_headless'], $is_headless, "headless='{$headless_case['word']}'");
-            }
-        } finally {
-            $restore_headless = $backup_headless === false ? null : $backup_headless;
-            Dj_App_Env::set('DJEBEL_APP_CORE_HEADLESS', $restore_headless);
-            Dj_App_Config::cfg('app.core.headless', '', [ 'override' => 1, ]);
+            $is_headless = Dj_App_Env::isHeadless();
+            $this->assertSame($headless_case['is_headless'], $is_headless, "headless='{$headless_case['word']}'");
         }
     }
 

@@ -909,8 +909,8 @@ CLEAR_AND_REDIRECT_HTML;
             return $req_url;
         }
 
-        // $_SERVER, not filter_input(INPUT_SERVER): the latter answers NULL under CGI, FastCGI and
-        // the CLI, which made every URL read as '/' there. The same sanitizer runs on it.
+        // $_SERVER, not filter_input(INPUT_SERVER): the latter is empty under CGI, FastCGI and the
+        // CLI. The same sanitizer runs on it.
         $req_url = empty($_SERVER['REQUEST_URI']) ? '' : $_SERVER['REQUEST_URI'];
         $req_url = filter_var($req_url, FILTER_SANITIZE_URL);
         $req_url = empty($req_url) ? '/' : $req_url;
@@ -2021,13 +2021,6 @@ CLEAR_AND_REDIRECT_HTML;
     }
 
     /**
-     * Outputs headers and then content
-     * Ensures headers are sent before content regardless of when plugins set them
-     *
-     * @param string $content Content to output (uses stored content if not provided)
-     * @return void
-     */
-    /**
      * Resets the one-shot output guard so a test can render output again.
      * @return void
      */
@@ -2036,6 +2029,13 @@ CLEAR_AND_REDIRECT_HTML;
         $this->content_output = false;
     }
 
+    /**
+     * Outputs headers and then content, once per request: a later call prints nothing.
+     * Ensures headers are sent before content regardless of when plugins set them
+     *
+     * @param string $content Content to output (uses stored content if not provided)
+     * @return void
+     */
     public function outputContent($content = '')
     {
         if ($this->content_output) {

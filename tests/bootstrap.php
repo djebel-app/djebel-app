@@ -33,8 +33,7 @@ putenv('DJEBEL_APP_PRIVATE_DIR=' . $dj_app_test_private_dir);
 $dj_app_dir = dirname(__DIR__);
 require_once $dj_app_dir . '/index.php';
 
-// The theme lib loads only on a request that will render a page, so a run with run off — which is
-// every run here — never sees it. Loaded from the SUITE rather than teaching the app it is
+// The theme tests need the theme lib, so the SUITE loads it rather than teaching the app it is
 // being tested.
 require_once $dj_app_dir . '/src/core/lib/themes.php';
 

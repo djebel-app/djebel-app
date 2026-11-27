@@ -136,9 +136,8 @@ class Dj_App_Env {
     }
 
     /**
-     * Returns true when djebel was booted headless: plugins load and nothing is served, for an
-     * API or a worker. Reads the app.core.headless switch as an on/off word (1, true, yes, on,
-     * enabled); a word it does not know answers false. It does not look at app.core.run.
+     * Returns true when the app.core.headless switch is on, read as an on/off word (1, true, yes,
+     * on, enabled); a word it does not know answers false. It does not look at app.core.run.
      * Dj_App_Env::isHeadless();
      * @return bool
      */

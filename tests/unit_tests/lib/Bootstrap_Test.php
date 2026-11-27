@@ -3,9 +3,8 @@
 use PHPUnit\Framework\TestCase;
 
 /**
- * The bootstrap runs once per process, so each case boots djebel in a child process over the
- * committed fixtures in data/headless, with an environment built here rather than inherited:
- * the suite itself runs with run off.
+ * Each case boots djebel in a child process of its own, over the committed fixtures in
+ * data/headless, with an environment built here rather than inherited from the suite.
  */
 class Dj_App_Bootstrap_Test extends TestCase {
 
@@ -57,8 +56,8 @@ class Dj_App_Bootstrap_Test extends TestCase {
     }
 
     /**
-     * Pins that run off stays "core only", also when headless is set beside it: the tools and
-     * the suite set run off and a child process inherits a stray headless.
+     * Pins that run off stays "core only", also when headless is set beside it, so a stray
+     * headless that a run-off process inherits never loads plugins.
      */
     public function testRunOffLoadsNoPluginEvenWithHeadless()
     {
@@ -81,7 +80,7 @@ class Dj_App_Bootstrap_Test extends TestCase {
     /**
      * Pins that run is read as an on/off word: every off word stops at the gate, and an on word
      * or a word it does not know serves the request, its default. An empty value stops at the
-     * gate as well, but proc_open() drops an env var whose value is empty, so it is not a case here.
+     * gate as well; it is not a case here, since a child process cannot be handed an empty env var.
      */
     public function testRunSwitchReadsOnOffWords()
     {
@@ -138,9 +137,9 @@ class Dj_App_Bootstrap_Test extends TestCase {
     }
 
     /**
-     * Pins that the request URI reaches the bootstrap from the server variables, which CGI,
-     * FastCGI and the CLI fill while filter_input() sees nothing there: a deep URL gives its
-     * segments, and a static file's URL is the 404 on a page while headless leaves it alone.
+     * Pins that the request URI reaches the bootstrap when only the server variables carry it, as
+     * under CGI, FastCGI and the CLI: a deep URL gives its segments, and a static file's URL is
+     * the 404 on a page while headless leaves it alone.
      */
     public function testRequestUriReachesTheBootstrap()
     {
@@ -165,6 +164,24 @@ class Dj_App_Bootstrap_Test extends TestCase {
         $boot_res = $this->runBoot($boot_env);
 
         $this->assertNotEmpty($boot_res['report'], 'headless left the static file URL to its caller');
+    }
+
+    /**
+     * Pins that a page whose plugin throws from app.core.init answers with djebel's error page and
+     * its ref, never an empty body.
+     */
+    public function testPageErrorShowsTheErrorPage()
+    {
+        $boot_env = [
+            'DJEBEL_APP_CONTENT_DIR' => DJEBEL_APP_TEST_DATA_DIR . '/headless/content_init_throw',
+        ];
+
+        $boot_res = $this->runBoot($boot_env);
+
+        $this->assertEmpty($boot_res['report'], 'the boot ended in the error');
+        $this->assertStringContainsString('<html', $boot_res['output'], 'the visitor gets a page');
+        $this->assertStringContainsString('Something went wrong.', $boot_res['output'], 'the page carries the public message');
+        $this->assertStringContainsString('Ref: ', $boot_res['output'], 'the page carries the ref');
     }
 
     /**
